@@ -1,0 +1,58 @@
+<UserControl x:Class="NovaChat.Client.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid Background="{DynamicResource AppBackgroundBrush}">
+
+        <Border Width="500"
+                Padding="35"
+                Background="{DynamicResource PanelBackgroundBrush}"
+                CornerRadius="20"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center">
+
+            <StackPanel>
+
+                <TextBlock Text="Settings"
+                           FontSize="28"
+                           FontWeight="Bold"
+                           Foreground="{DynamicResource TextBrush}"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,30"/>
+
+                <TextBlock Text="Appearance"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextBrush}"
+                           Margin="0,0,0,12"/>
+
+                <Button Content="☀ Light Mode"
+                        Height="45"
+                        Background="{DynamicResource InputBackgroundBrush}"
+                        Foreground="{DynamicResource TextBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        Margin="0,0,0,10"
+                        Click="LightModeButton_Click"/>
+
+                <Button Content="🌙 Dark Mode"
+                        Height="45"
+                        Background="{DynamicResource InputBackgroundBrush}"
+                        Foreground="{DynamicResource TextBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        Margin="0,0,0,25"
+                        Click="DarkModeButton_Click"/>
+
+                <Button Content="Back to Chat"
+                        Height="42"
+                        Background="{DynamicResource PrimaryBrush}"
+                        Foreground="White"
+                        BorderThickness="0"
+                        Click="BackToChatButton_Click"/>
+
+            </StackPanel>
+
+        </Border>
+
+    </Grid>
+
+</UserControl>

@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="NovaChat.Client/NovaChat.Client.csproj" />
+  <Project Path="NovaChat.Server/NovaChat.Server.csproj" />
+</Solution>
