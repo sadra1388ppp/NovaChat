@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using NovaChat.Server.Data;
 using NovaChat.Server.DTOs;
@@ -8,10 +9,14 @@ namespace NovaChat.Server.Services;
 public class UserService
 {
     private readonly AppDbContext _context;
+    private readonly IPasswordHasher<User> _passwordHasher;
 
-    public UserService(AppDbContext context)
+    public UserService(
+        AppDbContext context,
+        IPasswordHasher<User> passwordHasher)
     {
         _context = context;
+        _passwordHasher = passwordHasher;
     }
 
     public async Task<RegisterResult> RegisterAsync(RegisterDto dto)
@@ -45,9 +50,12 @@ public class UserService
             Id = dto.Id,
             DisplayName = dto.DisplayName,
             Email = dto.Email,
-            Password = dto.Password,
             CreatedAt = DateTime.UtcNow
         };
+
+        user.PasswordHash = _passwordHasher.HashPassword(
+            user,
+            dto.Password);
 
         _context.Users.Add(user);
 
@@ -71,7 +79,12 @@ public class UserService
             return null;
         }
 
-        if (user.Password != dto.Password)
+        var passwordResult = _passwordHasher.VerifyHashedPassword(
+            user,
+            user.PasswordHash,
+            dto.Password);
+
+        if (passwordResult == PasswordVerificationResult.Failed)
         {
             return null;
         }
@@ -164,12 +177,19 @@ public class UserService
             return (false, "User not found.");
         }
 
-        if (user.Password != dto.CurrentPassword)
+        var passwordResult = _passwordHasher.VerifyHashedPassword(
+            user,
+            user.PasswordHash,
+            dto.CurrentPassword);
+
+        if (passwordResult == PasswordVerificationResult.Failed)
         {
             return (false, "Current password is incorrect.");
         }
 
-        user.Password = dto.NewPassword;
+        user.PasswordHash = _passwordHasher.HashPassword(
+            user,
+            dto.NewPassword);
 
         await _context.SaveChangesAsync();
 

@@ -76,9 +76,7 @@ public class UserController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetUser(string id)
     {
-        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (currentUserId != id)
+        if (!IsOwner() && !IsCurrentUser(id))
         {
             return Forbid();
         }
@@ -102,9 +100,7 @@ public class UserController : ControllerBase
         string id,
         UpdateUserDto dto)
     {
-        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (currentUserId != id)
+        if (!IsOwner() && !IsCurrentUser(id))
         {
             return Forbid();
         }
@@ -138,9 +134,7 @@ public class UserController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteUser(string id)
     {
-        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (currentUserId != id)
+        if (!IsOwner() && !IsCurrentUser(id))
         {
             return Forbid();
         }
@@ -167,9 +161,7 @@ public class UserController : ControllerBase
         string id,
         ChangePasswordDto dto)
     {
-        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (currentUserId != id)
+        if (!IsOwner() && !IsCurrentUser(id))
         {
             return Forbid();
         }
@@ -196,5 +188,26 @@ public class UserController : ControllerBase
         {
             message = result.Message
         });
+    }
+
+    private bool IsCurrentUser(string id)
+    {
+        var currentUserId =
+            User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        return currentUserId == id;
+    }
+
+    private bool IsOwner()
+    {
+        var ownerUserId =
+            HttpContext.RequestServices
+                .GetRequiredService<IConfiguration>()["Owner:UserId"];
+
+        var currentUserId =
+            User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        return !string.IsNullOrWhiteSpace(ownerUserId)
+               && currentUserId == ownerUserId;
     }
 }

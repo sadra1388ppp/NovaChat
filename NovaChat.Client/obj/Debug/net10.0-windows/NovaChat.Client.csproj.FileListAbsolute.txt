@@ -29,3 +29,4 @@ C:\Users\sadra\Desktop\NovaChat\NovaChat.Client\obj\Debug\net10.0-windows\refint
 C:\Users\sadra\Desktop\NovaChat\NovaChat.Client\obj\Debug\net10.0-windows\NovaChat.Client.pdb
 C:\Users\sadra\Desktop\NovaChat\NovaChat.Client\obj\Debug\net10.0-windows\NovaChat.Client.genruntimeconfig.cache
 C:\Users\sadra\Desktop\NovaChat\NovaChat.Client\obj\Debug\net10.0-windows\ref\NovaChat.Client.dll
+C:\Users\sadra\Desktop\NovaChat\NovaChat.Client\obj\Debug\net10.0-windows\NovaChat.Client.sourcelink.json

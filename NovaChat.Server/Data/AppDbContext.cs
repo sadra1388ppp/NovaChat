@@ -11,4 +11,37 @@ public class AppDbContext : DbContext
     }
 
     public DbSet<User> Users { get; set; } = null!;
+
+    public DbSet<Chat> Chats { get; set; } = null!;
+
+    public DbSet<Message> Messages { get; set; } = null!;
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<Chat>()
+            .HasOne(c => c.User1)
+            .WithMany()
+            .HasForeignKey(c => c.User1Id)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Chat>()
+            .HasOne(c => c.User2)
+            .WithMany()
+            .HasForeignKey(c => c.User2Id)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Message>()
+            .HasOne(m => m.Chat)
+            .WithMany(c => c.Messages)
+            .HasForeignKey(m => m.ChatId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Message>()
+            .HasOne(m => m.Sender)
+            .WithMany()
+            .HasForeignKey(m => m.SenderId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
 }

@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("NovaChat.Client")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+37f8552975d0f9558e80ad029db68cc939dbbf79")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ec231782a156b8099d329500d13a99e69b04c665")]
 [assembly: System.Reflection.AssemblyProductAttribute("NovaChat.Client")]
 [assembly: System.Reflection.AssemblyTitleAttribute("NovaChat.Client")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

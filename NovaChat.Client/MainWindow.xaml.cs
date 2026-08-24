@@ -5,24 +5,44 @@ namespace NovaChat.Client
 {
     public partial class MainWindow : Window
     {
+        private bool _isOwner;
+
         public MainWindow()
         {
             InitializeComponent();
 
             LoadLightTheme();
 
-            ShowMain();
+            ShowLogin();
         }
 
         public void ShowLogin()
         {
+            _isOwner = false;
+
             MainContainer.Children.Clear();
 
             LoginView loginView = new LoginView();
 
             loginView.CreateAccountRequested += ShowRegister;
+            loginView.LoginSuccessful += HandleNormalUserLogin;
+            loginView.OwnerLoginSuccessful += HandleOwnerLogin;
 
             MainContainer.Children.Add(loginView);
+        }
+
+        private void HandleNormalUserLogin()
+        {
+            _isOwner = false;
+
+            ShowMain();
+        }
+
+        private void HandleOwnerLogin()
+        {
+            _isOwner = true;
+
+            ShowMain();
         }
 
         public void ShowRegister()
@@ -44,6 +64,8 @@ namespace NovaChat.Client
 
             mainView.ProfileRequested += ShowProfile;
             mainView.SettingsRequested += ShowSettings;
+
+            mainView.SetOwnerMode(_isOwner);
 
             MainContainer.Children.Add(mainView);
         }
