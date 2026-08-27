@@ -42,25 +42,44 @@
 
                 </StackPanel>
 
-                <!-- SEARCH -->
+                <!-- SEARCH + NEW CHAT -->
 
-                <Border Grid.Row="1"
-                        Height="42"
-                        Background="{DynamicResource InputBackgroundBrush}"
-                        BorderBrush="{DynamicResource BorderBrush}"
-                        BorderThickness="1"
-                        CornerRadius="8"
-                        Margin="0,0,0,20">
+                <Grid Grid.Row="1"
+                      Margin="0,0,0,20">
 
-                    <TextBox x:Name="SearchTextBox"
-                             FontSize="14"
-                             Padding="12,0"
-                             Background="Transparent"
-                             Foreground="{DynamicResource TextBrush}"
-                             BorderThickness="0"
-                             VerticalContentAlignment="Center"/>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="42"/>
+                        <RowDefinition Height="42"/>
+                    </Grid.RowDefinitions>
 
-                </Border>
+                    <Border Grid.Row="0"
+                            Height="42"
+                            Background="{DynamicResource InputBackgroundBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8">
+
+                        <TextBox x:Name="SearchTextBox"
+                                 FontSize="14"
+                                 Padding="12,0"
+                                 Background="Transparent"
+                                 Foreground="{DynamicResource TextBrush}"
+                                 BorderThickness="0"
+                                 VerticalContentAlignment="Center"/>
+
+                    </Border>
+
+                    <Button Grid.Row="1"
+                            Content="＋  New Chat"
+                            Height="38"
+                            Margin="0,7,0,0"
+                            Background="{DynamicResource PrimaryBrush}"
+                            Foreground="White"
+                            BorderThickness="0"
+                            FontWeight="SemiBold"
+                            Click="NewChatButton_Click"/>
+
+                </Grid>
 
                 <!-- CHATS -->
 
@@ -76,66 +95,49 @@
                                    Foreground="{DynamicResource SecondaryTextBrush}"
                                    Margin="4,0,0,10"/>
 
-                        <Button Height="65"
-                                Background="{DynamicResource SelectedChatBrush}"
-                                BorderThickness="0"
-                                Padding="12"
-                                Margin="0,0,0,8">
+                        <ItemsControl x:Name="ChatsList">
 
-                            <StackPanel>
-                                <TextBlock Text="Ali"
-                                           FontSize="15"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource TextBrush}"/>
+                            <ItemsControl.ItemTemplate>
 
-                                <TextBlock Text="Hey! How are you?"
-                                           FontSize="12"
-                                           Foreground="{DynamicResource SecondaryTextBrush}"
-                                           Margin="0,5,0,0"/>
-                            </StackPanel>
+                                <DataTemplate>
 
-                        </Button>
+                                    <Button Height="65"
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            Padding="12"
+                                            Margin="0,0,0,8"
+                                            Click="ChatButton_Click">
 
-                        <Button Height="65"
-                                Background="Transparent"
-                                BorderThickness="0"
-                                Padding="12"
-                                Margin="0,0,0,8">
+                                        <StackPanel>
 
-                            <StackPanel>
-                                <TextBlock Text="Reza"
-                                           FontSize="15"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource TextBrush}"/>
+                                            <TextBlock Text="{Binding DisplayName}"
+                                                       FontSize="15"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextBrush}"/>
 
-                                <TextBlock Text="See you tomorrow!"
-                                           FontSize="12"
-                                           Foreground="{DynamicResource SecondaryTextBrush}"
-                                           Margin="0,5,0,0"/>
-                            </StackPanel>
+                                            <TextBlock Text="{Binding LastMessage}"
+                                                       FontSize="12"
+                                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                                       Margin="0,5,0,0"
+                                                       TextTrimming="CharacterEllipsis"/>
 
-                        </Button>
+                                        </StackPanel>
 
-                        <Button Height="65"
-                                Background="Transparent"
-                                BorderThickness="0"
-                                Padding="12">
+                                    </Button>
 
-                            <StackPanel>
-                                <TextBlock Text="Sara"
-                                           FontSize="15"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource TextBrush}"/>
+                                </DataTemplate>
 
-                                <TextBlock Text="Thanks!"
-                                           FontSize="12"
-                                           Foreground="{DynamicResource SecondaryTextBrush}"
-                                           Margin="0,5,0,0"/>
-                            </StackPanel>
+                            </ItemsControl.ItemTemplate>
 
-                        </Button>
+                        </ItemsControl>
 
-                        <!-- OWNER ONLY -->
+                        <TextBlock x:Name="NoChatsText"
+                                   Text="No conversations yet."
+                                   FontSize="13"
+                                   Foreground="{DynamicResource SecondaryTextBrush}"
+                                   Margin="4,15,0,0"/>
+
+                        <!-- OWNER -->
 
                         <Border x:Name="OwnerPanel"
                                 Visibility="Collapsed"
@@ -246,12 +248,14 @@
 
                 <StackPanel VerticalAlignment="Center">
 
-                    <TextBlock Text="Ali"
+                    <TextBlock x:Name="ChatUserNameText"
+                               Text="Select a chat"
                                FontSize="17"
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource TextBrush}"/>
 
-                    <TextBlock Text="Offline"
+                    <TextBlock x:Name="ChatStatusText"
+                               Text="Offline"
                                FontSize="13"
                                Foreground="{DynamicResource SecondaryTextBrush}"
                                Margin="0,4,0,0"/>
@@ -260,38 +264,12 @@
 
             </Border>
 
-            <ScrollViewer Grid.Row="1"
+            <ScrollViewer x:Name="MessagesScrollViewer"
+                          Grid.Row="1"
                           Padding="20"
                           VerticalScrollBarVisibility="Auto">
 
-                <StackPanel>
-
-                    <Border Background="{DynamicResource PanelBackgroundBrush}"
-                            Padding="12"
-                            CornerRadius="12"
-                            HorizontalAlignment="Left"
-                            MaxWidth="450"
-                            Margin="0,0,0,12">
-
-                        <TextBlock Text="Hey! Welcome to NovaChat 👋"
-                                   Foreground="{DynamicResource TextBrush}"
-                                   TextWrapping="Wrap"/>
-
-                    </Border>
-
-                    <Border Background="{DynamicResource PrimaryBrush}"
-                            Padding="12"
-                            CornerRadius="12"
-                            HorizontalAlignment="Right"
-                            MaxWidth="450">
-
-                        <TextBlock Text="Thanks! 😎"
-                                   Foreground="White"
-                                   TextWrapping="Wrap"/>
-
-                    </Border>
-
-                </StackPanel>
+                <StackPanel x:Name="MessagesPanel"/>
 
             </ScrollViewer>
 
@@ -314,12 +292,14 @@
                             BorderThickness="1"
                             CornerRadius="8">
 
-                        <TextBox FontSize="14"
+                        <TextBox x:Name="MessageTextBox"
+                                 FontSize="14"
                                  Padding="12,0"
                                  Background="Transparent"
                                  Foreground="{DynamicResource TextBrush}"
                                  BorderThickness="0"
-                                 VerticalContentAlignment="Center"/>
+                                 VerticalContentAlignment="Center"
+                                 KeyDown="MessageTextBox_KeyDown"/>
 
                     </Border>
 
@@ -330,7 +310,8 @@
                             Background="{DynamicResource PrimaryBrush}"
                             Foreground="White"
                             BorderThickness="0"
-                            FontWeight="SemiBold"/>
+                            FontWeight="SemiBold"
+                            Click="SendButton_Click"/>
 
                 </Grid>
 

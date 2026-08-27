@@ -7,28 +7,19 @@ using Microsoft.OpenApi;
 using NovaChat.Server.Authorization;
 using NovaChat.Server.Data;
 using NovaChat.Server.Entities;
+using NovaChat.Server.Hubs;
 using NovaChat.Server.Services;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// =========================
-// DATABASE
-// =========================
-
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(
         builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// =========================
-// CONTROLLERS
-// =========================
-
 builder.Services.AddControllers();
 
-// =========================
-// SERVICES
-// =========================
+builder.Services.AddSignalR();
 
 builder.Services.AddScoped<UserService>();
 
@@ -37,29 +28,21 @@ builder.Services.AddScoped<
     PasswordHasher<User>>();
 
 builder.Services.AddScoped<JwtService>();
-
 builder.Services.AddScoped<AdminService>();
+builder.Services.AddScoped<ChatService>();
 
-// =========================
-// OWNER AUTHORIZATION
-// =========================
-
-builder.Services.AddSingleton<IAuthorizationHandler, OwnerAuthorizationHandler>();
+builder.Services.AddSingleton<
+    IAuthorizationHandler,
+    OwnerAuthorizationHandler>();
 
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("OwnerOnly", policy =>
     {
         policy.RequireAuthenticatedUser();
-
-        policy.AddRequirements(
-            new OwnerRequirement());
+        policy.AddRequirements(new OwnerRequirement());
     });
 });
-
-// =========================
-// JWT
-// =========================
 
 var jwtKey = builder.Configuration["Jwt:Key"];
 
@@ -96,11 +79,27 @@ builder.Services
 
                 ClockSkew = TimeSpan.Zero
             };
-    });
 
-// =========================
-// SWAGGER
-// =========================
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken =
+                    context.Request.Query["access_token"];
+
+                var path =
+                    context.HttpContext.Request.Path;
+
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    path.StartsWithSegments("/hubs/chat"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
+        };
+    });
 
 builder.Services.AddEndpointsApiExplorer();
 
@@ -127,10 +126,6 @@ builder.Services.AddSwaggerGen(options =>
         });
 });
 
-// =========================
-// APP
-// =========================
-
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -142,9 +137,10 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.UseAuthentication();
-
 app.UseAuthorization();
 
 app.MapControllers();
+
+app.MapHub<ChatHub>("/hubs/chat");
 
 app.Run();

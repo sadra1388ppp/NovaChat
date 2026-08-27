@@ -17,7 +17,6 @@ namespace NovaChat.Client.Views
         public LoginView()
         {
             InitializeComponent();
-
             _apiService = new ApiService();
         }
 
@@ -25,8 +24,11 @@ namespace NovaChat.Client.Views
             object sender,
             RoutedEventArgs e)
         {
-            string userId = UserIdTextBox.Text.Trim();
-            string password = PasswordBox.Password;
+            string userId =
+                UserIdTextBox.Text.Trim();
+
+            string password =
+                PasswordBox.Password;
 
             if (string.IsNullOrWhiteSpace(userId) ||
                 string.IsNullOrWhiteSpace(password))
@@ -51,12 +53,15 @@ namespace NovaChat.Client.Views
                 };
 
                 var result =
-                    await _apiService.PostAsync<LoginRequest, LoginResponse>(
-                        "api/User/login",
-                        request);
+                    await _apiService.PostAsync<
+                        LoginRequest,
+                        LoginResponse>(
+                            "api/User/login",
+                            request);
 
                 if (result == null ||
-                    string.IsNullOrWhiteSpace(result.Token))
+                    string.IsNullOrWhiteSpace(
+                        result.Token))
                 {
                     MessageBox.Show(
                         "Invalid User ID or Password.",
@@ -67,14 +72,13 @@ namespace NovaChat.Client.Views
                     return;
                 }
 
-                MessageBox.Show(
-                    $"Welcome, {result.User.DisplayName}!",
-                    "Login Successful",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
+                AuthState.Set(
+                    result.Token,
+                    result.User.Id,
+                    result.User.DisplayName,
+                    result.User.Email);
 
-                const string ownerId =
-                    "BlackRoom";
+                const string ownerId = "BlackRoom";
 
                 if (string.Equals(
                         result.User.Id,

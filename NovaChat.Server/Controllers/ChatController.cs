@@ -23,18 +23,18 @@ public class ChatController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> CreateChat(CreateChatDto dto)
+    public async Task<IActionResult> CreateChat(
+        CreateChatDto dto)
     {
         var currentUserId = GetCurrentUserId();
 
         if (currentUserId == null)
-        {
             return Unauthorized();
-        }
 
-        var chat = await _chatService.CreatePrivateChatAsync(
-            currentUserId,
-            dto.UserId);
+        var chat =
+            await _chatService.CreatePrivateChatAsync(
+                currentUserId,
+                dto.UserId);
 
         if (chat == null)
         {
@@ -63,19 +63,20 @@ public class ChatController : ControllerBase
         var currentUserId = GetCurrentUserId();
 
         if (currentUserId == null)
-        {
             return Unauthorized();
-        }
 
-        var chats = await _chatService
-            .GetUserChatsAsync(currentUserId);
+        var chats =
+            await _chatService.GetUserChatsAsync(
+                currentUserId);
 
         return Ok(chats.Select(c => new
         {
             c.Id,
             c.User1Id,
             c.User2Id,
-            c.CreatedAt
+            c.CreatedAt,
+            User1Name = c.User1.DisplayName,
+            User2Name = c.User2.DisplayName
         }));
     }
 
@@ -83,40 +84,45 @@ public class ChatController : ControllerBase
     [Authorize(Policy = "OwnerOnly")]
     public async Task<IActionResult> GetAllChats()
     {
-        var chats = await _chatService.GetAllChatsAsync();
+        var chats =
+            await _chatService.GetAllChatsAsync();
 
         return Ok(chats.Select(c => new
         {
             c.Id,
             c.User1Id,
             c.User2Id,
-            c.CreatedAt
+            c.CreatedAt,
+            User1Name = c.User1.DisplayName,
+            User2Name = c.User2.DisplayName
         }));
     }
 
     [HttpGet("{chatId}/messages")]
-    public async Task<IActionResult> GetMessages(int chatId)
+    public async Task<IActionResult> GetMessages(
+        int chatId)
     {
         var currentUserId = GetCurrentUserId();
 
         if (currentUserId == null)
-        {
             return Unauthorized();
-        }
 
-        if (!await CanAccessChat(chatId, currentUserId))
+        if (!await CanAccessChat(
+                chatId,
+                currentUserId))
         {
             return Forbid();
         }
 
-        var messages = await _chatService
-            .GetMessagesAsync(chatId);
+        var messages =
+            await _chatService.GetMessagesAsync(chatId);
 
         return Ok(messages.Select(m => new
         {
             m.Id,
             m.ChatId,
             m.SenderId,
+            SenderName = m.Sender.DisplayName,
             m.Content,
             m.SentAt
         }));
@@ -130,19 +136,20 @@ public class ChatController : ControllerBase
         var currentUserId = GetCurrentUserId();
 
         if (currentUserId == null)
-        {
             return Unauthorized();
-        }
 
-        if (!await CanAccessChat(chatId, currentUserId))
+        if (!await CanAccessChat(
+                chatId,
+                currentUserId))
         {
             return Forbid();
         }
 
-        var message = await _chatService.SendMessageAsync(
-            chatId,
-            currentUserId,
-            dto.Content);
+        var message =
+            await _chatService.SendMessageAsync(
+                chatId,
+                currentUserId,
+                dto.Content);
 
         if (message == null)
         {
@@ -160,6 +167,7 @@ public class ChatController : ControllerBase
                 message.Id,
                 message.ChatId,
                 message.SenderId,
+                SenderName = message.Sender.DisplayName,
                 message.Content,
                 message.SentAt
             }
@@ -167,25 +175,26 @@ public class ChatController : ControllerBase
     }
 
     [HttpDelete("{chatId}")]
-    public async Task<IActionResult> DeleteChat(int chatId)
+    public async Task<IActionResult> DeleteChat(
+        int chatId)
     {
         var currentUserId = GetCurrentUserId();
 
         if (currentUserId == null)
-        {
             return Unauthorized();
-        }
 
         var isOwner = IsOwner();
 
         if (!isOwner &&
-            !await CanAccessChat(chatId, currentUserId))
+            !await CanAccessChat(
+                chatId,
+                currentUserId))
         {
             return Forbid();
         }
 
-        var deleted = await _chatService
-            .DeleteChatAsync(chatId);
+        var deleted =
+            await _chatService.DeleteChatAsync(chatId);
 
         if (!deleted)
         {
@@ -202,23 +211,33 @@ public class ChatController : ControllerBase
     }
 
     [HttpDelete("messages/{messageId}")]
-    public async Task<IActionResult> DeleteMessage(int messageId)
+    public async Task<IActionResult> DeleteMessage(
+        int messageId)
     {
         var currentUserId = GetCurrentUserId();
 
         if (currentUserId == null)
-        {
             return Unauthorized();
-        }
 
         if (!IsOwner())
         {
-            var messages = await _chatService
-                .GetMessagesAsync(
-                    await GetChatIdFromMessage(messageId));
+            var chatId =
+                await GetChatIdFromMessage(messageId);
 
-            var message = messages.FirstOrDefault(m =>
-                m.Id == messageId);
+            if (chatId == 0 ||
+                !await CanAccessChat(
+                    chatId,
+                    currentUserId))
+            {
+                return Forbid();
+            }
+
+            var messages =
+                await _chatService.GetMessagesAsync(chatId);
+
+            var message =
+                messages.FirstOrDefault(
+                    m => m.Id == messageId);
 
             if (message == null ||
                 message.SenderId != currentUserId)
@@ -227,8 +246,9 @@ public class ChatController : ControllerBase
             }
         }
 
-        var deleted = await _chatService
-            .DeleteMessageAsync(messageId);
+        var deleted =
+            await _chatService.DeleteMessageAsync(
+                messageId);
 
         if (!deleted)
         {
@@ -259,7 +279,7 @@ public class ChatController : ControllerBase
             GetCurrentUserId();
 
         return !string.IsNullOrWhiteSpace(ownerUserId)
-               && currentUserId == ownerUserId;
+            && currentUserId == ownerUserId;
     }
 
     private async Task<bool> CanAccessChat(
@@ -267,17 +287,18 @@ public class ChatController : ControllerBase
         string userId)
     {
         if (IsOwner())
-        {
             return true;
-        }
 
         return await _chatService
-            .CanAccessChatAsync(chatId, userId);
+            .CanAccessChatAsync(
+                chatId,
+                userId);
     }
 
-    private async Task<int> GetChatIdFromMessage(int messageId)
+    private async Task<int> GetChatIdFromMessage(
+        int messageId)
     {
-    return await _chatService
-        .GetMessageChatIdAsync(messageId) ?? 0;
+        return await _chatService
+            .GetMessageChatIdAsync(messageId) ?? 0;
     }
 }

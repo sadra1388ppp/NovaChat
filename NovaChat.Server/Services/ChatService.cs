@@ -18,40 +18,38 @@ public class ChatService
         string otherUserId)
     {
         if (string.IsNullOrWhiteSpace(otherUserId))
-        {
             return null;
-        }
 
         if (currentUserId == otherUserId)
+            return null;
+
+        var currentUserExists =
+            await _context.Users
+                .AnyAsync(u => u.Id == currentUserId);
+
+        var otherUserExists =
+            await _context.Users
+                .AnyAsync(u => u.Id == otherUserId);
+
+        if (!currentUserExists ||
+            !otherUserExists)
         {
             return null;
         }
 
-        var currentUserExists = await _context.Users
-            .AnyAsync(u => u.Id == currentUserId);
-
-        var otherUserExists = await _context.Users
-            .AnyAsync(u => u.Id == otherUserId);
-
-        if (!currentUserExists || !otherUserExists)
-        {
-            return null;
-        }
-
-        var existingChat = await _context.Chats
-            .Include(c => c.User1)
-            .Include(c => c.User2)
-            .FirstOrDefaultAsync(c =>
-                (c.User1Id == currentUserId &&
-                 c.User2Id == otherUserId)
-                ||
-                (c.User1Id == otherUserId &&
-                 c.User2Id == currentUserId));
+        var existingChat =
+            await _context.Chats
+                .Include(c => c.User1)
+                .Include(c => c.User2)
+                .FirstOrDefaultAsync(c =>
+                    (c.User1Id == currentUserId &&
+                     c.User2Id == otherUserId)
+                    ||
+                    (c.User1Id == otherUserId &&
+                     c.User2Id == currentUserId));
 
         if (existingChat != null)
-        {
             return existingChat;
-        }
 
         var chat = new Chat
         {
@@ -74,7 +72,8 @@ public class ChatService
         return chat;
     }
 
-    public async Task<List<Chat>> GetUserChatsAsync(string userId)
+    public async Task<List<Chat>> GetUserChatsAsync(
+        string userId)
     {
         return await _context.Chats
             .Include(c => c.User1)
@@ -95,12 +94,14 @@ public class ChatService
             .ToListAsync();
     }
 
-    public async Task<Chat?> GetChatByIdAsync(int chatId)
+    public async Task<Chat?> GetChatByIdAsync(
+        int chatId)
     {
         return await _context.Chats
             .Include(c => c.User1)
             .Include(c => c.User2)
-            .FirstOrDefaultAsync(c => c.Id == chatId);
+            .FirstOrDefaultAsync(
+                c => c.Id == chatId);
     }
 
     public async Task<bool> CanAccessChatAsync(
@@ -120,17 +121,15 @@ public class ChatService
         string content)
     {
         if (string.IsNullOrWhiteSpace(content))
-        {
             return null;
-        }
 
-        var chat = await _context.Chats
-            .FirstOrDefaultAsync(c => c.Id == chatId);
+        var chat =
+            await _context.Chats
+                .FirstOrDefaultAsync(
+                    c => c.Id == chatId);
 
         if (chat == null)
-        {
             return null;
-        }
 
         if (chat.User1Id != senderId &&
             chat.User2Id != senderId)
@@ -156,7 +155,8 @@ public class ChatService
         return message;
     }
 
-    public async Task<List<Message>> GetMessagesAsync(int chatId)
+    public async Task<List<Message>> GetMessagesAsync(
+        int chatId)
     {
         return await _context.Messages
             .Include(m => m.Sender)
@@ -165,15 +165,16 @@ public class ChatService
             .ToListAsync();
     }
 
-    public async Task<bool> DeleteChatAsync(int chatId)
+    public async Task<bool> DeleteChatAsync(
+        int chatId)
     {
-        var chat = await _context.Chats
-            .FirstOrDefaultAsync(c => c.Id == chatId);
+        var chat =
+            await _context.Chats
+                .FirstOrDefaultAsync(
+                    c => c.Id == chatId);
 
         if (chat == null)
-        {
             return false;
-        }
 
         _context.Chats.Remove(chat);
 
@@ -182,15 +183,16 @@ public class ChatService
         return true;
     }
 
-    public async Task<bool> DeleteMessageAsync(int messageId)
+    public async Task<bool> DeleteMessageAsync(
+        int messageId)
     {
-        var message = await _context.Messages
-            .FirstOrDefaultAsync(m => m.Id == messageId);
+        var message =
+            await _context.Messages
+                .FirstOrDefaultAsync(
+                    m => m.Id == messageId);
 
         if (message == null)
-        {
             return false;
-        }
 
         _context.Messages.Remove(message);
 
@@ -199,12 +201,12 @@ public class ChatService
         return true;
     }
 
-
-    public async Task<int?> GetMessageChatIdAsync(int messageId)
+    public async Task<int?> GetMessageChatIdAsync(
+        int messageId)
     {
-    return await _context.Messages
-        .Where(m => m.Id == messageId)
-        .Select(m => (int?)m.ChatId)
-        .FirstOrDefaultAsync();
+        return await _context.Messages
+            .Where(m => m.Id == messageId)
+            .Select(m => (int?)m.ChatId)
+            .FirstOrDefaultAsync();
     }
 }

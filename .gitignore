@@ -1,0 +1,12 @@
+# Visual Studio / .NET
+.vs/
+bin/
+obj/
+
+# User-specific files
+*.user
+*.suo
+
+# Build output
+[Bb]in/
+[Oo]bj/
