@@ -10,7 +10,7 @@
 
   <ItemGroup>
     <Page Remove="Views\ContactsView.xaml" />
-    <Page Include="Views\ContactsView.New.xaml" />
+    <Page Remove="Views\ContactsView.New.xaml" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.0" />
   </ItemGroup>
 
