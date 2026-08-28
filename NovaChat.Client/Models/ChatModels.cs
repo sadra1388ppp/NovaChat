@@ -4,17 +4,24 @@ public class ChatModel
 {
     public int Id { get; set; }
 
-    public string User1Id { get; set; } = string.Empty;
+    public string User1Id { get; set; } =
+        string.Empty;
 
-    public string User2Id { get; set; } = string.Empty;
+    public string User2Id { get; set; } =
+        string.Empty;
 
-    public string User1Name { get; set; } = string.Empty;
+    public string User1Name { get; set; } =
+        string.Empty;
 
-    public string User2Name { get; set; } = string.Empty;
+    public string User2Name { get; set; } =
+        string.Empty;
 
     public DateTime CreatedAt { get; set; }
 
-    public string OtherUserId(string currentUserId)
+    public MessageModel? LastMessage { get; set; }
+
+    public string OtherUserId(
+        string currentUserId)
     {
         return string.Equals(
             User1Id,
@@ -24,7 +31,8 @@ public class ChatModel
             : User1Id;
     }
 
-    public string OtherUserName(string currentUserId)
+    public string OtherUserName(
+        string currentUserId)
     {
         return string.Equals(
             User1Id,
@@ -41,23 +49,38 @@ public class MessageModel
 
     public int ChatId { get; set; }
 
-    public string SenderId { get; set; } = string.Empty;
+    public string SenderId { get; set; } =
+        string.Empty;
 
-    public string SenderName { get; set; } = string.Empty;
+    public string SenderName { get; set; } =
+        string.Empty;
 
-    public string Content { get; set; } = string.Empty;
+    public string Content { get; set; } =
+        string.Empty;
 
     public DateTime SentAt { get; set; }
 }
 
+public class ChatHistoryResponse
+{
+    public List<MessageModel> Messages { get; set; } =
+        [];
+
+    public bool HasMore { get; set; }
+
+    public int? NextBeforeMessageId { get; set; }
+}
+
 public class CreateChatRequest
 {
-    public string UserId { get; set; } = string.Empty;
+    public string UserId { get; set; } =
+        string.Empty;
 }
 
 public class CreateChatResponse
 {
-    public string Message { get; set; } = string.Empty;
+    public string Message { get; set; } =
+        string.Empty;
 
     public ChatModel? Chat { get; set; }
 }

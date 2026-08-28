@@ -13,16 +13,32 @@ public partial class MainView : UserControl
     public event Action? ProfileRequested;
     public event Action? SettingsRequested;
 
+    private const int MessagePageSize = 50;
+
     private readonly ApiService _apiService;
 
     private HubConnection? _hubConnection;
+
     private readonly List<ChatListItem> _chats = [];
 
+    private readonly HashSet<int> _loadedMessageIds = [];
+
+    private readonly HashSet<string> _onlineUserIds =
+        new(StringComparer.OrdinalIgnoreCase);
+
     private int? _currentChatId;
+
+    private int? _oldestLoadedMessageId;
 
     private string _currentOtherUserId = string.Empty;
 
     private bool _isOwner;
+
+    private bool _isLoadingOlderMessages;
+
+    private bool _hasMoreMessages;
+
+    private bool _isOpeningChat;
 
     public MainView()
     {
@@ -109,7 +125,81 @@ public partial class MainView : UserControl
             "ReceiveMessage",
             OnMessageReceived);
 
+        _hubConnection.On<List<string>>(
+            "PresenceSnapshot",
+            OnPresenceSnapshot);
+
+        _hubConnection.On<string>(
+            "UserOnline",
+            OnUserOnline);
+
+        _hubConnection.On<string>(
+            "UserOffline",
+            OnUserOffline);
+
+        _hubConnection.Reconnecting +=
+            OnSignalRReconnecting;
+
+        _hubConnection.Reconnected +=
+            OnSignalRReconnected;
+
+        _hubConnection.Closed +=
+            OnSignalRClosed;
+
         await _hubConnection.StartAsync();
+
+        ChatStatusText.Text =
+            "Connected";
+
+        await RefreshCurrentUserPresenceAsync();
+    }
+
+    private Task OnSignalRReconnecting(
+        Exception? exception)
+    {
+        return Dispatcher.InvokeAsync(() =>
+        {
+            ChatStatusText.Text =
+                "Connecting...";
+
+            ChatStatusIndicator.Fill =
+                Brushes.Gray;
+        }).Task;
+    }
+
+    private async Task OnSignalRReconnected(
+        string? connectionId)
+    {
+        await Dispatcher.InvokeAsync(() =>
+        {
+            ChatStatusText.Text =
+                "Connected";
+        });
+
+        try
+        {
+            await RefreshCurrentUserPresenceAsync();
+        }
+        catch
+        {
+        }
+    }
+
+    private Task OnSignalRClosed(
+        Exception? exception)
+    {
+        return Dispatcher.InvokeAsync(() =>
+        {
+            ChatStatusText.Text =
+                "Offline";
+
+            ChatStatusIndicator.Fill =
+                Brushes.Gray;
+
+            _onlineUserIds.Clear();
+
+            RefreshPresenceUi();
+        }).Task;
     }
 
     private async Task DisconnectSignalRAsync()
@@ -120,11 +210,190 @@ public partial class MainView : UserControl
         try
         {
             await _hubConnection.StopAsync();
+
             await _hubConnection.DisposeAsync();
         }
         finally
         {
             _hubConnection = null;
+
+            _onlineUserIds.Clear();
+
+            ChatStatusText.Text =
+                "Offline";
+
+            ChatStatusIndicator.Fill =
+                Brushes.Gray;
+
+            RefreshPresenceUi();
+        }
+    }
+
+    private async Task RefreshCurrentUserPresenceAsync()
+    {
+        if (_hubConnection == null)
+            return;
+
+        if (_hubConnection.State !=
+            HubConnectionState.Connected)
+        {
+            return;
+        }
+
+        try
+        {
+            var onlineUsers =
+                await _hubConnection.InvokeAsync<
+                    List<string>>(
+                    "GetOnlineUsers");
+
+            await Dispatcher.InvokeAsync(() =>
+            {
+                _onlineUserIds.Clear();
+
+                if (onlineUsers != null)
+                {
+                    foreach (var userId in onlineUsers)
+                    {
+                        if (!string.IsNullOrWhiteSpace(userId))
+                        {
+                            _onlineUserIds.Add(
+                                userId);
+                        }
+                    }
+                }
+
+                RefreshPresenceUi();
+            });
+        }
+        catch
+        {
+        }
+    }
+
+    private async void OnPresenceSnapshot(
+        List<string> onlineUserIds)
+    {
+        await Dispatcher.InvokeAsync(() =>
+        {
+            _onlineUserIds.Clear();
+
+            if (onlineUserIds != null)
+            {
+                foreach (var userId in onlineUserIds)
+                {
+                    if (!string.IsNullOrWhiteSpace(userId))
+                    {
+                        _onlineUserIds.Add(
+                            userId);
+                    }
+                }
+            }
+
+            RefreshPresenceUi();
+        });
+    }
+
+    private async void OnUserOnline(
+        string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return;
+
+        await Dispatcher.InvokeAsync(() =>
+        {
+            _onlineUserIds.Add(userId);
+
+            RefreshPresenceUi();
+        });
+    }
+
+    private async void OnUserOffline(
+        string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return;
+
+        await Dispatcher.InvokeAsync(() =>
+        {
+            _onlineUserIds.Remove(userId);
+
+            RefreshPresenceUi();
+        });
+    }
+
+    private void RefreshPresenceUi()
+    {
+        foreach (var chat in _chats)
+        {
+            var otherUserId =
+                chat.Chat.OtherUserId(
+                    AuthState.UserId);
+
+            chat.IsOnline =
+                IsUserOnline(otherUserId);
+        }
+
+        RefreshChatsList();
+
+        if (!string.IsNullOrWhiteSpace(
+                _currentOtherUserId))
+        {
+            UpdateCurrentChatPresence();
+        }
+        else
+        {
+            ChatStatusText.Text =
+                "Offline";
+
+            ChatStatusIndicator.Fill =
+                Brushes.Gray;
+        }
+    }
+
+    private bool IsUserOnline(
+        string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return false;
+
+        return _onlineUserIds.Contains(
+            userId);
+    }
+
+    private void UpdateCurrentChatPresence()
+    {
+        if (string.IsNullOrWhiteSpace(
+                _currentOtherUserId))
+        {
+            ChatStatusText.Text =
+                "Offline";
+
+            ChatStatusIndicator.Fill =
+                Brushes.Gray;
+
+            return;
+        }
+
+        var isOnline =
+            IsUserOnline(
+                _currentOtherUserId);
+
+        if (isOnline)
+        {
+            ChatStatusText.Text =
+                "Online";
+
+            ChatStatusIndicator.Fill =
+                Brushes.LimeGreen;
+        }
+        else
+        {
+            ChatStatusText.Text =
+                "Offline";
+
+            ChatStatusIndicator.Fill =
+                Brushes.Gray;
         }
     }
 
@@ -134,9 +403,21 @@ public partial class MainView : UserControl
         await Dispatcher.InvokeAsync(() =>
         {
             if (_currentChatId != message.ChatId)
+            {
+                UpdateChatPreview(message);
+
                 return;
+            }
+
+            if (!_loadedMessageIds.Add(
+                    message.Id))
+            {
+                return;
+            }
 
             AddMessageToUi(message);
+
+            UpdateChatPreview(message);
 
             _ = ScrollMessagesToBottomAsync();
         });
@@ -155,6 +436,10 @@ public partial class MainView : UserControl
         {
             foreach (var chat in chats)
             {
+                var otherUserId =
+                    chat.OtherUserId(
+                        AuthState.UserId);
+
                 _chats.Add(
                     new ChatListItem
                     {
@@ -165,12 +450,25 @@ public partial class MainView : UserControl
                                 AuthState.UserId),
 
                         LastMessage =
-                            "No messages yet."
+                            chat.LastMessage == null
+                                ? "No messages yet."
+                                : FormatLastMessage(
+                                    chat.LastMessage),
+
+                        IsOnline =
+                            IsUserOnline(
+                                otherUserId)
                     });
             }
         }
 
+        RefreshChatsList();
+    }
+
+    private void RefreshChatsList()
+    {
         ChatsList.ItemsSource = null;
+
         ChatsList.ItemsSource = _chats;
 
         NoChatsText.Visibility =
@@ -179,16 +477,64 @@ public partial class MainView : UserControl
                 : Visibility.Collapsed;
     }
 
+    private string FormatLastMessage(
+        MessageModel message)
+    {
+        var prefix =
+            string.Equals(
+                message.SenderId,
+                AuthState.UserId,
+                StringComparison.OrdinalIgnoreCase)
+                ? "You: "
+                : string.Empty;
+
+        return prefix + message.Content;
+    }
+
+    private void UpdateChatPreview(
+        MessageModel message)
+    {
+        var item =
+            _chats.FirstOrDefault(
+                x => x.Chat.Id == message.ChatId);
+
+        if (item == null)
+            return;
+
+        item.Chat.LastMessage =
+            message;
+
+        item.LastMessage =
+            FormatLastMessage(message);
+
+        var index =
+            _chats.IndexOf(item);
+
+        if (index > 0)
+        {
+            _chats.RemoveAt(index);
+
+            _chats.Insert(0, item);
+        }
+
+        RefreshChatsList();
+    }
+
     private async void NewChatButton_Click(
         object sender,
         RoutedEventArgs e)
     {
-        var userId = ShowNewChatDialog();
+        var userId =
+            ShowNewChatDialog();
 
-        if (string.IsNullOrWhiteSpace(userId))
+        if (string.IsNullOrWhiteSpace(
+                userId))
+        {
             return;
+        }
 
-        userId = userId.Trim();
+        userId =
+            userId.Trim();
 
         if (string.Equals(
                 userId,
@@ -231,7 +577,9 @@ public partial class MainView : UserControl
 
             var createdChat =
                 _chats.FirstOrDefault(
-                    x => x.Chat.Id == result.Chat.Id);
+                    x =>
+                        x.Chat.Id ==
+                        result.Chat.Id);
 
             if (createdChat != null)
             {
@@ -243,7 +591,7 @@ public partial class MainView : UserControl
         {
             MessageBox.Show(
                 $"Could not create chat.\n\n{ex.Message}",
-                "NovaChat",
+                "New Chat",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
@@ -254,151 +602,223 @@ public partial class MainView : UserControl
         var window = new Window
         {
             Title = "New Chat",
+
             Width = 400,
+
             Height = 230,
+
             WindowStartupLocation =
                 WindowStartupLocation.CenterOwner,
-            ResizeMode = ResizeMode.NoResize,
+
+            ResizeMode =
+                ResizeMode.NoResize,
+
             Background =
                 (Brush)FindResource(
                     "PanelBackgroundBrush"),
+
             Foreground =
                 (Brush)FindResource(
                     "TextBrush"),
+
             Owner =
                 Window.GetWindow(this)
         };
 
-        var mainPanel = new StackPanel
-        {
-            Margin = new Thickness(25)
-        };
+        var mainPanel =
+            new StackPanel
+            {
+                Margin =
+                    new Thickness(25)
+            };
 
-        var title = new TextBlock
-        {
-            Text = "Start a new conversation",
-            FontSize = 20,
-            FontWeight = FontWeights.SemiBold,
-            Foreground =
-                (Brush)FindResource(
-                    "TextBrush"),
-            Margin =
-                new Thickness(0, 0, 0, 18)
-        };
+        var title =
+            new TextBlock
+            {
+                Text =
+                    "Start a new conversation",
 
-        var label = new TextBlock
-        {
-            Text = "Enter User ID",
-            FontSize = 13,
-            Foreground =
-                (Brush)FindResource(
-                    "SecondaryTextBrush"),
-            Margin =
-                new Thickness(0, 0, 0, 7)
-        };
+                FontSize = 20,
 
-        var textBox = new TextBox
-        {
-            Height = 40,
-            FontSize = 14,
-            Padding = new Thickness(10),
-            Background =
-                (Brush)FindResource(
-                    "InputBackgroundBrush"),
-            Foreground =
-                (Brush)FindResource(
-                    "TextBrush"),
-            BorderBrush =
-                (Brush)FindResource(
-                    "BorderBrush"),
-            BorderThickness =
-                new Thickness(1)
-        };
+                FontWeight =
+                    FontWeights.SemiBold,
 
-        var buttons = new StackPanel
-        {
-            Orientation =
-                Orientation.Horizontal,
+                Foreground =
+                    (Brush)FindResource(
+                        "TextBrush"),
 
-            HorizontalAlignment =
-                HorizontalAlignment.Right,
+                Margin =
+                    new Thickness(
+                        0,
+                        0,
+                        0,
+                        18)
+            };
 
-            Margin =
-                new Thickness(0, 18, 0, 0)
-        };
+        var label =
+            new TextBlock
+            {
+                Text =
+                    "Enter User ID",
 
-        var cancelButton = new Button
-        {
-            Content = "Cancel",
-            Width = 85,
-            Height = 35,
-            Margin =
-                new Thickness(0, 0, 8, 0)
-        };
+                FontSize = 13,
 
-        var startButton = new Button
-        {
-            Content = "Start Chat",
-            Width = 100,
-            Height = 35,
-            Background =
-                (Brush)FindResource(
-                    "PrimaryBrush"),
-            Foreground = Brushes.White,
-            BorderThickness =
-                new Thickness(0)
-        };
+                Foreground =
+                    (Brush)FindResource(
+                        "SecondaryTextBrush"),
+
+                Margin =
+                    new Thickness(
+                        0,
+                        0,
+                        0,
+                        7)
+            };
+
+        var textBox =
+            new TextBox
+            {
+                Height = 40,
+
+                FontSize = 14,
+
+                Padding =
+                    new Thickness(10),
+
+                Background =
+                    (Brush)FindResource(
+                        "InputBackgroundBrush"),
+
+                Foreground =
+                    (Brush)FindResource(
+                        "TextBrush"),
+
+                BorderBrush =
+                    (Brush)FindResource(
+                        "BorderBrush"),
+
+                BorderThickness =
+                    new Thickness(1)
+            };
+
+        var buttons =
+            new StackPanel
+            {
+                Orientation =
+                    Orientation.Horizontal,
+
+                HorizontalAlignment =
+                    HorizontalAlignment.Right,
+
+                Margin =
+                    new Thickness(
+                        0,
+                        18,
+                        0,
+                        0)
+            };
+
+        var cancelButton =
+            new Button
+            {
+                Content = "Cancel",
+
+                Width = 85,
+
+                Height = 35,
+
+                Margin =
+                    new Thickness(
+                        0,
+                        0,
+                        8,
+                        0)
+            };
+
+        var startButton =
+            new Button
+            {
+                Content = "Start Chat",
+
+                Width = 100,
+
+                Height = 35,
+
+                Background =
+                    (Brush)FindResource(
+                        "PrimaryBrush"),
+
+                Foreground =
+                    Brushes.White,
+
+                BorderThickness =
+                    new Thickness(0)
+            };
 
         string? result = null;
 
-        cancelButton.Click += (_, _) =>
-        {
-            window.DialogResult = false;
-        };
-
-        startButton.Click += (_, _) =>
-        {
-            if (string.IsNullOrWhiteSpace(
-                    textBox.Text))
+        cancelButton.Click +=
+            (_, _) =>
             {
-                MessageBox.Show(
-                    "Please enter a User ID.",
-                    "New Chat",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
+                window.DialogResult =
+                    false;
+            };
 
-                return;
-            }
-
-            result = textBox.Text.Trim();
-
-            window.DialogResult = true;
-        };
-
-        textBox.KeyDown += (_, e) =>
-        {
-            if (e.Key == Key.Enter)
+        startButton.Click +=
+            (_, _) =>
             {
-                startButton.RaiseEvent(
-                    new RoutedEventArgs(
-                        Button.ClickEvent));
-            }
-        };
+                if (string.IsNullOrWhiteSpace(
+                        textBox.Text))
+                {
+                    MessageBox.Show(
+                        "Please enter a User ID.",
+                        "New Chat",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
 
-        buttons.Children.Add(cancelButton);
-        buttons.Children.Add(startButton);
+                    return;
+                }
+
+                result =
+                    textBox.Text.Trim();
+
+                window.DialogResult =
+                    true;
+            };
+
+        textBox.KeyDown +=
+            (_, e) =>
+            {
+                if (e.Key == Key.Enter)
+                {
+                    startButton.RaiseEvent(
+                        new RoutedEventArgs(
+                            Button.ClickEvent));
+                }
+            };
+
+        buttons.Children.Add(
+            cancelButton);
+
+        buttons.Children.Add(
+            startButton);
 
         mainPanel.Children.Add(title);
+
         mainPanel.Children.Add(label);
+
         mainPanel.Children.Add(textBox);
+
         mainPanel.Children.Add(buttons);
 
-        window.Content = mainPanel;
+        window.Content =
+            mainPanel;
 
-        window.Loaded += (_, _) =>
-        {
-            textBox.Focus();
-        };
+        window.Loaded +=
+            (_, _) =>
+            {
+                textBox.Focus();
+            };
 
         window.ShowDialog();
 
@@ -415,7 +835,245 @@ public partial class MainView : UserControl
             return;
         }
 
-        await OpenChatAsync(item.Chat);
+        await OpenChatAsync(
+            item.Chat);
+    }
+
+    private async Task OpenChatAsync(
+        ChatModel chat)
+    {
+        if (_isOpeningChat)
+            return;
+
+        _isOpeningChat = true;
+
+        try
+        {
+            if (_currentChatId.HasValue &&
+                _currentChatId.Value != chat.Id &&
+                _hubConnection != null &&
+                _hubConnection.State ==
+                    HubConnectionState.Connected)
+            {
+                try
+                {
+                    await _hubConnection.InvokeAsync(
+                        "LeaveChat",
+                        _currentChatId.Value);
+                }
+                catch
+                {
+                }
+            }
+
+            _currentChatId =
+                chat.Id;
+
+            _currentOtherUserId =
+                chat.OtherUserId(
+                    AuthState.UserId);
+
+            ChatUserNameText.Text =
+                chat.OtherUserName(
+                    AuthState.UserId);
+
+            UpdateCurrentChatPresence();
+
+            MessagesPanel.Children.Clear();
+
+            _loadedMessageIds.Clear();
+
+            _oldestLoadedMessageId =
+                null;
+
+            _hasMoreMessages =
+                false;
+
+            LoadOlderMessagesButton.Visibility =
+                Visibility.Collapsed;
+
+            if (_hubConnection != null &&
+                _hubConnection.State ==
+                    HubConnectionState.Connected)
+            {
+                await _hubConnection.InvokeAsync(
+                    "JoinChat",
+                    chat.Id);
+            }
+
+            await LoadInitialMessagesAsync(
+                chat.Id);
+
+            await ScrollMessagesToBottomAsync();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Could not open chat.\n\n{ex.Message}",
+                "NovaChat",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        finally
+        {
+            _isOpeningChat = false;
+        }
+    }
+
+    private async Task LoadInitialMessagesAsync(
+        int chatId)
+    {
+        var response =
+            await _apiService.GetAsync<
+                ChatHistoryResponse>(
+                    $"api/Chat/{chatId}/messages?pageSize={MessagePageSize}");
+
+        if (response == null)
+            return;
+
+        foreach (var message in response.Messages)
+        {
+            if (_loadedMessageIds.Add(
+                    message.Id))
+            {
+                AddMessageToUi(
+                    message);
+            }
+        }
+
+        _oldestLoadedMessageId =
+            response.NextBeforeMessageId;
+
+        _hasMoreMessages =
+            response.HasMore;
+
+        UpdateLoadOlderButton();
+    }
+
+    private async Task LoadOlderMessagesAsync()
+    {
+        if (_currentChatId == null)
+            return;
+
+        if (!_hasMoreMessages)
+            return;
+
+        if (_isLoadingOlderMessages)
+            return;
+
+        if (!_oldestLoadedMessageId.HasValue)
+            return;
+
+        _isLoadingOlderMessages =
+            true;
+
+        try
+        {
+            var oldScrollHeight =
+                MessagesScrollViewer.ExtentHeight;
+
+            var oldOffset =
+                MessagesScrollViewer.VerticalOffset;
+
+            var response =
+                await _apiService.GetAsync<
+                    ChatHistoryResponse>(
+                        $"api/Chat/{_currentChatId.Value}/messages" +
+                        $"?beforeMessageId={_oldestLoadedMessageId.Value}" +
+                        $"&pageSize={MessagePageSize}");
+
+            if (response == null)
+                return;
+
+            var messagesToAdd =
+                response.Messages
+                    .Where(
+                        m =>
+                            _loadedMessageIds.Add(
+                                m.Id))
+                    .ToList();
+
+            if (messagesToAdd.Count > 0)
+            {
+                foreach (var message in
+                         messagesToAdd)
+                {
+                    AddMessageToUi(
+                        message,
+                        insertAtTop: true);
+                }
+
+                await Dispatcher.InvokeAsync(
+                    () =>
+                    {
+                        var newScrollHeight =
+                            MessagesScrollViewer
+                                .ExtentHeight;
+
+                        var difference =
+                            newScrollHeight -
+                            oldScrollHeight;
+
+                        MessagesScrollViewer
+                            .ScrollToVerticalOffset(
+                                oldOffset +
+                                difference);
+                    },
+                    System.Windows.Threading
+                        .DispatcherPriority.Loaded);
+            }
+
+            _oldestLoadedMessageId =
+                response.NextBeforeMessageId;
+
+            _hasMoreMessages =
+                response.HasMore;
+
+            UpdateLoadOlderButton();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Could not load older messages.\n\n{ex.Message}",
+                "NovaChat",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        finally
+        {
+            _isLoadingOlderMessages =
+                false;
+        }
+    }
+
+    private void UpdateLoadOlderButton()
+    {
+        LoadOlderMessagesButton.Visibility =
+            _hasMoreMessages
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        LoadOlderMessagesButton.IsEnabled =
+            !_isLoadingOlderMessages;
+    }
+
+    private void MessagesScrollViewer_ScrollChanged(
+        object sender,
+        ScrollChangedEventArgs e)
+    {
+        if (e.VerticalOffset <= 30 &&
+            _hasMoreMessages &&
+            !_isLoadingOlderMessages)
+        {
+            _ = LoadOlderMessagesAsync();
+        }
+    }
+
+    private async void LoadOlderMessagesButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        await LoadOlderMessagesAsync();
     }
 
     private async void DeleteChatButton_Click(
@@ -455,11 +1113,37 @@ public partial class MainView : UserControl
                 return;
             }
 
-            if (_currentChatId == item.Chat.Id)
+            if (_currentChatId ==
+                item.Chat.Id)
             {
-                _currentChatId = null;
+                if (_hubConnection != null &&
+                    _hubConnection.State ==
+                        HubConnectionState.Connected)
+                {
+                    try
+                    {
+                        await _hubConnection.InvokeAsync(
+                            "LeaveChat",
+                            item.Chat.Id);
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                _currentChatId =
+                    null;
+
                 _currentOtherUserId =
                     string.Empty;
+
+                _oldestLoadedMessageId =
+                    null;
+
+                _hasMoreMessages =
+                    false;
+
+                _loadedMessageIds.Clear();
 
                 ChatUserNameText.Text =
                     "Select a chat";
@@ -467,77 +1151,25 @@ public partial class MainView : UserControl
                 ChatStatusText.Text =
                     "Offline";
 
+                ChatStatusIndicator.Fill =
+                    Brushes.Gray;
+
                 MessagesPanel.Children.Clear();
+
                 MessageTextBox.Clear();
+
+                UpdateLoadOlderButton();
             }
 
             _chats.Remove(item);
 
-            ChatsList.ItemsSource = null;
-            ChatsList.ItemsSource = _chats;
-
-            NoChatsText.Visibility =
-                _chats.Count == 0
-                    ? Visibility.Visible
-                    : Visibility.Collapsed;
+            RefreshChatsList();
         }
         catch (Exception ex)
         {
             MessageBox.Show(
                 $"Could not delete chat.\n\n{ex.Message}",
                 "Delete Chat",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
-        }
-    }
-
-    private async Task OpenChatAsync(
-        ChatModel chat)
-    {
-        _currentChatId = chat.Id;
-
-        _currentOtherUserId =
-            chat.OtherUserId(
-                AuthState.UserId);
-
-        ChatUserNameText.Text =
-            chat.OtherUserName(
-                AuthState.UserId);
-
-        ChatStatusText.Text =
-            "Online connection";
-
-        MessagesPanel.Children.Clear();
-
-        try
-        {
-            if (_hubConnection != null)
-            {
-                await _hubConnection.InvokeAsync(
-                    "JoinChat",
-                    chat.Id);
-            }
-
-            var messages =
-                await _apiService.GetAsync<
-                    List<MessageModel>>(
-                    $"api/Chat/{chat.Id}/messages");
-
-            if (messages != null)
-            {
-                foreach (var message in messages)
-                {
-                    AddMessageToUi(message);
-                }
-            }
-
-            await ScrollMessagesToBottomAsync();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(
-                $"Could not open chat.\n\n{ex.Message}",
-                "NovaChat",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
@@ -578,12 +1210,15 @@ public partial class MainView : UserControl
         string content =
             MessageTextBox.Text.Trim();
 
-        if (string.IsNullOrWhiteSpace(content))
+        if (string.IsNullOrWhiteSpace(
+                content))
+        {
             return;
+        }
 
         if (_hubConnection == null ||
             _hubConnection.State !=
-            HubConnectionState.Connected)
+                HubConnectionState.Connected)
         {
             MessageBox.Show(
                 "Real-time connection is not available.",
@@ -614,7 +1249,8 @@ public partial class MainView : UserControl
     }
 
     private void AddMessageToUi(
-        MessageModel message)
+        MessageModel message,
+        bool insertAtTop = false)
     {
         bool isMine =
             string.Equals(
@@ -622,77 +1258,104 @@ public partial class MainView : UserControl
                 AuthState.UserId,
                 StringComparison.OrdinalIgnoreCase);
 
-        var border = new Border
+        var border =
+            new Border
+            {
+                Background =
+                    isMine
+                        ? (Brush)FindResource(
+                            "PrimaryBrush")
+                        : (Brush)FindResource(
+                            "PanelBackgroundBrush"),
+
+                Padding =
+                    new Thickness(12),
+
+                CornerRadius =
+                    new CornerRadius(12),
+
+                HorizontalAlignment =
+                    isMine
+                        ? HorizontalAlignment.Right
+                        : HorizontalAlignment.Left,
+
+                MaxWidth = 450,
+
+                Margin =
+                    new Thickness(
+                        0,
+                        0,
+                        0,
+                        12)
+            };
+
+        var panel =
+            new StackPanel();
+
+        var contentText =
+            new TextBlock
+            {
+                Text =
+                    message.Content,
+
+                TextWrapping =
+                    TextWrapping.Wrap,
+
+                Foreground =
+                    isMine
+                        ? Brushes.White
+                        : (Brush)FindResource(
+                            "TextBrush")
+            };
+
+        panel.Children.Add(
+            contentText);
+
+        var timeText =
+            new TextBlock
+            {
+                Text =
+                    message.SentAt
+                        .ToLocalTime()
+                        .ToString(
+                            "HH:mm"),
+
+                FontSize = 10,
+
+                Margin =
+                    new Thickness(
+                        0,
+                        5,
+                        0,
+                        0),
+
+                Foreground =
+                    isMine
+                        ? Brushes.White
+                        : (Brush)FindResource(
+                            "SecondaryTextBrush"),
+
+                HorizontalAlignment =
+                    HorizontalAlignment.Right
+            };
+
+        panel.Children.Add(
+            timeText);
+
+        border.Child =
+            panel;
+
+        if (insertAtTop)
         {
-            Background =
-                isMine
-                    ? (Brush)FindResource(
-                        "PrimaryBrush")
-                    : (Brush)FindResource(
-                        "PanelBackgroundBrush"),
-
-            Padding =
-                new Thickness(12),
-
-            CornerRadius =
-                new CornerRadius(12),
-
-            HorizontalAlignment =
-                isMine
-                    ? HorizontalAlignment.Right
-                    : HorizontalAlignment.Left,
-
-            MaxWidth = 450,
-
-            Margin =
-                new Thickness(0, 0, 0, 12)
-        };
-
-        var panel = new StackPanel();
-
-        var contentText = new TextBlock
+            MessagesPanel.Children.Insert(
+                1,
+                border);
+        }
+        else
         {
-            Text = message.Content,
-
-            TextWrapping =
-                TextWrapping.Wrap,
-
-            Foreground =
-                isMine
-                    ? Brushes.White
-                    : (Brush)FindResource(
-                        "TextBrush")
-        };
-
-        panel.Children.Add(contentText);
-
-        var timeText = new TextBlock
-        {
-            Text =
-                message.SentAt
-                    .ToLocalTime()
-                    .ToString("HH:mm"),
-
-            FontSize = 10,
-
-            Margin =
-                new Thickness(0, 5, 0, 0),
-
-            Foreground =
-                isMine
-                    ? Brushes.White
-                    : (Brush)FindResource(
-                        "SecondaryTextBrush"),
-
-            HorizontalAlignment =
-                HorizontalAlignment.Right
-        };
-
-        panel.Children.Add(timeText);
-
-        border.Child = panel;
-
-        MessagesPanel.Children.Add(border);
+            MessagesPanel.Children.Add(
+                border);
+        }
     }
 
     private async Task ScrollMessagesToBottomAsync()
@@ -763,12 +1426,24 @@ public partial class MainView : UserControl
 
     private sealed class ChatListItem
     {
-        public ChatModel Chat { get; set; } = new();
+        public ChatModel Chat { get; set; } =
+            new();
 
         public string DisplayName { get; set; } =
             string.Empty;
 
         public string LastMessage { get; set; } =
             string.Empty;
+
+        public bool IsOnline
+        {
+            get;
+            set;
+        }
+
+        public Visibility OnlineVisibility =>
+            IsOnline
+                ? Visibility.Visible
+                : Visibility.Collapsed;
     }
 }

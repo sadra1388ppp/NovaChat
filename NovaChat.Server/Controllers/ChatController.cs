@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NovaChat.Server.DTOs;
+using NovaChat.Server.Entities;
 using NovaChat.Server.Services;
 using System.Security.Claims;
 
@@ -47,7 +48,6 @@ public class ChatController : ControllerBase
         return Ok(new
         {
             message = "Private chat created successfully.",
-
             chat = new
             {
                 chat.Id,
@@ -70,15 +70,30 @@ public class ChatController : ControllerBase
             await _chatService.GetUserChatsAsync(
                 currentUserId);
 
-        return Ok(chats.Select(c => new
+        var result = new List<ChatListDto>();
+
+        foreach (var chat in chats)
         {
-            c.Id,
-            c.User1Id,
-            c.User2Id,
-            c.CreatedAt,
-            User1Name = c.User1.DisplayName,
-            User2Name = c.User2.DisplayName
-        }));
+            var lastMessage =
+                await _chatService.GetLastMessageAsync(
+                    chat.Id);
+
+            result.Add(new ChatListDto
+            {
+                Id = chat.Id,
+                User1Id = chat.User1Id,
+                User2Id = chat.User2Id,
+                User1Name = chat.User1.DisplayName,
+                User2Name = chat.User2.DisplayName,
+                CreatedAt = chat.CreatedAt,
+                LastMessage =
+                    lastMessage == null
+                        ? null
+                        : MapMessage(lastMessage)
+            });
+        }
+
+        return Ok(result);
     }
 
     [HttpGet("all")]
@@ -88,20 +103,37 @@ public class ChatController : ControllerBase
         var chats =
             await _chatService.GetAllChatsAsync();
 
-        return Ok(chats.Select(c => new
+        var result = new List<ChatListDto>();
+
+        foreach (var chat in chats)
         {
-            c.Id,
-            c.User1Id,
-            c.User2Id,
-            c.CreatedAt,
-            User1Name = c.User1.DisplayName,
-            User2Name = c.User2.DisplayName
-        }));
+            var lastMessage =
+                await _chatService.GetLastMessageAsync(
+                    chat.Id);
+
+            result.Add(new ChatListDto
+            {
+                Id = chat.Id,
+                User1Id = chat.User1Id,
+                User2Id = chat.User2Id,
+                User1Name = chat.User1.DisplayName,
+                User2Name = chat.User2.DisplayName,
+                CreatedAt = chat.CreatedAt,
+                LastMessage =
+                    lastMessage == null
+                        ? null
+                        : MapMessage(lastMessage)
+            });
+        }
+
+        return Ok(result);
     }
 
     [HttpGet("{chatId}/messages")]
     public async Task<IActionResult> GetMessages(
-        int chatId)
+        int chatId,
+        [FromQuery] int? beforeMessageId = null,
+        [FromQuery] int pageSize = 50)
     {
         var currentUserId = GetCurrentUserId();
 
@@ -115,19 +147,35 @@ public class ChatController : ControllerBase
             return Forbid();
         }
 
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var messages =
             await _chatService.GetMessagesAsync(
-                chatId);
+                chatId,
+                beforeMessageId,
+                pageSize);
 
-        return Ok(messages.Select(m => new
+        var firstMessage =
+            messages.FirstOrDefault();
+
+        var hasMore =
+            firstMessage != null &&
+            await _chatService.HasOlderMessagesAsync(
+                chatId,
+                firstMessage.Id);
+
+        return Ok(new ChatHistoryResponseDto
         {
-            m.Id,
-            m.ChatId,
-            m.SenderId,
-            SenderName = m.Sender.DisplayName,
-            m.Content,
-            m.SentAt
-        }));
+            Messages =
+                messages
+                    .Select(MapMessage)
+                    .ToList(),
+
+            HasMore = hasMore,
+
+            NextBeforeMessageId =
+                firstMessage?.Id
+        });
     }
 
     [HttpPost("{chatId}/messages")]
@@ -164,16 +212,7 @@ public class ChatController : ControllerBase
         return Ok(new
         {
             message = "Message sent successfully.",
-
-            data = new
-            {
-                message.Id,
-                message.ChatId,
-                message.SenderId,
-                SenderName = message.Sender.DisplayName,
-                message.Content,
-                message.SentAt
-            }
+            data = MapMessage(message)
         });
     }
 
@@ -197,8 +236,7 @@ public class ChatController : ControllerBase
         }
 
         var deleted =
-            await _chatService.DeleteChatAsync(
-                chatId);
+            await _chatService.DeleteChatAsync(chatId);
 
         if (!deleted)
         {
@@ -225,31 +263,25 @@ public class ChatController : ControllerBase
 
         if (!IsOwner())
         {
-            var chatId =
-                await GetChatIdFromMessage(
+            var message =
+                await _chatService.GetMessageByIdAsync(
                     messageId);
 
-            if (chatId == 0 ||
-                !await CanAccessChat(
-                    chatId,
+            if (message == null)
+                return NotFound(new
+                {
+                    message = "Message not found."
+                });
+
+            if (!await CanAccessChat(
+                    message.ChatId,
                     currentUserId))
             {
                 return Forbid();
             }
 
-            var messages =
-                await _chatService.GetMessagesAsync(
-                    chatId);
-
-            var message =
-                messages.FirstOrDefault(
-                    m => m.Id == messageId);
-
-            if (message == null ||
-                message.SenderId != currentUserId)
-            {
+            if (message.SenderId != currentUserId)
                 return Forbid();
-            }
         }
 
         var deleted =
@@ -268,6 +300,22 @@ public class ChatController : ControllerBase
         {
             message = "Message deleted successfully."
         });
+    }
+
+    private static MessageDto MapMessage(
+        Message message)
+    {
+        return new MessageDto
+        {
+            Id = message.Id,
+            ChatId = message.ChatId,
+            SenderId = message.SenderId,
+            SenderName =
+                message.Sender?.DisplayName ??
+                string.Empty,
+            Content = message.Content,
+            SentAt = message.SentAt
+        };
     }
 
     private string? GetCurrentUserId()
@@ -300,13 +348,5 @@ public class ChatController : ControllerBase
             .CanAccessChatAsync(
                 chatId,
                 userId);
-    }
-
-    private async Task<int> GetChatIdFromMessage(
-        int messageId)
-    {
-        return await _chatService
-            .GetMessageChatIdAsync(
-                messageId) ?? 0;
     }
 }

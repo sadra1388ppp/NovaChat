@@ -13,9 +13,11 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(
-        builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddDbContext<AppDbContext>(
+    options =>
+        options.UseNpgsql(
+            builder.Configuration.GetConnectionString(
+                "DefaultConnection")));
 
 builder.Services.AddControllers();
 
@@ -28,8 +30,12 @@ builder.Services.AddScoped<
     PasswordHasher<User>>();
 
 builder.Services.AddScoped<JwtService>();
+
 builder.Services.AddScoped<AdminService>();
+
 builder.Services.AddScoped<ChatService>();
+
+builder.Services.AddSingleton<PresenceService>();
 
 builder.Services.AddSingleton<
     IAuthorizationHandler,
@@ -37,14 +43,19 @@ builder.Services.AddSingleton<
 
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("OwnerOnly", policy =>
-    {
-        policy.RequireAuthenticatedUser();
-        policy.AddRequirements(new OwnerRequirement());
-    });
+    options.AddPolicy(
+        "OwnerOnly",
+        policy =>
+        {
+            policy.RequireAuthenticatedUser();
+
+            policy.AddRequirements(
+                new OwnerRequirement());
+        });
 });
 
-var jwtKey = builder.Configuration["Jwt:Key"];
+var jwtKey =
+    builder.Configuration["Jwt:Key"];
 
 if (string.IsNullOrWhiteSpace(jwtKey))
 {
@@ -53,7 +64,8 @@ if (string.IsNullOrWhiteSpace(jwtKey))
 }
 
 builder.Services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddAuthentication(
+        JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         options.TokenValidationParameters =
@@ -63,84 +75,109 @@ builder.Services
 
                 IssuerSigningKey =
                     new SymmetricSecurityKey(
-                        Encoding.UTF8.GetBytes(jwtKey)),
+                        Encoding.UTF8.GetBytes(
+                            jwtKey)),
 
                 ValidateIssuer = true,
 
                 ValidIssuer =
-                    builder.Configuration["Jwt:Issuer"],
+                    builder.Configuration[
+                        "Jwt:Issuer"],
 
                 ValidateAudience = true,
 
                 ValidAudience =
-                    builder.Configuration["Jwt:Audience"],
+                    builder.Configuration[
+                        "Jwt:Audience"],
 
                 ValidateLifetime = true,
 
-                ClockSkew = TimeSpan.Zero
+                ClockSkew =
+                    TimeSpan.Zero
             };
 
-        options.Events = new JwtBearerEvents
-        {
-            OnMessageReceived = context =>
+        options.Events =
+            new JwtBearerEvents
             {
-                var accessToken =
-                    context.Request.Query["access_token"];
+                OnMessageReceived =
+                    context =>
+                    {
+                        var accessToken =
+                            context.Request.Query[
+                                "access_token"];
 
-                var path =
-                    context.HttpContext.Request.Path;
+                        var path =
+                            context.HttpContext.Request.Path;
 
-                if (!string.IsNullOrEmpty(accessToken) &&
-                    path.StartsWithSegments("/hubs/chat"))
-                {
-                    context.Token = accessToken;
-                }
+                        if (!string.IsNullOrEmpty(
+                                accessToken) &&
+                            path.StartsWithSegments(
+                                "/hubs/chat"))
+                        {
+                            context.Token =
+                                accessToken;
+                        }
 
-                return Task.CompletedTask;
-            }
-        };
+                        return Task.CompletedTask;
+                    }
+            };
     });
 
 builder.Services.AddEndpointsApiExplorer();
 
-builder.Services.AddSwaggerGen(options =>
-{
-    options.AddSecurityDefinition(
-        "Bearer",
-        new OpenApiSecurityScheme
-        {
-            Name = "Authorization",
-            Type = SecuritySchemeType.Http,
-            Scheme = "bearer",
-            BearerFormat = "JWT",
-            In = ParameterLocation.Header,
-            Description = "Enter your JWT token."
-        });
+builder.Services.AddSwaggerGen(
+    options =>
+    {
+        options.AddSecurityDefinition(
+            "Bearer",
+            new OpenApiSecurityScheme
+            {
+                Name = "Authorization",
 
-    options.AddSecurityRequirement(document =>
-        new OpenApiSecurityRequirement
-        {
-            [new OpenApiSecuritySchemeReference(
-                "Bearer",
-                document)] = []
-        });
-});
+                Type =
+                    SecuritySchemeType.Http,
+
+                Scheme = "bearer",
+
+                BearerFormat = "JWT",
+
+                In =
+                    ParameterLocation.Header,
+
+                Description =
+                    "Enter your JWT token."
+            });
+
+        options.AddSecurityRequirement(
+            document =>
+                new OpenApiSecurityRequirement
+                {
+                    [
+                        new OpenApiSecuritySchemeReference(
+                            "Bearer",
+                            document)
+                    ] = []
+                });
+    });
 
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
+
     app.UseSwaggerUI();
 }
 
 app.UseHttpsRedirection();
 
 app.UseAuthentication();
+
 app.UseAuthorization();
 
 app.MapControllers();
 
-app.MapHub<ChatHub>("/hubs/chat");
+app.MapHub<ChatHub>(
+    "/hubs/chat");
 
 app.Run();

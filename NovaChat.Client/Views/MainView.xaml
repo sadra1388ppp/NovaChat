@@ -10,6 +10,7 @@
         </Grid.ColumnDefinitions>
 
         <!-- SIDEBAR -->
+
         <Border Grid.Column="0"
                 Background="{DynamicResource PanelBackgroundBrush}"
                 BorderBrush="{DynamicResource BorderBrush}"
@@ -23,8 +24,6 @@
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
-
-                <!-- ACCOUNT -->
 
                 <StackPanel Margin="0,0,0,20">
 
@@ -40,8 +39,6 @@
                                Margin="0,4,0,0"/>
 
                 </StackPanel>
-
-                <!-- SEARCH + NEW CHAT -->
 
                 <Grid Grid.Row="1"
                       Margin="0,0,0,20">
@@ -80,8 +77,6 @@
 
                 </Grid>
 
-                <!-- CHATS -->
-
                 <ScrollViewer Grid.Row="2"
                               VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled">
@@ -118,10 +113,27 @@
 
                                             <StackPanel>
 
-                                                <TextBlock Text="{Binding DisplayName}"
-                                                           FontSize="15"
-                                                           FontWeight="SemiBold"
-                                                           Foreground="{DynamicResource TextBrush}"/>
+                                                <Grid>
+
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <TextBlock Text="{Binding DisplayName}"
+                                                               FontSize="15"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource TextBrush}"/>
+
+                                                    <Ellipse Grid.Column="1"
+                                                             Width="9"
+                                                             Height="9"
+                                                             Margin="8,0,0,0"
+                                                             VerticalAlignment="Center"
+                                                             Fill="{DynamicResource PrimaryBrush}"
+                                                             Visibility="{Binding OnlineVisibility}"/>
+
+                                                </Grid>
 
                                                 <TextBlock Text="{Binding LastMessage}"
                                                            FontSize="12"
@@ -157,8 +169,6 @@
                                    FontSize="13"
                                    Foreground="{DynamicResource SecondaryTextBrush}"
                                    Margin="4,15,0,0"/>
-
-                        <!-- OWNER -->
 
                         <Border x:Name="OwnerPanel"
                                 Visibility="Collapsed"
@@ -223,8 +233,6 @@
 
                 </ScrollViewer>
 
-                <!-- BOTTOM -->
-
                 <StackPanel Grid.Row="3"
                             Margin="0,15,0,0">
 
@@ -275,11 +283,22 @@
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource TextBrush}"/>
 
-                    <TextBlock x:Name="ChatStatusText"
-                               Text="Offline"
-                               FontSize="13"
-                               Foreground="{DynamicResource SecondaryTextBrush}"
-                               Margin="0,4,0,0"/>
+                    <StackPanel Orientation="Horizontal"
+                                Margin="0,4,0,0">
+
+                        <Ellipse x:Name="ChatStatusIndicator"
+                                 Width="8"
+                                 Height="8"
+                                 Margin="0,0,6,0"
+                                 VerticalAlignment="Center"
+                                 Fill="{DynamicResource SecondaryTextBrush}"/>
+
+                        <TextBlock x:Name="ChatStatusText"
+                                   Text="Offline"
+                                   FontSize="13"
+                                   Foreground="{DynamicResource SecondaryTextBrush}"/>
+
+                    </StackPanel>
 
                 </StackPanel>
 
@@ -288,9 +307,23 @@
             <ScrollViewer x:Name="MessagesScrollViewer"
                           Grid.Row="1"
                           Padding="20"
-                          VerticalScrollBarVisibility="Auto">
+                          VerticalScrollBarVisibility="Auto"
+                          ScrollChanged="MessagesScrollViewer_ScrollChanged">
 
-                <StackPanel x:Name="MessagesPanel"/>
+                <StackPanel x:Name="MessagesPanel">
+
+                    <Button x:Name="LoadOlderMessagesButton"
+                            Content="Load older messages"
+                            Visibility="Collapsed"
+                            Margin="0,0,0,15"
+                            HorizontalAlignment="Center"
+                            Padding="15,7"
+                            Background="{DynamicResource PanelBackgroundBrush}"
+                            Foreground="{DynamicResource TextBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            Click="LoadOlderMessagesButton_Click"/>
+
+                </StackPanel>
 
             </ScrollViewer>
 

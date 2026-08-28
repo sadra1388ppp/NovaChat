@@ -25,19 +25,14 @@ public class ChatService
 
         var currentUserExists =
             await _context.Users
-                .AnyAsync(u =>
-                    u.Id == currentUserId);
+                .AnyAsync(u => u.Id == currentUserId);
 
         var otherUserExists =
             await _context.Users
-                .AnyAsync(u =>
-                    u.Id == otherUserId);
+                .AnyAsync(u => u.Id == otherUserId);
 
-        if (!currentUserExists ||
-            !otherUserExists)
-        {
+        if (!currentUserExists || !otherUserExists)
             return null;
-        }
 
         var existingChat =
             await _context.Chats
@@ -83,7 +78,13 @@ public class ChatService
             .Where(c =>
                 c.User1Id == userId ||
                 c.User2Id == userId)
-            .OrderByDescending(c => c.CreatedAt)
+            .OrderByDescending(c =>
+                c.Messages
+                    .OrderByDescending(m => m.SentAt)
+                    .ThenByDescending(m => m.Id)
+                    .Select(m => (DateTime?)m.SentAt)
+                    .FirstOrDefault()
+                ?? c.CreatedAt)
             .ToListAsync();
     }
 
@@ -92,7 +93,13 @@ public class ChatService
         return await _context.Chats
             .Include(c => c.User1)
             .Include(c => c.User2)
-            .OrderByDescending(c => c.CreatedAt)
+            .OrderByDescending(c =>
+                c.Messages
+                    .OrderByDescending(m => m.SentAt)
+                    .ThenByDescending(m => m.Id)
+                    .Select(m => (DateTime?)m.SentAt)
+                    .FirstOrDefault()
+                ?? c.CreatedAt)
             .ToListAsync();
     }
 
@@ -158,13 +165,102 @@ public class ChatService
     }
 
     public async Task<List<Message>> GetMessagesAsync(
+        int chatId,
+        int? beforeMessageId = null,
+        int pageSize = 50)
+    {
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var query =
+            _context.Messages
+                .AsNoTracking()
+                .Include(m => m.Sender)
+                .Where(m => m.ChatId == chatId);
+
+        if (beforeMessageId.HasValue)
+        {
+            var beforeMessage =
+                await _context.Messages
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(m =>
+                        m.Id == beforeMessageId.Value &&
+                        m.ChatId == chatId);
+
+            if (beforeMessage != null)
+            {
+                query = query.Where(m =>
+                    m.SentAt < beforeMessage.SentAt ||
+                    (
+                        m.SentAt == beforeMessage.SentAt &&
+                        m.Id < beforeMessage.Id
+                    ));
+            }
+        }
+
+        var messages =
+            await query
+                .OrderByDescending(m => m.SentAt)
+                .ThenByDescending(m => m.Id)
+                .Take(pageSize + 1)
+                .ToListAsync();
+
+        if (messages.Count > pageSize)
+        {
+            messages.RemoveAt(messages.Count - 1);
+        }
+
+        return messages
+            .OrderBy(m => m.SentAt)
+            .ThenBy(m => m.Id)
+            .ToList();
+    }
+
+    public async Task<bool> HasOlderMessagesAsync(
+        int chatId,
+        int firstMessageId)
+    {
+        var firstMessage =
+            await _context.Messages
+                .AsNoTracking()
+                .FirstOrDefaultAsync(m =>
+                    m.Id == firstMessageId &&
+                    m.ChatId == chatId);
+
+        if (firstMessage == null)
+            return false;
+
+        return await _context.Messages
+            .AsNoTracking()
+            .AnyAsync(m =>
+                m.ChatId == chatId &&
+                (
+                    m.SentAt < firstMessage.SentAt ||
+                    (
+                        m.SentAt == firstMessage.SentAt &&
+                        m.Id < firstMessage.Id
+                    )
+                ));
+    }
+
+    public async Task<Message?> GetLastMessageAsync(
         int chatId)
     {
         return await _context.Messages
+            .AsNoTracking()
             .Include(m => m.Sender)
             .Where(m => m.ChatId == chatId)
-            .OrderBy(m => m.SentAt)
-            .ToListAsync();
+            .OrderByDescending(m => m.SentAt)
+            .ThenByDescending(m => m.Id)
+            .FirstOrDefaultAsync();
+    }
+
+    public async Task<Message?> GetMessageByIdAsync(
+        int messageId)
+    {
+        return await _context.Messages
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                m => m.Id == messageId);
     }
 
     public async Task<bool> DeleteChatAsync(
