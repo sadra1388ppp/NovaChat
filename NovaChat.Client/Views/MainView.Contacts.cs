@@ -5,16 +5,16 @@ public partial class MainView
     public async Task OpenChatWithUserIdAsync(string userId)
     {
         if (string.IsNullOrWhiteSpace(userId) ||
-            string.Equals(userId, Services.AuthState.UserId, StringComparison.OrdinalIgnoreCase))
+            string.Equals(userId, NovaChat.Client.Services.AuthState.UserId, StringComparison.OrdinalIgnoreCase))
             return;
 
         try
         {
             var result = await _apiService.PostAsync<
-                Models.CreateChatRequest,
-                Models.CreateChatResponse>(
+                NovaChat.Client.Models.CreateChatRequest,
+                NovaChat.Client.Models.CreateChatResponse>(
                 "api/Chat",
-                new Models.CreateChatRequest { UserId = userId.Trim() });
+                new NovaChat.Client.Models.CreateChatRequest { UserId = userId.Trim() });
 
             if (result?.Chat == null)
                 return;
