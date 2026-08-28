@@ -24,7 +24,7 @@ public partial class ContactsView : UserControl
         try
         {
             var contacts = await _apiService.GetAsync<List<ContactModel>>("api/Contact");
-            ContactsList.ItemsSource = contacts ?? [];
+            ContactsList.ItemsSource = contacts ?? new List<ContactModel>();
             StatusText.Text = contacts == null ? "Could not load contacts." : $"{contacts.Count} contact(s)";
         }
         catch (Exception ex)
@@ -46,7 +46,7 @@ public partial class ContactsView : UserControl
         var query = SearchTextBox.Text.Trim();
         if (string.IsNullOrWhiteSpace(query))
         {
-            SearchResultsList.ItemsSource = [];
+            SearchResultsList.ItemsSource = new List<UserSearchResultModel>();
             StatusText.Text = "Type a User ID, name, or email to search.";
             return;
         }
@@ -56,7 +56,7 @@ public partial class ContactsView : UserControl
             StatusText.Text = "Searching...";
             var results = await _apiService.GetAsync<List<UserSearchResultModel>>(
                 $"api/User/search?q={Uri.EscapeDataString(query)}");
-            SearchResultsList.ItemsSource = results ?? [];
+            SearchResultsList.ItemsSource = results ?? new List<UserSearchResultModel>();
             StatusText.Text = results == null ? "Search failed." : $"{results.Count} result(s) found.";
         }
         catch (Exception ex)
@@ -71,13 +71,13 @@ public partial class ContactsView : UserControl
             await AddContactAsync(user.Id);
     }
 
-    private async void ChatButton_Click(object sender, RoutedEventArgs e)
+    private void ChatButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button { DataContext: UserSearchResultModel user })
             ChatRequested?.Invoke(user.Id);
     }
 
-    private async void ChatContactButton_Click(object sender, RoutedEventArgs e)
+    private void ChatContactButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button { DataContext: ContactModel contact })
             ChatRequested?.Invoke(contact.UserId);
@@ -98,17 +98,6 @@ public partial class ContactsView : UserControl
         {
             StatusText.Text = ex.Message;
         }
-    }
-
-    private async void AddButton_Click(object sender, RoutedEventArgs e)
-    {
-        var userId = SearchTextBox.Text.Trim();
-        if (string.IsNullOrWhiteSpace(userId))
-        {
-            StatusText.Text = "Search for a user first.";
-            return;
-        }
-        await AddContactAsync(userId);
     }
 
     private async void RemoveButton_Click(object sender, RoutedEventArgs e)
