@@ -23,131 +23,81 @@ namespace NovaChat.Server.Migrations
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("NovaChat.Server.Entities.Chat", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
+            {
+                b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("integer");
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                b.Property<DateTime>("CreatedAt").HasColumnType("timestamp with time zone");
+                b.Property<string>("User1Id").IsRequired().HasColumnType("text");
+                b.Property<string>("User2Id").IsRequired().HasColumnType("text");
+                b.HasKey("Id");
+                b.HasIndex("User1Id");
+                b.HasIndex("User2Id");
+                b.ToTable("Chats");
+            });
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("User1Id")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("User2Id")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("User1Id");
-
-                    b.HasIndex("User2Id");
-
-                    b.ToTable("Chats");
-                });
+            modelBuilder.Entity("NovaChat.Server.Entities.Contact", b =>
+            {
+                b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("integer");
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                b.Property<string>("ContactUserId").IsRequired().HasColumnType("text");
+                b.Property<DateTime>("CreatedAt").HasColumnType("timestamp with time zone");
+                b.Property<string>("OwnerUserId").IsRequired().HasColumnType("text");
+                b.HasKey("Id");
+                b.HasIndex("ContactUserId");
+                b.HasIndex("OwnerUserId", "ContactUserId").IsUnique();
+                b.ToTable("Contacts");
+            });
 
             modelBuilder.Entity("NovaChat.Server.Entities.Message", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("ChatId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("SenderId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("SentAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ChatId");
-
-                    b.HasIndex("SenderId");
-
-                    b.ToTable("Messages");
-                });
+            {
+                b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("integer");
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                b.Property<int>("ChatId").HasColumnType("integer");
+                b.Property<string>("Content").IsRequired().HasColumnType("text");
+                b.Property<string>("SenderId").IsRequired().HasColumnType("text");
+                b.Property<DateTime>("SentAt").HasColumnType("timestamp with time zone");
+                b.HasKey("Id");
+                b.HasIndex("ChatId");
+                b.HasIndex("SenderId");
+                b.ToTable("Messages");
+            });
 
             modelBuilder.Entity("NovaChat.Server.Entities.User", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("DisplayName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("PasswordHash")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Users");
-                });
+            {
+                b.Property<string>("Id").HasColumnType("text");
+                b.Property<DateTime>("CreatedAt").HasColumnType("timestamp with time zone");
+                b.Property<string>("DisplayName").IsRequired().HasColumnType("text");
+                b.Property<string>("Email").IsRequired().HasColumnType("text");
+                b.Property<string>("PasswordHash").IsRequired().HasColumnType("text");
+                b.HasKey("Id");
+                b.ToTable("Users");
+            });
 
             modelBuilder.Entity("NovaChat.Server.Entities.Chat", b =>
-                {
-                    b.HasOne("NovaChat.Server.Entities.User", "User1")
-                        .WithMany()
-                        .HasForeignKey("User1Id")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+            {
+                b.HasOne("NovaChat.Server.Entities.User", "User1").WithMany().HasForeignKey("User1Id").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                b.HasOne("NovaChat.Server.Entities.User", "User2").WithMany().HasForeignKey("User2Id").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                b.Navigation("User1");
+                b.Navigation("User2");
+            });
 
-                    b.HasOne("NovaChat.Server.Entities.User", "User2")
-                        .WithMany()
-                        .HasForeignKey("User2Id")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("User1");
-
-                    b.Navigation("User2");
-                });
+            modelBuilder.Entity("NovaChat.Server.Entities.Contact", b =>
+            {
+                b.HasOne("NovaChat.Server.Entities.User", "ContactUser").WithMany().HasForeignKey("ContactUserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                b.HasOne("NovaChat.Server.Entities.User", "OwnerUser").WithMany().HasForeignKey("OwnerUserId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                b.Navigation("ContactUser");
+                b.Navigation("OwnerUser");
+            });
 
             modelBuilder.Entity("NovaChat.Server.Entities.Message", b =>
-                {
-                    b.HasOne("NovaChat.Server.Entities.Chat", "Chat")
-                        .WithMany("Messages")
-                        .HasForeignKey("ChatId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+            {
+                b.HasOne("NovaChat.Server.Entities.Chat", "Chat").WithMany("Messages").HasForeignKey("ChatId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                b.HasOne("NovaChat.Server.Entities.User", "Sender").WithMany().HasForeignKey("SenderId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                b.Navigation("Chat");
+                b.Navigation("Sender");
+            });
 
-                    b.HasOne("NovaChat.Server.Entities.User", "Sender")
-                        .WithMany()
-                        .HasForeignKey("SenderId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Chat");
-
-                    b.Navigation("Sender");
-                });
-
-            modelBuilder.Entity("NovaChat.Server.Entities.Chat", b =>
-                {
-                    b.Navigation("Messages");
-                });
+            modelBuilder.Entity("NovaChat.Server.Entities.Chat", b => b.Navigation("Messages"));
 #pragma warning restore 612, 618
         }
     }
