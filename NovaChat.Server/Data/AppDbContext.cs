@@ -16,6 +16,8 @@ public class AppDbContext : DbContext
 
     public DbSet<Message> Messages { get; set; } = null!;
 
+    public DbSet<Contact> Contacts { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -43,5 +45,21 @@ public class AppDbContext : DbContext
             .WithMany()
             .HasForeignKey(m => m.SenderId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Contact>()
+            .HasOne(c => c.OwnerUser)
+            .WithMany()
+            .HasForeignKey(c => c.OwnerUserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Contact>()
+            .HasOne(c => c.ContactUser)
+            .WithMany()
+            .HasForeignKey(c => c.ContactUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Contact>()
+            .HasIndex(c => new { c.OwnerUserId, c.ContactUserId })
+            .IsUnique();
     }
 }
