@@ -13,9 +13,7 @@ public class UserController : ControllerBase
     private readonly UserService _userService;
     private readonly JwtService _jwtService;
 
-    public UserController(
-        UserService userService,
-        JwtService jwtService)
+    public UserController(UserService userService, JwtService jwtService)
     {
         _userService = userService;
         _jwtService = jwtService;
@@ -26,20 +24,10 @@ public class UserController : ControllerBase
     public async Task<IActionResult> Register(RegisterDto dto)
     {
         var result = await _userService.RegisterAsync(dto);
-
         if (!result.Success)
-        {
-            return Conflict(new
-            {
-                message = result.Message
-            });
-        }
+            return Conflict(new { message = result.Message });
 
-        return Ok(new
-        {
-            message = result.Message,
-            user = result.User
-        });
+        return Ok(new { message = result.Message, user = result.User });
     }
 
     [AllowAnonymous]
@@ -47,29 +35,31 @@ public class UserController : ControllerBase
     public async Task<IActionResult> Login(LoginDto dto)
     {
         var user = await _userService.LoginAsync(dto);
-
         if (user == null)
-        {
-            return Unauthorized(new
-            {
-                message = "Invalid User ID or Password."
-            });
-        }
+            return Unauthorized(new { message = "Invalid User ID or Password." });
 
         var token = _jwtService.GenerateToken(user);
-
         return Ok(new
         {
             message = "Login successful.",
             token,
-            user = new
-            {
-                user.Id,
-                user.DisplayName,
-                user.Email,
-                user.CreatedAt
-            }
+            user = new { user.Id, user.DisplayName, user.Email, user.CreatedAt }
         });
+    }
+
+    [Authorize]
+    [HttpGet("search")]
+    public async Task<IActionResult> Search([FromQuery] string q)
+    {
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (currentUserId == null)
+            return Unauthorized();
+
+        if (string.IsNullOrWhiteSpace(q))
+            return Ok(Array.Empty<UserResponseDto>());
+
+        var users = await _userService.SearchUsersAsync(q, currentUserId);
+        return Ok(users);
     }
 
     [Authorize]
@@ -77,57 +67,31 @@ public class UserController : ControllerBase
     public async Task<IActionResult> GetUser(string id)
     {
         if (!IsOwner() && !IsCurrentUser(id))
-        {
             return Forbid();
-        }
 
         var user = await _userService.GetUserByIdAsync(id);
-
         if (user == null)
-        {
-            return NotFound(new
-            {
-                message = "User not found."
-            });
-        }
+            return NotFound(new { message = "User not found." });
 
         return Ok(user);
     }
 
     [Authorize]
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateUser(
-        string id,
-        UpdateUserDto dto)
+    public async Task<IActionResult> UpdateUser(string id, UpdateUserDto dto)
     {
         if (!IsOwner() && !IsCurrentUser(id))
-        {
             return Forbid();
-        }
 
         var result = await _userService.UpdateUserAsync(id, dto);
-
         if (!result.Success)
         {
             if (result.Message == "User not found.")
-            {
-                return NotFound(new
-                {
-                    message = result.Message
-                });
-            }
-
-            return Conflict(new
-            {
-                message = result.Message
-            });
+                return NotFound(new { message = result.Message });
+            return Conflict(new { message = result.Message });
         }
 
-        return Ok(new
-        {
-            message = result.Message,
-            user = result.User
-        });
+        return Ok(new { message = result.Message, user = result.User });
     }
 
     [Authorize]
@@ -135,79 +99,42 @@ public class UserController : ControllerBase
     public async Task<IActionResult> DeleteUser(string id)
     {
         if (!IsOwner() && !IsCurrentUser(id))
-        {
             return Forbid();
-        }
 
         var deleted = await _userService.DeleteUserAsync(id);
-
         if (!deleted)
-        {
-            return NotFound(new
-            {
-                message = "User not found."
-            });
-        }
+            return NotFound(new { message = "User not found." });
 
-        return Ok(new
-        {
-            message = "User deleted successfully."
-        });
+        return Ok(new { message = "User deleted successfully." });
     }
 
     [Authorize]
     [HttpPut("{id}/password")]
-    public async Task<IActionResult> ChangePassword(
-        string id,
-        ChangePasswordDto dto)
+    public async Task<IActionResult> ChangePassword(string id, ChangePasswordDto dto)
     {
         if (!IsOwner() && !IsCurrentUser(id))
-        {
             return Forbid();
-        }
 
         var result = await _userService.ChangePasswordAsync(id, dto);
-
         if (!result.Success)
         {
             if (result.Message == "User not found.")
-            {
-                return NotFound(new
-                {
-                    message = result.Message
-                });
-            }
-
-            return BadRequest(new
-            {
-                message = result.Message
-            });
+                return NotFound(new { message = result.Message });
+            return BadRequest(new { message = result.Message });
         }
 
-        return Ok(new
-        {
-            message = result.Message
-        });
+        return Ok(new { message = result.Message });
     }
 
     private bool IsCurrentUser(string id)
     {
-        var currentUserId =
-            User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        return currentUserId == id;
+        return User.FindFirstValue(ClaimTypes.NameIdentifier) == id;
     }
 
     private bool IsOwner()
     {
-        var ownerUserId =
-            HttpContext.RequestServices
-                .GetRequiredService<IConfiguration>()["Owner:UserId"];
-
-        var currentUserId =
-            User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        return !string.IsNullOrWhiteSpace(ownerUserId)
-               && currentUserId == ownerUserId;
+        var ownerUserId = HttpContext.RequestServices.GetRequiredService<IConfiguration>()["Owner:UserId"];
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return !string.IsNullOrWhiteSpace(ownerUserId) && currentUserId == ownerUserId;
     }
 }
