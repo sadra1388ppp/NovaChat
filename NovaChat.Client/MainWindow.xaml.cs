@@ -6,6 +6,7 @@ namespace NovaChat.Client
     public partial class MainWindow : Window
     {
         private bool _isOwner;
+        private string? _pendingChatUserId;
 
         public MainWindow()
         {
@@ -17,8 +18,8 @@ namespace NovaChat.Client
         public void ShowLogin()
         {
             _isOwner = false;
+            _pendingChatUserId = null;
             MainContainer.Children.Clear();
-
             LoginView loginView = new LoginView();
             loginView.CreateAccountRequested += ShowRegister;
             loginView.LoginSuccessful += HandleNormalUserLogin;
@@ -54,6 +55,12 @@ namespace NovaChat.Client
             mainView.SettingsRequested += ShowSettings;
             mainView.SetOwnerMode(_isOwner);
             MainContainer.Children.Add(mainView);
+            if (!string.IsNullOrWhiteSpace(_pendingChatUserId))
+            {
+                var userId = _pendingChatUserId;
+                _pendingChatUserId = null;
+                mainView.Loaded += async (_, _) => await mainView.OpenChatWithUserIdAsync(userId);
+            }
         }
 
         public void ShowProfile()
@@ -70,6 +77,11 @@ namespace NovaChat.Client
             MainContainer.Children.Clear();
             ContactsView contactsView = new ContactsView();
             contactsView.BackToChatRequested += ShowMain;
+            contactsView.ChatRequested += userId =>
+            {
+                _pendingChatUserId = userId;
+                ShowMain();
+            };
             MainContainer.Children.Add(contactsView);
         }
 
