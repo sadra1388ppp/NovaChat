@@ -25,11 +25,13 @@ public class ChatService
 
         var currentUserExists =
             await _context.Users
-                .AnyAsync(u => u.Id == currentUserId);
+                .AnyAsync(u =>
+                    u.Id == currentUserId);
 
         var otherUserExists =
             await _context.Users
-                .AnyAsync(u => u.Id == otherUserId);
+                .AnyAsync(u =>
+                    u.Id == otherUserId);
 
         if (!currentUserExists ||
             !otherUserExists)

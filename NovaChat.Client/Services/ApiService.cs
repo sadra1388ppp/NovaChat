@@ -19,9 +19,11 @@ public class ApiService
 
     private void AddAuthorization()
     {
-        _httpClient.DefaultRequestHeaders.Authorization = null;
+        _httpClient.DefaultRequestHeaders.Authorization =
+            null;
 
-        if (!string.IsNullOrWhiteSpace(AuthState.Token))
+        if (!string.IsNullOrWhiteSpace(
+                AuthState.Token))
         {
             _httpClient.DefaultRequestHeaders.Authorization =
                 new AuthenticationHeaderValue(

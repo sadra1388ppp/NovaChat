@@ -47,6 +47,7 @@ public class ChatController : ControllerBase
         return Ok(new
         {
             message = "Private chat created successfully.",
+
             chat = new
             {
                 chat.Id,
@@ -115,7 +116,8 @@ public class ChatController : ControllerBase
         }
 
         var messages =
-            await _chatService.GetMessagesAsync(chatId);
+            await _chatService.GetMessagesAsync(
+                chatId);
 
         return Ok(messages.Select(m => new
         {
@@ -162,6 +164,7 @@ public class ChatController : ControllerBase
         return Ok(new
         {
             message = "Message sent successfully.",
+
             data = new
             {
                 message.Id,
@@ -194,7 +197,8 @@ public class ChatController : ControllerBase
         }
 
         var deleted =
-            await _chatService.DeleteChatAsync(chatId);
+            await _chatService.DeleteChatAsync(
+                chatId);
 
         if (!deleted)
         {
@@ -222,7 +226,8 @@ public class ChatController : ControllerBase
         if (!IsOwner())
         {
             var chatId =
-                await GetChatIdFromMessage(messageId);
+                await GetChatIdFromMessage(
+                    messageId);
 
             if (chatId == 0 ||
                 !await CanAccessChat(
@@ -233,7 +238,8 @@ public class ChatController : ControllerBase
             }
 
             var messages =
-                await _chatService.GetMessagesAsync(chatId);
+                await _chatService.GetMessagesAsync(
+                    chatId);
 
             var message =
                 messages.FirstOrDefault(
@@ -279,7 +285,8 @@ public class ChatController : ControllerBase
             GetCurrentUserId();
 
         return !string.IsNullOrWhiteSpace(ownerUserId)
-            && currentUserId == ownerUserId;
+               &&
+               currentUserId == ownerUserId;
     }
 
     private async Task<bool> CanAccessChat(
@@ -299,6 +306,7 @@ public class ChatController : ControllerBase
         int messageId)
     {
         return await _chatService
-            .GetMessageChatIdAsync(messageId) ?? 0;
+            .GetMessageChatIdAsync(
+                messageId) ?? 0;
     }
 }

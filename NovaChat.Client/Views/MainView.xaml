@@ -10,7 +10,6 @@
         </Grid.ColumnDefinitions>
 
         <!-- SIDEBAR -->
-
         <Border Grid.Column="0"
                 Background="{DynamicResource PanelBackgroundBrush}"
                 BorderBrush="{DynamicResource BorderBrush}"
@@ -101,29 +100,51 @@
 
                                 <DataTemplate>
 
-                                    <Button Height="65"
-                                            Background="Transparent"
-                                            BorderThickness="0"
-                                            Padding="12"
-                                            Margin="0,0,0,8"
-                                            Click="ChatButton_Click">
+                                    <Grid Height="65"
+                                          Margin="0,0,0,8">
 
-                                        <StackPanel>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="42"/>
+                                        </Grid.ColumnDefinitions>
 
-                                            <TextBlock Text="{Binding DisplayName}"
-                                                       FontSize="15"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource TextBrush}"/>
+                                        <Button Grid.Column="0"
+                                                Height="65"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                Padding="12"
+                                                HorizontalContentAlignment="Left"
+                                                Click="ChatButton_Click">
 
-                                            <TextBlock Text="{Binding LastMessage}"
-                                                       FontSize="12"
-                                                       Foreground="{DynamicResource SecondaryTextBrush}"
-                                                       Margin="0,5,0,0"
-                                                       TextTrimming="CharacterEllipsis"/>
+                                            <StackPanel>
 
-                                        </StackPanel>
+                                                <TextBlock Text="{Binding DisplayName}"
+                                                           FontSize="15"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource TextBrush}"/>
 
-                                    </Button>
+                                                <TextBlock Text="{Binding LastMessage}"
+                                                           FontSize="12"
+                                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                                           Margin="0,5,0,0"
+                                                           TextTrimming="CharacterEllipsis"/>
+
+                                            </StackPanel>
+
+                                        </Button>
+
+                                        <Button Grid.Column="1"
+                                                Width="34"
+                                                Height="34"
+                                                Content="🗑"
+                                                FontSize="14"
+                                                Background="Transparent"
+                                                Foreground="{DynamicResource SecondaryTextBrush}"
+                                                BorderThickness="0"
+                                                ToolTip="Delete chat"
+                                                Click="DeleteChatButton_Click"/>
+
+                                    </Grid>
 
                                 </DataTemplate>
 

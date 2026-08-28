@@ -16,7 +16,6 @@ public partial class MainView : UserControl
     private readonly ApiService _apiService;
 
     private HubConnection? _hubConnection;
-
     private readonly List<ChatListItem> _chats = [];
 
     private int? _currentChatId;
@@ -160,9 +159,11 @@ public partial class MainView : UserControl
                     new ChatListItem
                     {
                         Chat = chat,
+
                         DisplayName =
                             chat.OtherUserName(
                                 AuthState.UserId),
+
                         LastMessage =
                             "No messages yet."
                     });
@@ -242,7 +243,7 @@ public partial class MainView : UserControl
         {
             MessageBox.Show(
                 $"Could not create chat.\n\n{ex.Message}",
-                "New Chat",
+                "NovaChat",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
@@ -281,7 +282,8 @@ public partial class MainView : UserControl
             Foreground =
                 (Brush)FindResource(
                     "TextBrush"),
-            Margin = new Thickness(0, 0, 0, 18)
+            Margin =
+                new Thickness(0, 0, 0, 18)
         };
 
         var label = new TextBlock
@@ -291,7 +293,8 @@ public partial class MainView : UserControl
             Foreground =
                 (Brush)FindResource(
                     "SecondaryTextBrush"),
-            Margin = new Thickness(0, 0, 0, 7)
+            Margin =
+                new Thickness(0, 0, 0, 7)
         };
 
         var textBox = new TextBox
@@ -316,9 +319,12 @@ public partial class MainView : UserControl
         {
             Orientation =
                 Orientation.Horizontal,
+
             HorizontalAlignment =
                 HorizontalAlignment.Right,
-            Margin = new Thickness(0, 18, 0, 0)
+
+            Margin =
+                new Thickness(0, 18, 0, 0)
         };
 
         var cancelButton = new Button
@@ -326,7 +332,8 @@ public partial class MainView : UserControl
             Content = "Cancel",
             Width = 85,
             Height = 35,
-            Margin = new Thickness(0, 0, 8, 0)
+            Margin =
+                new Thickness(0, 0, 8, 0)
         };
 
         var startButton = new Button
@@ -411,15 +418,91 @@ public partial class MainView : UserControl
         await OpenChatAsync(item.Chat);
     }
 
-    private async Task OpenChatAsync(ChatModel chat)
+    private async void DeleteChatButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (sender is not Button button ||
+            button.DataContext is not ChatListItem item)
+        {
+            return;
+        }
+
+        var result =
+            MessageBox.Show(
+                $"Delete chat with {item.DisplayName}?\n\nAll messages in this chat will also be deleted.",
+                "Delete Chat",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+
+        if (result != MessageBoxResult.Yes)
+            return;
+
+        try
+        {
+            var deleted =
+                await _apiService.DeleteAsync(
+                    $"api/Chat/{item.Chat.Id}");
+
+            if (!deleted)
+            {
+                MessageBox.Show(
+                    "The chat could not be deleted.",
+                    "Delete Chat",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+
+                return;
+            }
+
+            if (_currentChatId == item.Chat.Id)
+            {
+                _currentChatId = null;
+                _currentOtherUserId =
+                    string.Empty;
+
+                ChatUserNameText.Text =
+                    "Select a chat";
+
+                ChatStatusText.Text =
+                    "Offline";
+
+                MessagesPanel.Children.Clear();
+                MessageTextBox.Clear();
+            }
+
+            _chats.Remove(item);
+
+            ChatsList.ItemsSource = null;
+            ChatsList.ItemsSource = _chats;
+
+            NoChatsText.Visibility =
+                _chats.Count == 0
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Could not delete chat.\n\n{ex.Message}",
+                "Delete Chat",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private async Task OpenChatAsync(
+        ChatModel chat)
     {
         _currentChatId = chat.Id;
 
         _currentOtherUserId =
-            chat.OtherUserId(AuthState.UserId);
+            chat.OtherUserId(
+                AuthState.UserId);
 
         ChatUserNameText.Text =
-            chat.OtherUserName(AuthState.UserId);
+            chat.OtherUserName(
+                AuthState.UserId);
 
         ChatStatusText.Text =
             "Online connection";
@@ -570,8 +653,10 @@ public partial class MainView : UserControl
         var contentText = new TextBlock
         {
             Text = message.Content,
+
             TextWrapping =
                 TextWrapping.Wrap,
+
             Foreground =
                 isMine
                     ? Brushes.White
