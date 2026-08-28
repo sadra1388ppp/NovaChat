@@ -2,6 +2,7 @@ using NovaChat.Client.Models;
 using NovaChat.Client.Services;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace NovaChat.Client.Views;
 
@@ -31,15 +32,67 @@ public partial class ContactsView : UserControl
         }
     }
 
-    private async void AddButton_Click(object sender, RoutedEventArgs e)
+    private async void SearchButton_Click(object sender, RoutedEventArgs e) => await SearchAsync();
+
+    private async void SearchTextBox_KeyDown(object sender, KeyEventArgs e)
     {
-        var userId = UserIdTextBox.Text.Trim();
-        if (string.IsNullOrWhiteSpace(userId))
+        if (e.Key == Key.Enter)
+            await SearchAsync();
+    }
+
+    private async Task SearchAsync()
+    {
+        var query = SearchTextBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(query))
         {
-            StatusText.Text = "Enter a User ID.";
+            SearchResultsList.ItemsSource = [];
+            StatusText.Text = "Type a User ID, name, or email to search.";
             return;
         }
 
+        try
+        {
+            StatusText.Text = "Searching...";
+            var results = await _apiService.GetAsync<List<UserSearchResultModel>>(
+                $"api/User/search?q={Uri.EscapeDataString(query)}");
+
+            SearchResultsList.ItemsSource = results ?? [];
+            StatusText.Text = results == null
+                ? "Search failed."
+                : $"{results.Count} result(s) found.";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = ex.Message;
+        }
+    }
+
+    private async void AddSearchResultButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.DataContext is not UserSearchResultModel user)
+            return;
+
+        await AddContactAsync(user.Id);
+    }
+
+    private async void ChatButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.DataContext is not UserSearchResultModel user)
+            return;
+
+        await StartChatAsync(user.Id);
+    }
+
+    private async void ChatContactButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.DataContext is not ContactModel contact)
+            return;
+
+        await StartChatAsync(contact.UserId);
+    }
+
+    private async Task AddContactAsync(string userId)
+    {
         try
         {
             var result = await _apiService.PostAsync<AddContactRequest, ContactActionResponse>(
@@ -48,11 +101,10 @@ public partial class ContactsView : UserControl
 
             if (result == null)
             {
-                StatusText.Text = "Could not add contact.";
+                StatusText.Text = "Could not add contact. It may already exist.";
                 return;
             }
 
-            UserIdTextBox.Clear();
             StatusText.Text = result.Message;
             await LoadContactsAsync();
         }
@@ -60,6 +112,49 @@ public partial class ContactsView : UserControl
         {
             StatusText.Text = ex.Message;
         }
+    }
+
+    private async Task StartChatAsync(string userId)
+    {
+        try
+        {
+            var result = await _apiService.PostAsync<CreateChatRequest, CreateChatResponse>(
+                "api/Chat",
+                new CreateChatRequest { UserId = userId });
+
+            if (result?.Chat == null)
+            {
+                MessageBox.Show(
+                    "Could not start the chat. Make sure the user still exists.",
+                    "NovaChat",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            StatusText.Text = "Chat created. Opening your chats...";
+            BackToChatRequested?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Could not start chat.\n\n{ex.Message}",
+                "NovaChat",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private async void AddButton_Click(object sender, RoutedEventArgs e)
+    {
+        var userId = SearchTextBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            StatusText.Text = "Search for a user first.";
+            return;
+        }
+
+        await AddContactAsync(userId);
     }
 
     private async void RemoveButton_Click(object sender, RoutedEventArgs e)
