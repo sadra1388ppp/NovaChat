@@ -9,6 +9,7 @@ namespace NovaChat.Client.Views;
 public partial class ContactsView : UserControl
 {
     public event Action? BackToChatRequested;
+    public event Action<string>? ChatRequested;
 
     private readonly ApiService _apiService = new();
 
@@ -55,11 +56,8 @@ public partial class ContactsView : UserControl
             StatusText.Text = "Searching...";
             var results = await _apiService.GetAsync<List<UserSearchResultModel>>(
                 $"api/User/search?q={Uri.EscapeDataString(query)}");
-
             SearchResultsList.ItemsSource = results ?? [];
-            StatusText.Text = results == null
-                ? "Search failed."
-                : $"{results.Count} result(s) found.";
+            StatusText.Text = results == null ? "Search failed." : $"{results.Count} result(s) found.";
         }
         catch (Exception ex)
         {
@@ -69,26 +67,20 @@ public partial class ContactsView : UserControl
 
     private async void AddSearchResultButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button button || button.DataContext is not UserSearchResultModel user)
-            return;
-
-        await AddContactAsync(user.Id);
+        if (sender is Button { DataContext: UserSearchResultModel user })
+            await AddContactAsync(user.Id);
     }
 
     private async void ChatButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button button || button.DataContext is not UserSearchResultModel user)
-            return;
-
-        await StartChatAsync(user.Id);
+        if (sender is Button { DataContext: UserSearchResultModel user })
+            ChatRequested?.Invoke(user.Id);
     }
 
     private async void ChatContactButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button button || button.DataContext is not ContactModel contact)
-            return;
-
-        await StartChatAsync(contact.UserId);
+        if (sender is Button { DataContext: ContactModel contact })
+            ChatRequested?.Invoke(contact.UserId);
     }
 
     private async Task AddContactAsync(string userId)
@@ -96,52 +88,15 @@ public partial class ContactsView : UserControl
         try
         {
             var result = await _apiService.PostAsync<AddContactRequest, ContactActionResponse>(
-                "api/Contact",
-                new AddContactRequest { UserId = userId });
+                "api/Contact", new AddContactRequest { UserId = userId });
 
-            if (result == null)
-            {
-                StatusText.Text = "Could not add contact. It may already exist.";
-                return;
-            }
-
-            StatusText.Text = result.Message;
-            await LoadContactsAsync();
+            StatusText.Text = result?.Message ?? "Could not add contact. It may already exist.";
+            if (result != null)
+                await LoadContactsAsync();
         }
         catch (Exception ex)
         {
             StatusText.Text = ex.Message;
-        }
-    }
-
-    private async Task StartChatAsync(string userId)
-    {
-        try
-        {
-            var result = await _apiService.PostAsync<CreateChatRequest, CreateChatResponse>(
-                "api/Chat",
-                new CreateChatRequest { UserId = userId });
-
-            if (result?.Chat == null)
-            {
-                MessageBox.Show(
-                    "Could not start the chat. Make sure the user still exists.",
-                    "NovaChat",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-                return;
-            }
-
-            StatusText.Text = "Chat created. Opening your chats...";
-            BackToChatRequested?.Invoke();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(
-                $"Could not start chat.\n\n{ex.Message}",
-                "NovaChat",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
         }
     }
 
@@ -153,13 +108,12 @@ public partial class ContactsView : UserControl
             StatusText.Text = "Search for a user first.";
             return;
         }
-
         await AddContactAsync(userId);
     }
 
     private async void RemoveButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button button || button.DataContext is not ContactModel contact)
+        if (sender is not Button { DataContext: ContactModel contact })
             return;
 
         if (MessageBox.Show($"Remove {contact.DisplayName} from contacts?", "NovaChat", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
@@ -171,10 +125,7 @@ public partial class ContactsView : UserControl
             await LoadContactsAsync();
     }
 
-    private void BackButton_Click(object sender, RoutedEventArgs e)
-    {
-        BackToChatRequested?.Invoke();
-    }
+    private void BackButton_Click(object sender, RoutedEventArgs e) => BackToChatRequested?.Invoke();
 
     private sealed class ContactActionResponse
     {
