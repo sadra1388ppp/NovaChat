@@ -16,57 +16,37 @@ public partial class MainView : UserControl
     private const int MessagePageSize = 50;
 
     private readonly ApiService _apiService;
-
     private HubConnection? _hubConnection;
-
-    private readonly List<ChatListItem> _chats = [];
-
+    private readonly List<ChatModel> _chats = [];
     private readonly HashSet<int> _loadedMessageIds = [];
-
-    private readonly HashSet<string> _onlineUserIds =
-        new(StringComparer.OrdinalIgnoreCase);
-
+    private readonly HashSet<string> _onlineUserIds = new(StringComparer.OrdinalIgnoreCase);
     private int? _currentChatId;
-
     private int? _oldestLoadedMessageId;
-
     private string _currentOtherUserId = string.Empty;
-
     private bool _isOwner;
-
     private bool _isLoadingOlderMessages;
-
     private bool _hasMoreMessages;
-
     private bool _isOpeningChat;
-
     private static bool _messageDeletionHandlerRegistered;
 
     public MainView()
     {
         InitializeComponent();
-
         _apiService = new ApiService();
 
         if (!_messageDeletionHandlerRegistered)
         {
-            EventManager.RegisterClassHandler(
-                typeof(Border),
-                UIElement.MouseRightButtonUpEvent,
+            EventManager.RegisterClassHandler(typeof(Border), UIElement.MouseRightButtonUpEvent,
                 new MouseButtonEventHandler(OnMessageBubbleRightClick));
-
             _messageDeletionHandlerRegistered = true;
         }
 
         SetOwnerMode(false);
-
         Loaded += MainView_Loaded;
         Unloaded += MainView_Unloaded;
     }
 
-    private async void MainView_Loaded(
-        object sender,
-        RoutedEventArgs e)
+    private async void MainView_Loaded(object sender, RoutedEventArgs e)
     {
         try
         {
@@ -75,17 +55,12 @@ public partial class MainView : UserControl
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                $"Could not initialize chat.\n\n{ex.Message}",
-                "NovaChat",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            MessageBox.Show($"Could not initialize chat.\n\n{ex.Message}", "NovaChat",
+                MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
-    private async void MainView_Unloaded(
-        object sender,
-        RoutedEventArgs e)
+    private async void MainView_Unloaded(object sender, RoutedEventArgs e)
     {
         await DisconnectSignalRAsync();
     }
