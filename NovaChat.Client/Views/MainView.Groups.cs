@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.SignalR.Client;
 using NovaChat.Client.Models;
 using NovaChat.Client.Services;
 using System.Windows;
@@ -16,9 +17,7 @@ public partial class MainView
 
     private async void GroupsList_Loaded(object sender, RoutedEventArgs e)
     {
-        if (_groupsLoaded || !AuthState.IsAuthenticated)
-            return;
-
+        if (_groupsLoaded || !AuthState.IsAuthenticated) return;
         _groupsLoaded = true;
         await LoadGroupsIntoConversationsAsync();
     }
@@ -42,118 +41,64 @@ public partial class MainView
 
     private async void GroupButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not FrameworkElement element || element.DataContext is not GroupModel group)
-            return;
-
-        await OpenGroupInMainViewAsync(group);
+        if (sender is FrameworkElement element && element.DataContext is GroupModel group)
+            await OpenGroupInMainViewAsync(group);
     }
 
     private async void GroupsButton_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new CreateGroupDialog { Owner = Window.GetWindow(this) };
-        if (dialog.ShowDialog() != true)
-            return;
-
-        var group = await _apiService.PostAsync<CreateGroupRequest, GroupModel>(
-            "api/Group",
-            new CreateGroupRequest { Name = dialog.GroupName, Description = dialog.GroupDescription });
-
-        if (group == null)
-        {
-            MessageBox.Show(Window.GetWindow(this), "Could not create the group.", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
+        var view = new GroupView { Owner = Window.GetWindow(this), WindowStartupLocation = WindowStartupLocation.CenterOwner };
+        view.ShowDialog();
         await LoadGroupsIntoConversationsAsync();
-        await OpenGroupInMainViewAsync(group);
     }
 
     private async Task OpenGroupInMainViewAsync(GroupModel group)
     {
         _currentGroupId = group.Id;
-        _currentChatId = null;
-        _currentOtherUserId = string.Empty;
-        _loadedMessageIds.Clear();
-        _oldestLoadedMessageId = null;
-        _hasMoreMessages = false;
+        ChatHeaderName.Text = group.Name;
+        ChatHeaderStatus.Text = string.IsNullOrWhiteSpace(group.Description) ? "Group" : group.Description;
+        EmptyStatePanel.Visibility = Visibility.Collapsed;
+        ChatMessagesScrollViewer.Visibility = Visibility.Visible;
+        MessageInputPanel.Visibility = Visibility.Visible;
+        ChatMessagesPanel.Children.Clear();
 
-        ChatUserNameText.Text = group.Name;
-        ChatStatusText.Text = string.IsNullOrWhiteSpace(group.Description) ? "Group conversation" : group.Description;
-        ChatStatusIndicator.Fill = Brushes.DodgerBlue;
-        ChatAvatarStatusDot.Visibility = Visibility.Collapsed;
-        MessagesPanel.Children.Clear();
-        LoadOlderMessagesButton.Visibility = Visibility.Collapsed;
-
-        if (!_groupEventsAttached)
-        {
-            MessageTextBox.KeyDown += GroupMessageTextBox_KeyDown;
-            if (MessageTextBox.Parent is Grid inputGrid)
-            {
-                var sendButton = inputGrid.Children.OfType<Button>().LastOrDefault();
-                if (sendButton != null)
-                    sendButton.Click += GroupSendButtonProxy;
-            }
-            _groupEventsAttached = true;
-        }
-
-        await LoadGroupMessagesAsync(group.Id);
-    }
-
-    private async Task LoadGroupMessagesAsync(int groupId)
-    {
         try
         {
-            var messages = await _apiService.GetAsync<List<GroupMessageModel>>($"api/Group/{groupId}/messages");
-            MessagesPanel.Children.Clear();
-            foreach (var message in messages ?? [])
-                AddGroupMessageToUi(message);
-            await ScrollMessagesToBottomAsync();
+            var messages = await _apiService.GetAsync<List<GroupMessageModel>>($"api/Group/{group.Id}/messages");
+            foreach (var message in messages ?? []) AddGroupMessageToUi(message);
+            await EnsureGroupHubAsync();
+            if (_hubConnection.State == HubConnectionState.Connected)
+                await _hubConnection.InvokeAsync("JoinGroup", group.Id);
         }
         catch (Exception ex)
         {
-            MessagesPanel.Children.Clear();
-            MessagesPanel.Children.Add(new TextBlock
-            {
-                Text = $"Could not load group messages.\n{ex.Message}",
-                Foreground = Brushes.Gray,
-                Margin = new Thickness(12)
-            });
+            MessageBox.Show(Window.GetWindow(this), $"Could not open group.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
-    private async void GroupMessageTextBox_KeyDown(object? sender, KeyEventArgs e)
+    private async Task EnsureGroupHubAsync()
     {
-        if (_currentGroupId == null || e.Key != Key.Enter)
-            return;
+        if (_hubConnection.State == HubConnectionState.Disconnected)
+            await _hubConnection.StartAsync();
 
-        e.Handled = true;
-        await SendGroupMessageAsync();
+        if (_groupEventsAttached) return;
+        _hubConnection.On<GroupMessageModel>("ReceiveGroupMessage", message => Dispatcher.Invoke(() =>
+        {
+            if (_currentGroupId == message.GroupId) AddGroupMessageToUi(message);
+        }));
+        _groupEventsAttached = true;
     }
 
-    private async void GroupSendButtonProxy(object? sender, RoutedEventArgs e)
+    private async Task SendGroupMessageAsync(string content)
     {
-        if (_currentGroupId != null)
-            await SendGroupMessageAsync();
-    }
-
-    private async Task SendGroupMessageAsync()
-    {
-        if (_currentGroupId == null || _hubConnection == null)
-            return;
-
-        var content = MessageTextBox.Text.Trim();
-        if (string.IsNullOrWhiteSpace(content))
-            return;
-
-        if (_hubConnection.State != Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Connected)
+        if (_currentGroupId == null || string.IsNullOrWhiteSpace(content)) return;
+        if (_hubConnection.State != HubConnectionState.Connected)
         {
             MessageBox.Show(Window.GetWindow(this), "Chat connection is not ready.", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
-
         var groupId = _currentGroupId.Value;
         MessageTextBox.Clear();
-
         try
         {
             await _hubConnection.InvokeAsync("JoinGroup", groupId);
@@ -170,45 +115,17 @@ public partial class MainView
         var isMine = string.Equals(message.SenderId, AuthState.UserId, StringComparison.OrdinalIgnoreCase);
         var bubble = new Border
         {
-            Background = isMine ? (Brush)FindResource("PrimaryBrush") : (Brush)FindResource("PanelBackgroundBrush"),
-            BorderBrush = isMine ? Brushes.Transparent : (Brush)FindResource("BorderBrush"),
-            BorderThickness = new Thickness(isMine ? 0 : 1),
-            CornerRadius = new CornerRadius(14),
-            Padding = new Thickness(13, 9, 13, 8),
+            Background = isMine ? new SolidColorBrush(Color.FromRgb(225, 245, 254)) : new SolidColorBrush(Color.FromRgb(245, 247, 250)),
+            CornerRadius = new CornerRadius(14), Padding = new Thickness(12, 8),
             Margin = new Thickness(isMine ? 70 : 0, 4, isMine ? 0 : 70, 4),
-            HorizontalAlignment = isMine ? HorizontalAlignment.Right : HorizontalAlignment.Left,
-            MaxWidth = 560
+            HorizontalAlignment = isMine ? HorizontalAlignment.Right : HorizontalAlignment.Left, MaxWidth = 520
         };
-
         var panel = new StackPanel();
-        if (!isMine)
-        {
-            panel.Children.Add(new TextBlock
-            {
-                Text = message.SenderName,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = (Brush)FindResource("PrimaryBrush"),
-                Margin = new Thickness(0, 0, 0, 3)
-            });
-        }
-
-        panel.Children.Add(new TextBlock
-        {
-            Text = message.Content,
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = isMine ? Brushes.White : (Brush)FindResource("TextBrush")
-        });
-
-        panel.Children.Add(new TextBlock
-        {
-            Text = message.SentAt.ToLocalTime().ToString("HH:mm"),
-            FontSize = 10,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 4, 0, 0),
-            Foreground = isMine ? Brushes.WhiteSmoke : (Brush)FindResource("SecondaryTextBrush")
-        });
-
+        if (!isMine) panel.Children.Add(new TextBlock { Text = message.SenderName, FontWeight = FontWeights.SemiBold, FontSize = 12, Margin = new Thickness(0, 0, 0, 3) });
+        panel.Children.Add(new TextBlock { Text = message.Content, TextWrapping = TextWrapping.Wrap, FontSize = 14 });
+        panel.Children.Add(new TextBlock { Text = message.SentAt.ToLocalTime().ToString("HH:mm"), HorizontalAlignment = HorizontalAlignment.Right, FontSize = 10, Foreground = Brushes.Gray, Margin = new Thickness(0, 4, 0, 0) });
         bubble.Child = panel;
-        MessagesPanel.Children.Add(bubble);
+        ChatMessagesPanel.Children.Add(bubble);
+        ChatMessagesScrollViewer.ScrollToEnd();
     }
 }
