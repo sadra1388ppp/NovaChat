@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Threading;
 using NovaChat.Client.Models;
+using NovaChat.Client.Services;
 
 namespace NovaChat.Client.Views;
 
@@ -26,24 +27,16 @@ public partial class MainView
             new RoutedEventHandler(OnAutoRefreshUnloaded));
     }
 
-    private static void OnAutoRefreshLoaded(
-        object sender,
-        RoutedEventArgs e)
+    private static void OnAutoRefreshLoaded(object sender, RoutedEventArgs e)
     {
-        if (sender is not MainView view)
-            return;
-
-        view.StartAutoRefresh();
+        if (sender is MainView view)
+            view.StartAutoRefresh();
     }
 
-    private static void OnAutoRefreshUnloaded(
-        object sender,
-        RoutedEventArgs e)
+    private static void OnAutoRefreshUnloaded(object sender, RoutedEventArgs e)
     {
-        if (sender is not MainView view)
-            return;
-
-        view.StopAutoRefresh();
+        if (sender is MainView view)
+            view.StopAutoRefresh();
     }
 
     private void StartAutoRefresh()
@@ -59,9 +52,7 @@ public partial class MainView
         _autoRefreshTimer.Tick -= AutoRefreshTimer_Tick;
     }
 
-    private async void AutoRefreshTimer_Tick(
-        object? sender,
-        EventArgs e)
+    private async void AutoRefreshTimer_Tick(object? sender, EventArgs e)
     {
         if (_isAutoRefreshing || !AuthState.IsAuthenticated)
             return;
