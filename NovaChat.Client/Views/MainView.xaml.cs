@@ -89,3 +89,4 @@ public partial class MainView : UserControl
     {
         await DisconnectSignalRAsync();
     }
+}
