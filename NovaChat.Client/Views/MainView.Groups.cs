@@ -1,4 +1,5 @@
 using NovaChat.Client.Models;
+using NovaChat.Client.Services;
 using System.Windows;
 
 namespace NovaChat.Client.Views;
@@ -39,21 +40,22 @@ public partial class MainView
         if (sender is not FrameworkElement element || element.DataContext is not GroupModel group)
             return;
 
+        OpenGroupWindow(group);
+    }
+
+    private void GroupsButton_Click(object sender, RoutedEventArgs e)
+    {
+        OpenGroupWindow(null);
+    }
+
+    private void OpenGroupWindow(GroupModel? group)
+    {
         var view = new GroupView
         {
             Owner = Window.GetWindow(this),
             WindowStartupLocation = WindowStartupLocation.CenterOwner
         };
-        view.Show();
-    }
 
-    private void GroupsButton_Click(object sender, RoutedEventArgs e)
-    {
-        var window = new GroupView
-        {
-            Owner = Window.GetWindow(this),
-            WindowStartupLocation = WindowStartupLocation.CenterOwner
-        };
-        window.ShowDialog();
+        view.ShowDialog();
     }
 }
