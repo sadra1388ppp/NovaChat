@@ -45,7 +45,11 @@ public partial class MainView
     private async void GroupButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement element && element.DataContext is GroupModel group)
+        {
+            _currentChatId = null;
+            _currentOtherUserId = string.Empty;
             await OpenGroupInMainViewAsync(group);
+        }
     }
 
     private async void GroupsButton_Click(object sender, RoutedEventArgs e)
