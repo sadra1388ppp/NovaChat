@@ -5,20 +5,11 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using NovaChat.Client.Models;
-using NovaChat.Client.Services;
 
 namespace NovaChat.Client.Views;
 
 public partial class MainView
 {
-    static MainView()
-    {
-        EventManager.RegisterClassHandler(
-            typeof(Border),
-            UIElement.MouseRightButtonUpEvent,
-            new MouseButtonEventHandler(OnMessageBubbleRightClick));
-    }
-
     private static void OnMessageBubbleRightClick(
         object sender,
         MouseButtonEventArgs e)
