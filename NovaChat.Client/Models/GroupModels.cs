@@ -25,6 +25,8 @@ public class GroupMessageModel
     public string SenderName { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public DateTime SentAt { get; set; }
+    public bool DeletedForEveryone { get; set; }
+    public bool DeletedForMe { get; set; }
 }
 
 public class CreateGroupRequest
