@@ -30,9 +30,7 @@ public partial class MainView
             var groups = await _apiService.GetAsync<List<GroupModel>>("api/Group");
             _groups = groups ?? [];
             GroupsList.ItemsSource = _groups;
-            NoGroupsText.Visibility = _groups.Count == 0
-                ? Visibility.Visible
-                : Visibility.Collapsed;
+            NoGroupsText.Visibility = _groups.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
         catch
         {
@@ -65,81 +63,73 @@ public partial class MainView
         _currentGroupId = group.Id;
 
         ChatUserNameText.Text = group.Name;
-        ChatStatusText.Text = string.IsNullOrWhiteSpace(group.Description)
-            ? "Group"
-            : group.Description;
-
+        ChatStatusText.Text = string.IsNullOrWhiteSpace(group.Description) ? "Group" : group.Description;
         MessagesPanel.Children.Clear();
 
         try
         {
-            var messages = await _apiService.GetAsync<List<GroupMessageModel>>(
-                $"api/Group/{group.Id}/messages");
+            var messages = await _apiService.GetAsync<List<GroupMessageModel>>($"api/Group/{group.Id}/messages");
 
             foreach (var message in messages ?? [])
                 AddGroupMessageToUi(message);
 
             await EnsureGroupHubAsync();
 
-            if (_hubConnection != null &&
-                _hubConnection.State == HubConnectionState.Connected)
-            {
+            if (_hubConnection != null && _hubConnection.State == HubConnectionState.Connected)
                 await _hubConnection.InvokeAsync("JoinGroup", group.Id);
-            }
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                Window.GetWindow(this),
-                $"Could not open group.\n\n{ex.Message}",
-                "NovaChat",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            MessageBox.Show(Window.GetWindow(this), $"Could not open group.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
     private async Task EnsureGroupHubAsync()
     {
-        if (_hubConnection == null ||
-            _hubConnection.State == HubConnectionState.Disconnected)
-        {
+        if (_hubConnection == null || _hubConnection.State == HubConnectionState.Disconnected)
             return;
-        }
 
         if (_groupEventsAttached)
             return;
 
-        _hubConnection.On<GroupMessageModel>(
-            "ReceiveGroupMessage",
-            message => Dispatcher.Invoke(() =>
+        _hubConnection.On<GroupMessageModel>("ReceiveGroupMessage", message => Dispatcher.Invoke(() =>
+        {
+            if (_currentGroupId == message.GroupId)
+                AddGroupMessageToUi(message);
+        }));
+
+        _hubConnection.On<GroupMessageModel>("GroupMessageDeleted", message => Dispatcher.Invoke(() =>
+        {
+            if (_currentGroupId != message.GroupId)
+                return;
+
+            if (message.DeletedForMe)
             {
-                if (_currentGroupId == message.GroupId)
-                    AddGroupMessageToUi(message);
-            }));
+                RemoveGroupMessageFromUi(message.Id);
+                return;
+            }
+
+            ReplaceGroupMessageWithDeletedState(message);
+        }));
 
         _groupEventsAttached = true;
     }
 
     private void AddGroupMessageToUi(GroupMessageModel message)
     {
-        var isMine = string.Equals(
-            message.SenderId,
-            AuthState.UserId,
-            StringComparison.OrdinalIgnoreCase);
+        if (message.DeletedForMe)
+            return;
+
+        var isMine = string.Equals(message.SenderId, AuthState.UserId, StringComparison.OrdinalIgnoreCase);
 
         var bubble = new Border
         {
-            Background = isMine
-                ? new SolidColorBrush(Color.FromRgb(225, 245, 254))
-                : new SolidColorBrush(Color.FromRgb(245, 247, 250)),
+            Tag = message.Id,
+            Background = isMine ? new SolidColorBrush(Color.FromRgb(225, 245, 254)) : new SolidColorBrush(Color.FromRgb(245, 247, 250)),
             CornerRadius = new CornerRadius(14),
             Padding = new Thickness(12, 8, 12, 8),
-            Margin = isMine
-                ? new Thickness(70, 4, 0, 4)
-                : new Thickness(0, 4, 70, 4),
-            HorizontalAlignment = isMine
-                ? HorizontalAlignment.Right
-                : HorizontalAlignment.Left,
+            Margin = isMine ? new Thickness(70, 4, 0, 4) : new Thickness(0, 4, 70, 4),
+            HorizontalAlignment = isMine ? HorizontalAlignment.Right : HorizontalAlignment.Left,
             MaxWidth = 520
         };
 
@@ -158,9 +148,11 @@ public partial class MainView
 
         panel.Children.Add(new TextBlock
         {
-            Text = message.Content,
+            Text = message.DeletedForEveryone ? "This message was deleted." : message.Content,
             TextWrapping = TextWrapping.Wrap,
-            FontSize = 14
+            FontSize = 14,
+            FontStyle = message.DeletedForEveryone ? FontStyles.Italic : FontStyles.Normal,
+            Foreground = message.DeletedForEveryone ? Brushes.Gray : Brushes.Black
         });
 
         panel.Children.Add(new TextBlock
@@ -173,7 +165,85 @@ public partial class MainView
         });
 
         bubble.Child = panel;
+
+        if (!message.DeletedForEveryone)
+        {
+            var menu = new ContextMenu();
+            var deleteForMe = new MenuItem { Header = "Delete for me" };
+            deleteForMe.Click += async (_, _) => await DeleteGroupMessageAsync(message.Id, false);
+            menu.Items.Add(deleteForMe);
+
+            if (isMine)
+            {
+                var deleteForEveryone = new MenuItem { Header = "Delete for everyone" };
+                deleteForEveryone.Click += async (_, _) => await DeleteGroupMessageAsync(message.Id, true);
+                menu.Items.Add(deleteForEveryone);
+            }
+
+            bubble.ContextMenu = menu;
+        }
+
         MessagesPanel.Children.Add(bubble);
         MessagesScrollViewer.ScrollToEnd();
+    }
+
+    private async Task DeleteGroupMessageAsync(int messageId, bool forEveryone)
+    {
+        if (_hubConnection == null || _hubConnection.State != HubConnectionState.Connected)
+        {
+            MessageBox.Show("Real-time connection is not available.", "Delete Message", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (forEveryone)
+        {
+            var confirm = MessageBox.Show("Delete this message for everyone?", "Delete Message", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (confirm != MessageBoxResult.Yes)
+                return;
+        }
+
+        try
+        {
+            await _hubConnection.InvokeAsync("DeleteGroupMessage", messageId, forEveryone);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Message could not be deleted.\n\n{ex.Message}", "Delete Message", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void RemoveGroupMessageFromUi(int messageId)
+    {
+        var bubble = MessagesPanel.Children.OfType<Border>().FirstOrDefault(x => x.Tag is int id && id == messageId);
+        if (bubble != null)
+            MessagesPanel.Children.Remove(bubble);
+    }
+
+    private void ReplaceGroupMessageWithDeletedState(GroupMessageModel message)
+    {
+        var bubble = MessagesPanel.Children.OfType<Border>().FirstOrDefault(x => x.Tag is int id && id == message.Id);
+        if (bubble == null)
+            return;
+
+        var panel = new StackPanel();
+        var deletedText = new TextBlock
+        {
+            Text = "This message was deleted.",
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 14,
+            FontStyle = FontStyles.Italic,
+            Foreground = Brushes.Gray
+        };
+        panel.Children.Add(deletedText);
+        panel.Children.Add(new TextBlock
+        {
+            Text = message.SentAt.ToLocalTime().ToString("HH:mm"),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            FontSize = 10,
+            Foreground = Brushes.Gray,
+            Margin = new Thickness(0, 4, 0, 0)
+        });
+        bubble.Child = panel;
+        bubble.ContextMenu = null;
     }
 }
