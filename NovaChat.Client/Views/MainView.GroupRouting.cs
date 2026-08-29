@@ -1,16 +1,11 @@
+using Microsoft.AspNetCore.SignalR.Client;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Input;
 
 namespace NovaChat.Client.Views;
 
 public partial class MainView
 {
-    private sealed class SendGroupMessageRequest
-    {
-        public string Content { get; set; } = string.Empty;
-    }
-
     private void GroupAwareNewChatButton_Click(object sender, RoutedEventArgs e)
     {
         ClearGroupSelection();
@@ -74,15 +69,24 @@ public partial class MainView
 
         try
         {
-            var message = await _apiService.PostAsync<SendGroupMessageRequest, GroupMessageModel>(
-                $"api/Group/{groupId}/messages",
-                new SendGroupMessageRequest { Content = content });
+            if (_hubConnection != null &&
+                _hubConnection.State == HubConnectionState.Connected)
+            {
+                await _hubConnection.InvokeAsync(
+                    "SendGroupMessage",
+                    groupId,
+                    content);
 
-            if (message == null)
+                MessageTextBox.Clear();
                 return;
+            }
 
-            MessageTextBox.Clear();
-            AddGroupMessageToUi(message);
+            MessageBox.Show(
+                Window.GetWindow(this),
+                "The real-time connection is not available. Please wait a moment and try again.",
+                "NovaChat",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
         }
         catch (Exception ex)
         {
