@@ -9,4 +9,6 @@ public class GroupMessage
     public User Sender { get; set; } = null!;
     public string Content { get; set; } = string.Empty;
     public DateTime SentAt { get; set; } = DateTime.UtcNow;
+    public bool DeletedForEveryone { get; set; }
+    public string DeletedForUserIds { get; set; } = string.Empty;
 }
