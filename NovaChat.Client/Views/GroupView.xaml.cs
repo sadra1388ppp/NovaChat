@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.SignalR.Client;
 using NovaChat.Client.Models;
 using NovaChat.Client.Services;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 
 namespace NovaChat.Client.Views;
@@ -32,7 +33,7 @@ public partial class GroupView : Window
         GroupNameBox.Clear(); GroupDescriptionBox.Clear(); await LoadGroupsAsync(); GroupsList.SelectedItem = group;
     }
 
-    private async void GroupsList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    private async void GroupsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         _selected = GroupsList.SelectedItem as GroupModel;
         if (_selected == null) return;
@@ -59,7 +60,7 @@ public partial class GroupView : Window
     {
         if (_hub == null)
         {
-            _hub = new HubConnectionBuilder().WithUrl("http://localhost:5256/hubs/chat", o => o.AccessTokenProvider = () => Task.FromResult(AuthState.Token)).WithAutomaticReconnect().Build();
+            _hub = new HubConnectionBuilder().WithUrl("http://localhost:5256/hubs/chat", o => o.AccessTokenProvider = () => Task.FromResult<string?>(AuthState.Token)).WithAutomaticReconnect().Build();
             _hub.On<GroupMessageModel>("ReceiveGroupMessage", m => Dispatcher.Invoke(() => { if (_selected?.Id == m.GroupId) AddMessage(m); }));
             await _hub.StartAsync();
         }
@@ -73,7 +74,7 @@ public partial class GroupView : Window
         if (result == null) MessageBox.Show("Could not add member."); else { MemberIdBox.Clear(); await LoadMembersAsync(); }
     }
 
-    private void MembersList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) { }
+    private void MembersList_SelectionChanged(object sender, SelectionChangedEventArgs e) { }
 
     private async void Send_Click(object sender, RoutedEventArgs e) => await SendMessageAsync();
 
@@ -91,6 +92,6 @@ public partial class GroupView : Window
 
     private void AddMessage(GroupMessageModel message)
     {
-        MessagesPanel.Children.Add(new System.Windows.Controls.TextBlock { Text = $"{message.SenderName}: {message.Content}", Margin = new Thickness(0, 4, 0, 4), TextWrapping = TextWrapping.Wrap });
+        MessagesPanel.Children.Add(new TextBlock { Text = $"{message.SenderName}: {message.Content}", Margin = new Thickness(0, 4, 0, 4), TextWrapping = TextWrapping.Wrap });
     }
 }
