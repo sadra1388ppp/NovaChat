@@ -67,7 +67,38 @@ public class ChatHub : Hub
     {
         if (string.IsNullOrWhiteSpace(content)) throw new HubException("Message cannot be empty.");
         var message = await _groupService.SendMessageAsync(groupId, UserId(), content) ?? throw new HubException("Unable to send group message.");
-        await Clients.Group($"group-{groupId}").SendAsync("ReceiveGroupMessage", new { id = message.Id, groupId, senderId = message.SenderId, senderName = message.Sender?.DisplayName ?? "", content = message.Content, sentAt = message.SentAt });
+        await Clients.Group($"group-{groupId}").SendAsync("ReceiveGroupMessage", new { id = message.Id, groupId, senderId = message.SenderId, senderName = message.Sender?.DisplayName ?? "", content = message.Content, sentAt = message.SentAt, deletedForEveryone = false, deletedForMe = false });
+    }
+
+    public async Task DeleteGroupMessage(int messageId, bool forEveryone)
+    {
+        var result = await _groupService.DeleteMessageAsync(messageId, UserId(), forEveryone);
+        if (!result.Success || result.Data == null) throw new HubException(result.Message);
+
+        if (forEveryone)
+        {
+            await Clients.Group($"group-{result.Data.GroupId}").SendAsync("GroupMessageDeleted", new
+            {
+                id = result.Data.Id,
+                groupId = result.Data.GroupId,
+                senderId = result.Data.SenderId,
+                content = result.Data.Content,
+                deletedForEveryone = true,
+                deletedForMe = false
+            });
+        }
+        else
+        {
+            await Clients.Caller.SendAsync("GroupMessageDeleted", new
+            {
+                id = result.Data.Id,
+                groupId = result.Data.GroupId,
+                senderId = result.Data.SenderId,
+                content = result.Data.Content,
+                deletedForEveryone = false,
+                deletedForMe = true
+            });
+        }
     }
 
     private string UserId() => Context.User?.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new HubException("Unauthorized.");
