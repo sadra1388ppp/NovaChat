@@ -16,38 +16,53 @@ public partial class MainView
 
     private async void GroupsList_Loaded(object sender, RoutedEventArgs e)
     {
+        await EnsureGroupsLoadedAsync();
+    }
+
+    private async Task EnsureGroupsLoadedAsync()
+    {
         if (_groupsLoaded || !AuthState.IsAuthenticated)
             return;
 
-        _groupsLoaded = true;
         await LoadGroupsIntoConversationsAsync();
     }
 
     private async Task LoadGroupsIntoConversationsAsync()
     {
+        if (!AuthState.IsAuthenticated)
+            return;
+
         try
         {
             var groups = await _apiService.GetAsync<List<GroupModel>>("api/Group");
             _groups = groups ?? [];
+            GroupsList.ItemsSource = null;
             GroupsList.ItemsSource = _groups;
             NoGroupsText.Visibility = _groups.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            _groupsLoaded = true;
         }
         catch
         {
             _groups = [];
+            GroupsList.ItemsSource = null;
             GroupsList.ItemsSource = _groups;
             NoGroupsText.Visibility = Visibility.Visible;
+            _groupsLoaded = false;
         }
     }
 
     private async void GroupButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement element && element.DataContext is GroupModel group)
-        {
-            _currentChatId = null;
-            _currentOtherUserId = string.Empty;
-            await OpenGroupInMainViewAsync(group);
-        }
+        if (sender is not FrameworkElement element || element.DataContext is not GroupModel group)
+            return;
+
+        // A group is a first-class conversation. Do not require a private chat
+        // to be opened before a group can become the active conversation.
+        _currentChatId = null;
+        _currentOtherUserId = string.Empty;
+        _currentGroupId = group.Id;
+
+        await OpenGroupInMainViewAsync(group);
     }
 
     private async void GroupsButton_Click(object sender, RoutedEventArgs e)
@@ -59,28 +74,37 @@ public partial class MainView
         };
 
         view.ShowDialog();
+        _groupsLoaded = false;
         await LoadGroupsIntoConversationsAsync();
     }
 
     private async Task OpenGroupInMainViewAsync(GroupModel group)
     {
+        // Set group state before any asynchronous operation so the send button
+        // is immediately routed to the group even when no private chat was opened.
+        _currentChatId = null;
+        _currentOtherUserId = string.Empty;
         _currentGroupId = group.Id;
 
         ChatUserNameText.Text = group.Name;
         ChatStatusText.Text = string.IsNullOrWhiteSpace(group.Description) ? "Group" : group.Description;
+        ChatStatusIndicator.Fill = Brushes.Gray;
         MessagesPanel.Children.Clear();
+        MessageTextBox.Clear();
 
         try
         {
+            await EnsureGroupHubAsync();
+
             var messages = await _apiService.GetAsync<List<GroupMessageModel>>($"api/Group/{group.Id}/messages");
 
             foreach (var message in messages ?? [])
                 AddGroupMessageToUi(message);
 
-            await EnsureGroupHubAsync();
-
             if (_hubConnection != null && _hubConnection.State == HubConnectionState.Connected)
                 await _hubConnection.InvokeAsync("JoinGroup", group.Id);
+
+            ChatStatusText.Text = string.IsNullOrWhiteSpace(group.Description) ? "Group" : group.Description;
         }
         catch (Exception ex)
         {
@@ -230,15 +254,14 @@ public partial class MainView
             return;
 
         var panel = new StackPanel();
-        var deletedText = new TextBlock
+        panel.Children.Add(new TextBlock
         {
             Text = "This message was deleted.",
             TextWrapping = TextWrapping.Wrap,
             FontSize = 14,
             FontStyle = FontStyles.Italic,
             Foreground = Brushes.Gray
-        };
-        panel.Children.Add(deletedText);
+        });
         panel.Children.Add(new TextBlock
         {
             Text = message.SentAt.ToLocalTime().ToString("HH:mm"),
