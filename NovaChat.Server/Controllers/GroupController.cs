@@ -44,6 +44,16 @@ public class GroupController : ControllerBase
     [HttpGet("{groupId:int}/messages")]
     public async Task<IActionResult> Messages(int groupId, [FromQuery] int take = 100) => Result(await _groups.GetMessagesAsync(groupId, UserId(), take));
 
+    [HttpDelete("messages/{messageId:int}")]
+    public async Task<IActionResult> DeleteMessage(int messageId, DeleteGroupMessageDto dto)
+    {
+        var result = await _groups.DeleteMessageAsync(messageId, UserId(), dto.ForEveryone);
+        if (!result.Success)
+            return BadRequest(new { message = result.Message });
+
+        return Ok(result.Data);
+    }
+
     private async Task<IActionResult> SendMessage(int groupId, string content)
     {
         var message = await _groups.SendMessageAsync(groupId, UserId(), content);
