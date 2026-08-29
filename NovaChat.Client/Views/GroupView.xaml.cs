@@ -29,7 +29,7 @@ public partial class GroupView : Window
     private async void CreateGroup_Click(object sender, RoutedEventArgs e)
     {
         var group = await _api.PostAsync<CreateGroupRequest, GroupModel>("api/Group", new CreateGroupRequest { Name = GroupNameBox.Text, Description = GroupDescriptionBox.Text });
-        if (group == null) { MessageBox.Show("Could not create the group."); return; }
+        if (group == null) { System.Windows.MessageBox.Show("Could not create the group."); return; }
         GroupNameBox.Clear(); GroupDescriptionBox.Clear(); await LoadGroupsAsync(); GroupsList.SelectedItem = group;
     }
 
@@ -71,7 +71,7 @@ public partial class GroupView : Window
     {
         if (_selected == null) return;
         var result = await _api.PostAsync<AddGroupMemberRequest, object>($"api/Group/{_selected.Id}/members", new AddGroupMemberRequest { UserId = MemberIdBox.Text });
-        if (result == null) MessageBox.Show("Could not add member."); else { MemberIdBox.Clear(); await LoadMembersAsync(); }
+        if (result == null) System.Windows.MessageBox.Show("Could not add member."); else { MemberIdBox.Clear(); await LoadMembersAsync(); }
     }
 
     private void MembersList_SelectionChanged(object sender, SelectionChangedEventArgs e) { }
