@@ -107,8 +107,26 @@ public class GroupService
     {
         if (!await IsMemberAsync(groupId, userId)) return null;
         take = Math.Clamp(take, 1, 200);
-        return await _context.GroupMessages.AsNoTracking().Where(m => m.GroupId == groupId).OrderByDescending(m => m.SentAt).Take(take)
-            .OrderBy(m => m.SentAt).Select(m => new GroupMessageResponseDto { Id = m.Id, GroupId = m.GroupId, SenderId = m.SenderId, SenderName = m.Sender.DisplayName, Content = m.Content, SentAt = m.SentAt }).ToListAsync();
+        var messages = await _context.GroupMessages.AsNoTracking()
+            .Where(m => m.GroupId == groupId)
+            .OrderByDescending(m => m.SentAt).ThenByDescending(m => m.Id)
+            .Take(take)
+            .ToListAsync();
+
+        return messages.OrderBy(m => m.SentAt).ThenBy(m => m.Id)
+            .Select(m => new GroupMessageResponseDto
+            {
+                Id = m.Id,
+                GroupId = m.GroupId,
+                SenderId = m.SenderId,
+                SenderName = m.Sender.DisplayName,
+                Content = m.DeletedForEveryone ? "This message was deleted." : m.Content,
+                SentAt = m.SentAt,
+                DeletedForEveryone = m.DeletedForEveryone,
+                DeletedForMe = IsDeletedForUser(m, userId)
+            })
+            .Where(m => !m.DeletedForMe)
+            .ToList();
     }
 
     public async Task<GroupMessage?> SendMessageAsync(int groupId, string senderId, string content)
@@ -123,9 +141,54 @@ public class GroupService
         return message;
     }
 
+    public async Task<(bool Success, string Message, GroupMessageResponseDto? Data)> DeleteMessageAsync(int messageId, string userId, bool forEveryone)
+    {
+        var message = await _context.GroupMessages.Include(m => m.Sender).FirstOrDefaultAsync(m => m.Id == messageId);
+        if (message == null) return (false, "Message not found.", null);
+
+        if (!await IsMemberAsync(message.GroupId, userId))
+            return (false, "You are not a member of this group.", null);
+
+        if (forEveryone)
+        {
+            if (!string.Equals(message.SenderId, userId, StringComparison.OrdinalIgnoreCase))
+                return (false, "Only the sender can delete a message for everyone.", null);
+
+            message.DeletedForEveryone = true;
+            message.Content = string.Empty;
+        }
+        else
+        {
+            var ids = ParseDeletedIds(message.DeletedForUserIds);
+            if (!ids.Contains(userId, StringComparer.OrdinalIgnoreCase))
+                ids.Add(userId);
+            message.DeletedForUserIds = string.Join(",", ids);
+        }
+
+        await _context.SaveChangesAsync();
+
+        return (true, "Message deleted successfully.", new GroupMessageResponseDto
+        {
+            Id = message.Id,
+            GroupId = message.GroupId,
+            SenderId = message.SenderId,
+            SenderName = message.Sender?.DisplayName ?? string.Empty,
+            Content = message.DeletedForEveryone ? "This message was deleted." : message.Content,
+            SentAt = message.SentAt,
+            DeletedForEveryone = message.DeletedForEveryone,
+            DeletedForMe = !message.DeletedForEveryone && !forEveryone
+        });
+    }
+
     public Task<bool> IsMemberAsync(int groupId, string userId) => _context.GroupMembers.AnyAsync(m => m.GroupId == groupId && m.UserId == userId);
 
     private Task<bool> CanManageAsync(int groupId, string userId) => _context.GroupMembers.AnyAsync(m => m.GroupId == groupId && m.UserId == userId && (m.Role == GroupMemberRole.Owner || m.Role == GroupMemberRole.Admin));
+
+    private static bool IsDeletedForUser(GroupMessage message, string userId) => ParseDeletedIds(message.DeletedForUserIds).Contains(userId, StringComparer.OrdinalIgnoreCase);
+
+    private static List<string> ParseDeletedIds(string value) => string.IsNullOrWhiteSpace(value)
+        ? []
+        : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
     private static GroupResponseDto ToDto(Group g) => new() { Id = g.Id, Name = g.Name, Description = g.Description, CreatorId = g.CreatorId, CreatedAt = g.CreatedAt };
 }
