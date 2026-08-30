@@ -41,6 +41,7 @@ public partial class ProfileView : UserControl
                 return;
             }
 
+            NormalizeAvatarUrl();
             DataContext = _profile;
             DisplayNameBox.Text = _profile.DisplayName;
             UserIdBox.Text = _profile.Id;
@@ -52,6 +53,12 @@ public partial class ProfileView : UserControl
         {
             ShowFeedback($"Could not load profile: {ex.Message}");
         }
+    }
+
+    private void NormalizeAvatarUrl()
+    {
+        if (_profile == null || string.IsNullOrWhiteSpace(_profile.AvatarUrl)) return;
+        _profile.AvatarUrl = _apiService.BuildAbsoluteUrl(_profile.AvatarUrl);
     }
 
     private void UpdateProfileTextUi()
@@ -116,6 +123,7 @@ public partial class ProfileView : UserControl
             }
 
             _profile = result.User;
+            NormalizeAvatarUrl();
             DataContext = _profile;
             UpdateProfileTextUi();
             ShowFeedback(result.Message);
@@ -170,6 +178,7 @@ public partial class ProfileView : UserControl
             else
             {
                 _profile = result.User;
+                NormalizeAvatarUrl();
                 DataContext = _profile;
                 UpdateProfileTextUi();
                 ShowFeedback(result.Message);
