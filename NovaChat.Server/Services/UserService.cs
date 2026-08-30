@@ -8,6 +8,7 @@ namespace NovaChat.Server.Services;
 
 public class UserService
 {
+    private static readonly SemaphoreSlim RegisterLock = new(1, 1);
     private readonly AppDbContext _context;
     private readonly IPasswordHasher<User> _passwordHasher;
     private readonly PresenceService _presenceService;
@@ -22,12 +23,27 @@ public class UserService
     public async Task<RegisterResult> RegisterAsync(RegisterDto dto)
     {
         dto.Id = dto.Id.Trim(); dto.Email = dto.Email.Trim(); dto.DisplayName = dto.DisplayName.Trim();
-        if (await _context.Users.AnyAsync(u => u.Id == dto.Id)) return new RegisterResult { Success = false, Message = "This User ID is already taken." };
-        if (await _context.Users.AnyAsync(u => u.Email == dto.Email)) return new RegisterResult { Success = false, Message = "This Email is already registered." };
-        var user = new User { Id = dto.Id, DisplayName = dto.DisplayName, Email = dto.Email, CreatedAt = DateTime.UtcNow };
-        user.PasswordHash = _passwordHasher.HashPassword(user, dto.Password);
-        _context.Users.Add(user); await _context.SaveChangesAsync();
-        return new RegisterResult { Success = true, Message = "User registered successfully.", User = ToUserResponse(user) };
+        if (string.IsNullOrWhiteSpace(dto.Id) || string.IsNullOrWhiteSpace(dto.Email) || string.IsNullOrWhiteSpace(dto.DisplayName) || string.IsNullOrWhiteSpace(dto.Password))
+            return new RegisterResult { Success = false, Message = "All registration fields are required." };
+
+        await RegisterLock.WaitAsync();
+        try
+        {
+            if (await _context.Users.AnyAsync(u => u.Id == dto.Id))
+                return new RegisterResult { Success = false, Message = "This User ID is already taken." };
+            if (await _context.Users.AnyAsync(u => u.Email == dto.Email))
+                return new RegisterResult { Success = false, Message = "This Email is already registered." };
+
+            var user = new User { Id = dto.Id, DisplayName = dto.DisplayName, Email = dto.Email, CreatedAt = DateTime.UtcNow };
+            user.PasswordHash = _passwordHasher.HashPassword(user, dto.Password);
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+            return new RegisterResult { Success = true, Message = "User registered successfully.", User = ToUserResponse(user) };
+        }
+        finally
+        {
+            RegisterLock.Release();
+        }
     }
 
     public async Task<User?> LoginAsync(LoginDto dto)
