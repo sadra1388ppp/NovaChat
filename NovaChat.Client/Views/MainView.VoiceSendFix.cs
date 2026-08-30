@@ -19,7 +19,7 @@ public partial class MainView
             true);
     }
 
-    private static void VoiceAwareButtonPreviewMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    private static async void VoiceAwareButtonPreviewMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (sender is not Button button) return;
         if (!string.Equals(button.Content?.ToString(), "➤", StringComparison.Ordinal)) return;
@@ -27,7 +27,15 @@ public partial class MainView
         if (view._voiceRecorder == null) return;
 
         e.Handled = true;
-        view.StopVoiceRecording();
+        button.IsEnabled = false;
+        try
+        {
+            await view.ForceStopAndSendVoiceAsync();
+        }
+        finally
+        {
+            button.IsEnabled = true;
+        }
     }
 
     private static MainView? FindMainViewFromButton(DependencyObject element)
