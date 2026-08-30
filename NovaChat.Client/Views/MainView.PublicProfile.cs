@@ -58,7 +58,7 @@ public partial class MainView
 
             if (string.IsNullOrWhiteSpace(profile.AvatarUrl)) return;
 
-            var bitmap = await LoadConversationAvatarAsync(_apiService.BuildAbsoluteUrl(profile.AvatarUrl));
+            var bitmap = await LoadConversationAvatarAsync($"api/User/profile/{Uri.EscapeDataString(profile.Id)}/avatar");
             if (bitmap == null || !string.Equals(_currentOtherUserId, profile.Id, StringComparison.OrdinalIgnoreCase)) return;
 
             await Dispatcher.InvokeAsync(() =>
@@ -191,20 +191,17 @@ public partial class MainView
         root.Children.Add(closeButton);
         window.Content = root;
 
-        _ = LoadPublicProfileAvatarAsync(profile.AvatarUrl, avatarGrid, initials);
+        _ = LoadPublicProfileAvatarAsync(profile, avatarGrid, initials);
         window.ShowDialog();
     }
 
-    private async Task LoadPublicProfileAvatarAsync(string? avatarUrl, Grid avatarGrid, TextBlock initials)
+    private async Task LoadPublicProfileAvatarAsync(ProfileModel profile, Grid avatarGrid, TextBlock initials)
     {
-        if (string.IsNullOrWhiteSpace(avatarUrl)) return;
+        if (string.IsNullOrWhiteSpace(profile.AvatarUrl)) return;
 
         try
         {
-            var absoluteUrl = _apiService.BuildAbsoluteUrl(avatarUrl);
-            if (string.IsNullOrWhiteSpace(absoluteUrl)) return;
-
-            var bitmap = await LoadConversationAvatarAsync(absoluteUrl);
+            var bitmap = await LoadConversationAvatarAsync($"api/User/profile/{Uri.EscapeDataString(profile.Id)}/avatar");
             if (bitmap == null) return;
 
             await Dispatcher.InvokeAsync(() =>
