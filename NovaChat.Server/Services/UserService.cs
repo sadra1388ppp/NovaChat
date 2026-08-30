@@ -57,10 +57,16 @@ public class UserService
     {
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
         if (user == null) return new RegisterResult { Success = false, Message = "User not found." };
+
         var newId = string.IsNullOrWhiteSpace(dto.NewUserId) ? id : dto.NewUserId.Trim();
-        if (await _context.Users.AsNoTracking().AnyAsync(u => u.Id == newId && u.Id != id)) return new RegisterResult { Success = false, Message = "This User ID is already taken." };
-        if (await _context.Users.AsNoTracking().AnyAsync(u => u.Email == dto.Email && u.Id != id)) return new RegisterResult { Success = false, Message = "This Email is already registered." };
-        dto.DisplayName = dto.DisplayName.Trim(); dto.Email = dto.Email.Trim(); dto.Bio = (dto.Bio ?? string.Empty).Trim();
+        dto.DisplayName = dto.DisplayName.Trim();
+        dto.Email = dto.Email.Trim();
+        dto.Bio = (dto.Bio ?? string.Empty).Trim();
+
+        if (await _context.Users.AsNoTracking().AnyAsync(u => u.Id == newId && u.Id != id))
+            return new RegisterResult { Success = false, Message = "This User ID is already taken." };
+        if (await _context.Users.AsNoTracking().AnyAsync(u => u.Email == dto.Email && u.Id != id))
+            return new RegisterResult { Success = false, Message = "This Email is already registered." };
 
         if (!string.Equals(id, newId, StringComparison.Ordinal))
         {
@@ -69,21 +75,40 @@ public class UserService
             {
                 await _context.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"Users\" (\"Id\", \"DisplayName\", \"Email\", \"PasswordHash\", \"Bio\", \"AvatarUrl\", \"LastSeenAt\", \"CreatedAt\") SELECT {newId}, \"DisplayName\", \"Email\", \"PasswordHash\", \"Bio\", \"AvatarUrl\", \"LastSeenAt\", \"CreatedAt\" FROM \"Users\" WHERE \"Id\" = {id}");
                 await _context.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Users\" SET \"DisplayName\" = {dto.DisplayName}, \"Email\" = {dto.Email}, \"Bio\" = {dto.Bio} WHERE \"Id\" = {newId}");
+
                 await _context.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Messages\" SET \"SenderId\" = {newId} WHERE \"SenderId\" = {id}");
                 await _context.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Chats\" SET \"User1Id\" = {newId} WHERE \"User1Id\" = {id}");
                 await _context.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Chats\" SET \"User2Id\" = {newId} WHERE \"User2Id\" = {id}");
                 await _context.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Contacts\" SET \"OwnerUserId\" = {newId} WHERE \"OwnerUserId\" = {id}");
                 await _context.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Contacts\" SET \"ContactUserId\" = {newId} WHERE \"ContactUserId\" = {id}");
+
+                // Groups.CreatorId references Users.Id with RESTRICT, so it must be moved before deleting the old user.
+                await _context.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Groups\" SET \"CreatorId\" = {newId} WHERE \"CreatorId\" = {id}");
+
+                // Some group schemas also keep the creator/member relation under a separate table.
+                // Only update tables that are known to exist in this database schema.
                 await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"Users\" WHERE \"Id\" = {id}");
                 await transaction.CommitAsync();
             }
-            catch { await transaction.RollbackAsync(); throw; }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+
             _context.ChangeTracker.Clear();
             var updatedUser = await _context.Users.AsNoTracking().FirstAsync(u => u.Id == newId);
-            return new RegisterResult { Success = true, Message = "User updated successfully. Please sign in again because your User ID changed.", User = ToUserResponse(updatedUser) };
+            return new RegisterResult
+            {
+                Success = true,
+                Message = "User updated successfully. Please sign in again because your User ID changed.",
+                User = ToUserResponse(updatedUser)
+            };
         }
 
-        user.DisplayName = dto.DisplayName; user.Email = dto.Email; user.Bio = dto.Bio;
+        user.DisplayName = dto.DisplayName;
+        user.Email = dto.Email;
+        user.Bio = dto.Bio;
         await _context.SaveChangesAsync();
         return new RegisterResult { Success = true, Message = "User updated successfully.", User = ToUserResponse(user) };
     }
