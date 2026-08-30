@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 
 namespace NovaChat.Client.Views;
 
@@ -12,29 +11,62 @@ public partial class MainView
     {
         if (_voiceSendFixRegistered) return;
         _voiceSendFixRegistered = true;
-        EventManager.RegisterClassHandler(typeof(MainView), FrameworkElement.LoadedEvent, new RoutedEventHandler(OnVoiceSendFixLoaded));
+
+        EventManager.RegisterClassHandler(
+            typeof(MainView),
+            FrameworkElement.LoadedEvent,
+            new RoutedEventHandler(VoiceSendFixLoaded));
     }
 
-    private static void OnVoiceSendFixLoaded(object sender, RoutedEventArgs e)
+    private static void VoiceSendFixLoaded(object sender, RoutedEventArgs e)
     {
         if (sender is not MainView view) return;
-        view.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(view.AttachVoiceSendButton));
+
+        view.Dispatcher.BeginInvoke(
+            System.Windows.Threading.DispatcherPriority.Loaded,
+            new Action(view.AttachVoiceAwareSendButton));
     }
 
-    private void AttachVoiceSendButton()
+    private void AttachVoiceAwareSendButton()
     {
-        var send = FindDescendant<Button>(this, b => string.Equals(b.Content?.ToString(), "➤", StringComparison.Ordinal));
+        var send = FindDescendant<Button>(
+            this,
+            b => string.Equals(b.Content?.ToString(), "➤", StringComparison.Ordinal));
+
         if (send == null) return;
-        if (send.Tag is string tag && tag == "NovaChat.VoiceAwareSend") return;
 
         send.Tag = "NovaChat.VoiceAwareSend";
-        send.PreviewMouseLeftButtonDown += VoiceAwareSendButton_PreviewMouseLeftButtonDown;
     }
 
-    private void VoiceAwareSendButton_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    static MainView? FindMainViewFromButton(DependencyObject element)
     {
-        if (_voiceRecorder == null) return;
+        var current = System.Windows.Media.VisualTreeHelper.GetParent(element);
+        while (current != null)
+        {
+            if (current is MainView view) return view;
+            current = System.Windows.Media.VisualTreeHelper.GetParent(current);
+        }
+
+        return null;
+    }
+
+    private static void VoiceAwareButtonClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button) return;
+        if (!string.Equals(button.Tag?.ToString(), "NovaChat.VoiceAwareSend", StringComparison.Ordinal)) return;
+        if (FindMainViewFromButton(button) is not MainView view) return;
+        if (view._voiceRecorder == null) return;
+
         e.Handled = true;
-        StopVoiceRecording();
+        view.StopVoiceRecording();
+    }
+
+    static MainView()
+    {
+        EventManager.RegisterClassHandler(
+            typeof(Button),
+            Button.ClickEvent,
+            new RoutedEventHandler(VoiceAwareButtonClick),
+            true);
     }
 }
