@@ -20,22 +20,26 @@ public partial class ProfileView
     private static void OnProfileAvatarRuntimeLoaded(object sender, RoutedEventArgs e)
     {
         if (sender is ProfileView view)
-            _ = view.ForceLoadAvatarAsync();
+            _ = view.RefreshProfileAvatarRuntimeAsync();
     }
 
-    private async Task ForceLoadAvatarAsync()
+    private async Task RefreshProfileAvatarRuntimeAsync()
     {
         if (!AuthState.IsAuthenticated || string.IsNullOrWhiteSpace(AuthState.UserId)) return;
 
         try
         {
-            await Task.Delay(100);
-            var endpoint = $"api/avatar/{Uri.EscapeDataString(AuthState.UserId)}?v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+            await Task.Delay(50);
+            var profile = await _apiService.GetAsync<ProfileModel>("api/User/profile/me");
+            if (profile == null || string.IsNullOrWhiteSpace(profile.AvatarUrl)) return;
+
+            var endpoint = _apiService.BuildAbsoluteUrl(
+                $"api/avatar/{Uri.EscapeDataString(profile.Id)}?v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}");
             var bytes = await _apiService.GetBytesAsync(endpoint);
             if (bytes == null || bytes.Length == 0) return;
 
-            var bitmap = new BitmapImage();
             using var stream = new MemoryStream(bytes);
+            var bitmap = new BitmapImage();
             bitmap.BeginInit();
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
             bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
@@ -52,7 +56,7 @@ public partial class ProfileView
         }
         catch
         {
-            // Existing initials fallback remains visible when the server has no avatar.
+            // Keep the initials fallback when the avatar is unavailable.
         }
     }
 }
