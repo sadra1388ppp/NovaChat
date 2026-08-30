@@ -1,3 +1,5 @@
+using NovaChat.Server.DTOs;
+
 namespace NovaChat.Server.DTOs;
 
 public class RegisterResult
@@ -6,5 +8,5 @@ public class RegisterResult
 
     public string Message { get; set; } = string.Empty;
 
-    public object? User { get; set; }
+    public UserResponseDto? User { get; set; }
 }
