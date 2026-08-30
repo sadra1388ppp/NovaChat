@@ -1,8 +1,6 @@
 using Microsoft.Win32;
 using NovaChat.Client.Models;
 using NovaChat.Client.Services;
-using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -16,7 +14,6 @@ public partial class ProfileView : UserControl
     public event Action? ContactsRequested;
     public event Action? SessionExpired;
 
-    private static readonly HttpClient AvatarHttpClient = new();
     private readonly ApiService _apiService = new();
     private ProfileModel? _profile;
     private bool _busy;
@@ -58,12 +55,12 @@ public partial class ProfileView : UserControl
         ProfileUserIdText.Text = $"@{_profile.Id}";
         ProfileBioText.Text = string.IsNullOrWhiteSpace(_profile.Bio) ? "Add a short bio to tell people about yourself." : _profile.Bio;
         AvatarImage.Source = null;
-        AvatarInitialsText.Visibility = Visibility.Visible;
         AvatarImage.Visibility = Visibility.Collapsed;
+        AvatarInitialsText.Visibility = Visibility.Visible;
 
         if (!string.IsNullOrWhiteSpace(_profile.AvatarUrl))
         {
-            var bitmap = await LoadAvatarAsync(_profile.Id, _profile.AvatarUrl);
+            var bitmap = CreateAvatarBitmap(_profile.Id);
             if (bitmap != null)
             {
                 AvatarImage.Source = bitmap;
@@ -80,28 +77,20 @@ public partial class ProfileView : UserControl
         LastSeenText.Text = online ? "Active now" : (_profile.LastSeenAt.HasValue ? $"Last seen {FormatLastSeen(_profile.LastSeenAt.Value)}" : "Last seen not available");
         JoinedText.Text = $"Joined {_profile.CreatedAt.ToLocalTime():dd MMM yyyy}";
         CopyUserIdButton.ToolTip = $"Copy @{_profile.Id}";
+        await Task.CompletedTask;
     }
 
-    private async Task<BitmapImage?> LoadAvatarAsync(string userId, string avatarUrl)
+    private BitmapImage? CreateAvatarBitmap(string userId)
     {
-        var version = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
-        var endpointPath = $"api/avatar/{Uri.EscapeDataString(userId)}?v={Uri.EscapeDataString(avatarUrl)}-{version}";
-        var endpoint = _apiService.BuildAbsoluteUrl(endpointPath);
+        if (string.IsNullOrWhiteSpace(userId)) return null;
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
-            if (!string.IsNullOrWhiteSpace(AuthState.Token))
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AuthState.Token);
-            using var response = await AvatarHttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
-            if (!response.IsSuccessStatusCode) return null;
-            var bytes = await response.Content.ReadAsByteArrayAsync();
-            if (bytes.Length == 0) return null;
-            using var stream = new MemoryStream(bytes);
+            var url = _apiService.BuildAbsoluteUrl($"api/avatar/{Uri.EscapeDataString(userId)}?v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}");
             var bitmap = new BitmapImage();
             bitmap.BeginInit();
+            bitmap.UriSource = new Uri(url, UriKind.Absolute);
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
             bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
-            bitmap.StreamSource = stream;
             bitmap.EndInit();
             bitmap.Freeze();
             return bitmap;
@@ -121,7 +110,9 @@ public partial class ProfileView : UserControl
             var request = new UpdateProfileRequest { DisplayName = DisplayNameBox.Text.Trim(), Email = EmailBox.Text.Trim(), Bio = BioBox.Text.Trim(), NewUserId = UserIdBox.Text.Trim() };
             var result = await _apiService.PutAsync<UpdateProfileRequest, ProfileActionResponse>($"api/User/{Uri.EscapeDataString(oldId)}", request);
             if (result?.User == null) { ShowFeedback("Profile could not be updated. Check your values and try again."); return; }
-            _profile = result.User; await UpdateProfileUiAsync(); ShowFeedback(result.Message);
+            _profile = result.User;
+            await UpdateProfileUiAsync();
+            ShowFeedback(result.Message);
             if (!string.Equals(AuthState.UserId, _profile.Id, StringComparison.Ordinal)) { AuthState.Clear(); SessionExpired?.Invoke(); }
             else AuthState.UpdateProfile(_profile.DisplayName, _profile.Email);
         }
@@ -209,7 +200,7 @@ public partial class ProfileView : UserControl
     private static PasswordBox CreatePasswordBox(Panel parent, string label)
     {
         parent.Children.Add(new TextBlock { Text = label, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = (Brush)Application.Current.FindResource("TextBrush"), Margin = new Thickness(0, 6, 0, 5) });
-        var box = new PasswordBox { Height = 40, Padding = new Thickness(10), Background = (Brush)Application.Current.FindResource("InputBackgroundBrush"), Foreground = (Brush)Application.Current.FindResource("TextBrush"), BorderBrush = (Brush)Application.Current.FindResource("BorderBrush") };
+        var box = new PasswordBox { Height = 40, Padding = new Thickness(10), Background = (Brush)Application.Current.FindResource("InputBackgroundBrush"), Foreground = (Brush)Application.Current.FindResource("TextBrush"), BorderBrush = (Brush)Application.Current.FindResource("BorderBrush") });
         parent.Children.Add(box);
         return box;
     }
