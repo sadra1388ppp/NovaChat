@@ -31,6 +31,7 @@ public partial class MainView : UserControl
     public MainView()
     {
         InitializeComponent();
+        InitializeConversationAvatarFix();
         if (!_messageDeletionHandlerRegistered)
         {
             EventManager.RegisterClassHandler(typeof(Border), UIElement.MouseRightButtonUpEvent,
@@ -135,6 +136,7 @@ public partial class MainView : UserControl
         _chats.Clear();
         foreach (var chat in chats ?? []) _chats.Add(new ChatListItem { Chat = chat, DisplayName = chat.OtherUserName(AuthState.UserId), LastMessage = chat.LastMessage == null ? "No messages yet." : FormatLastMessage(chat.LastMessage), IsOnline = IsUserOnline(chat.OtherUserId(AuthState.UserId)) });
         RefreshChatsList();
+        await Dispatcher.InvokeAsync(async () => await RefreshConversationAvatarsAsync(), System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
     private void RefreshChatsList() { ChatsList.ItemsSource = null; ChatsList.ItemsSource = _chats; NoChatsText.Visibility = _chats.Count == 0 ? Visibility.Visible : Visibility.Collapsed; }
@@ -147,6 +149,7 @@ public partial class MainView : UserControl
         item.Chat.LastMessage = message; item.LastMessage = FormatLastMessage(message);
         var index = _chats.IndexOf(item); if (index > 0) { _chats.RemoveAt(index); _chats.Insert(0, item); }
         RefreshChatsList();
+        _ = Dispatcher.InvokeAsync(RefreshConversationAvatarsAsync, System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
     private async void NewChatButton_Click(object sender, RoutedEventArgs e)
@@ -250,18 +253,4 @@ public partial class MainView : UserControl
     private async Task ScrollMessagesToBottomAsync() { await Task.Delay(50); MessagesScrollViewer.ScrollToEnd(); }
     private void ProfileButton_Click(object sender, RoutedEventArgs e) => ProfileRequested?.Invoke();
     private void SettingsButton_Click(object sender, RoutedEventArgs e) => SettingsRequested?.Invoke();
-    private void ManageUsersButton_Click(object sender, RoutedEventArgs e) => MessageBox.Show("Manage Users", "Owner Control");
-    private void AllChatsButton_Click(object sender, RoutedEventArgs e) => MessageBox.Show("All Chats", "Owner Control");
-    private void DeleteChatsButton_Click(object sender, RoutedEventArgs e) => MessageBox.Show("Delete Chats", "Owner Control");
-    private void ServerOverviewButton_Click(object sender, RoutedEventArgs e) => MessageBox.Show("Server Overview", "Owner Control");
-    private void AdminSettingsButton_Click(object sender, RoutedEventArgs e) => MessageBox.Show("Admin Settings", "Owner Control");
-
-    private sealed class ChatListItem
-    {
-        public ChatModel Chat { get; set; } = new();
-        public string DisplayName { get; set; } = string.Empty;
-        public string LastMessage { get; set; } = string.Empty;
-        public bool IsOnline { get; set; }
-        public Visibility OnlineVisibility => IsOnline ? Visibility.Visible : Visibility.Collapsed;
-    }
 }
