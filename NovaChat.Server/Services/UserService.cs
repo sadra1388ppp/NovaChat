@@ -82,11 +82,14 @@ public class UserService
                 await _context.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Contacts\" SET \"OwnerUserId\" = {newId} WHERE \"OwnerUserId\" = {id}");
                 await _context.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Contacts\" SET \"ContactUserId\" = {newId} WHERE \"ContactUserId\" = {id}");
 
-                // Groups.CreatorId references Users.Id with RESTRICT, so it must be moved before deleting the old user.
-                await _context.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Groups\" SET \"CreatorId\" = {newId} WHERE \"CreatorId\" = {id}");
+                // Keep group relations working when an older database still contains the group tables.
+                if (await TableExistsAsync("GroupMembers"))
+                    await _context.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"GroupMembers\" SET \"UserId\" = {newId} WHERE \"UserId\" = {id}");
 
-                // Some group schemas also keep the creator/member relation under a separate table.
-                // Only update tables that are known to exist in this database schema.
+                if (await TableExistsAsync("Groups"))
+                    await _context.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Groups\" SET \"CreatorId\" = {newId} WHERE \"CreatorId\" = {id}");
+
+                // The old user cannot be deleted until every FK pointing at it has been moved.
                 await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"Users\" WHERE \"Id\" = {id}");
                 await transaction.CommitAsync();
             }
@@ -135,7 +138,36 @@ public class UserService
     {
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
         if (user == null) return false;
-        _context.Users.Remove(user); await _context.SaveChangesAsync(); return true;
+
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+        try
+        {
+            // Current schema uses RESTRICT for user references, so clean dependent rows explicitly.
+            await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"Messages\" WHERE \"SenderId\" = {id}");
+            await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"Chats\" WHERE \"User1Id\" = {id} OR \"User2Id\" = {id}");
+            await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"Contacts\" WHERE \"OwnerUserId\" = {id} OR \"ContactUserId\" = {id}");
+
+            // Clean legacy group tables if they still exist in the local database.
+            if (await TableExistsAsync("Groups") && await TableExistsAsync("GroupMembers"))
+            {
+                await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"GroupMembers\" WHERE \"GroupId\" IN (SELECT \"Id\" FROM \"Groups\" WHERE \"CreatorId\" = {id}) OR \"UserId\" = {id}");
+                await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"Groups\" WHERE \"CreatorId\" = {id}");
+            }
+            else if (await TableExistsAsync("GroupMembers"))
+            {
+                await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"GroupMembers\" WHERE \"UserId\" = {id}");
+            }
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"Users\" WHERE \"Id\" = {id}");
+            await transaction.CommitAsync();
+            _context.ChangeTracker.Clear();
+            return true;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     public async Task<(bool Success, string Message)> ChangePasswordAsync(string id, ChangePasswordDto dto)
@@ -146,6 +178,13 @@ public class UserService
         if (passwordResult == PasswordVerificationResult.Failed) return (false, "Current password is incorrect.");
         user.PasswordHash = _passwordHasher.HashPassword(user, dto.NewPassword); await _context.SaveChangesAsync();
         return (true, "Password changed successfully.");
+    }
+
+    private async Task<bool> TableExistsAsync(string tableName)
+    {
+        return await _context.Database
+            .SqlQueryRaw<bool>("SELECT to_regclass({0}) IS NOT NULL", $"\"{tableName}\"")
+            .FirstAsync();
     }
 
     private UserResponseDto ToUserResponse(User user) => new()
