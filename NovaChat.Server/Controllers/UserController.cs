@@ -79,7 +79,8 @@ public class UserController : ControllerBase
         Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
         Response.Headers.Pragma = "no-cache";
         Response.Headers.Expires = "0";
-        return PhysicalFile(path, "image/jpeg");
+        Response.Headers.ContentDisposition = "inline";
+        return PhysicalFile(path, "image/jpeg", enableRangeProcessing: true);
     }
 
     [Authorize]
@@ -150,7 +151,9 @@ public class UserController : ControllerBase
             var result = await _userService.SetAvatarAsync(id, $"/uploads/avatars/{fileName}");
             if (!result.Success) return NotFound(new { message = result.Message });
             DeleteStoredAvatar(oldProfile?.AvatarUrl);
-            return Ok(new { message = result.Message, user = result.User });
+
+            var refreshedUser = await _userService.GetUserByIdAsync(id);
+            return Ok(new { message = result.Message, user = refreshedUser });
         }
         catch (UnknownImageFormatException)
         {
