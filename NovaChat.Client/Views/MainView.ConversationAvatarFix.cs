@@ -36,14 +36,12 @@ public partial class MainView
         {
             var userId = item.Chat.OtherUserId(AuthState.UserId);
             if (string.IsNullOrWhiteSpace(userId)) continue;
-
             var container = ChatsList.ItemContainerGenerator.ContainerFromItem(item) as FrameworkElement;
             if (container == null) continue;
-
             var image = FindAvatarImage(container);
             if (image == null) continue;
 
-            var profile = await new ApiService().GetAsync<NovaChat.Client.Models.ProfileModel>($"api/User/profile/{Uri.EscapeDataString(userId)}");
+            var profile = await _apiService.GetAsync<NovaChat.Client.Models.ProfileModel>($"api/User/profile/{Uri.EscapeDataString(userId)}");
             var avatarUrl = profile?.AvatarUrl;
             if (string.IsNullOrWhiteSpace(avatarUrl)) continue;
 
@@ -70,41 +68,62 @@ public partial class MainView
     private async Task<BitmapImage?> LoadConversationAvatarAsync(string userId, string avatarUrl)
     {
         if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(avatarUrl)) return null;
+        ConversationAvatarCache.TryRemoveWhereContains(userId);
 
-        var apiEndpoint = $"api/User/profile/{Uri.EscapeDataString(userId)}/avatar?v={Uri.EscapeDataString(avatarUrl)}";
-        var staticEndpoint = avatarUrl.StartsWith('/') ? avatarUrl : "/" + avatarUrl;
-
-        foreach (var endpoint in new[] { apiEndpoint, staticEndpoint })
+        var endpoint = $"api/avatar/{Uri.EscapeDataString(userId)}?v={Uri.EscapeDataString(avatarUrl)}";
+        try
         {
-            try
-            {
-                var cacheKey = new ApiService().BuildAbsoluteUrl(endpoint);
-                if (ConversationAvatarCache.TryGetValue(cacheKey, out var cached)) return cached;
+            var absolute = _apiService.BuildAbsoluteUrl(endpoint);
+            var bytes = await _apiService.GetBytesAsync(endpoint);
+            if (bytes == null || bytes.Length == 0) return null;
 
-                var bytes = await new ApiService().GetBytesAsync(endpoint);
-                if (bytes == null || bytes.Length == 0) continue;
-
-                using var memoryStream = new MemoryStream(bytes);
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
-                bitmap.StreamSource = memoryStream;
-                bitmap.EndInit();
-                bitmap.Freeze();
-
-                ConversationAvatarCache[cacheKey] = bitmap;
-                return bitmap;
-            }
-            catch
-            {
-                // Try the next supported avatar source.
-            }
+            using var memoryStream = new MemoryStream(bytes);
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+            bitmap.StreamSource = memoryStream;
+            bitmap.EndInit();
+            bitmap.Freeze();
+            ConversationAvatarCache[absolute] = bitmap;
+            return bitmap;
         }
+        catch { return null; }
+    }
 
-        return null;
+    private async Task<BitmapImage?> LoadConversationAvatarAsync(string endpoint)
+    {
+        if (string.IsNullOrWhiteSpace(endpoint)) return null;
+        try
+        {
+            var absolute = _apiService.BuildAbsoluteUrl(endpoint);
+            var bytes = await _apiService.GetBytesAsync(endpoint);
+            if (bytes == null || bytes.Length == 0) return null;
+            if (ConversationAvatarCache.TryGetValue(absolute, out var cached)) return cached;
+
+            using var memoryStream = new MemoryStream(bytes);
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+            bitmap.StreamSource = memoryStream;
+            bitmap.EndInit();
+            bitmap.Freeze();
+            ConversationAvatarCache[absolute] = bitmap;
+            return bitmap;
+        }
+        catch { return null; }
     }
 
     private void InitializeConversationAvatarFix()
         => HookConversationAvatarRefresh();
+}
+
+internal static class AvatarCacheExtensions
+{
+    public static void TryRemoveWhereContains(this ConcurrentDictionary<string, BitmapImage> cache, string userId)
+    {
+        foreach (var key in cache.Keys.Where(k => k.Contains($"api/avatar/{Uri.EscapeDataString(userId)}", StringComparison.OrdinalIgnoreCase)).ToArray())
+            cache.TryRemove(key, out _);
+    }
 }
