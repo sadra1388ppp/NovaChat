@@ -6,6 +6,7 @@ using NovaChat.Server.Data;
 using NovaChat.Server.DTOs;
 using NovaChat.Server.Entities;
 using NovaChat.Server.Hubs;
+using NovaChat.Server.Services;
 using System.Security.Claims;
 
 namespace NovaChat.Server.Controllers;
@@ -18,15 +19,14 @@ public class MessageDeletionController : ControllerBase
     private readonly AppDbContext _db;
     private readonly IConfiguration _configuration;
     private readonly IHubContext<ChatHub> _hub;
+    private readonly IWebHostEnvironment _environment;
 
-    public MessageDeletionController(
-        AppDbContext db,
-        IConfiguration configuration,
-        IHubContext<ChatHub> hub)
+    public MessageDeletionController(AppDbContext db, IConfiguration configuration, IHubContext<ChatHub> hub, IWebHostEnvironment environment)
     {
         _db = db;
         _configuration = configuration;
         _hub = hub;
+        _environment = environment;
     }
 
     [HttpDelete("private/{messageId:int}")]
@@ -60,12 +60,27 @@ public class MessageDeletionController : ControllerBase
                 sentAt = message.SentAt
             };
 
+            string? mediaPath = null;
+            if (MediaMessageEnvelope.TryParse(message.Content, out var media) && media != null)
+            {
+                var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
+                mediaPath = Path.Combine(root, "uploads", "chat", media.StorageName.Replace('/', Path.DirectorySeparatorChar));
+            }
+
             message.DeletedForEveryone = true;
             message.Content = string.Empty;
             await _db.SaveChangesAsync();
 
-            await _hub.Clients.Users(chat.User1Id, chat.User2Id)
-                .SendAsync("MessageDeleted", deletedPayload);
+            if (!string.IsNullOrWhiteSpace(mediaPath))
+            {
+                try
+                {
+                    if (System.IO.File.Exists(mediaPath)) System.IO.File.Delete(mediaPath);
+                }
+                catch { }
+            }
+
+            await _hub.Clients.Users(chat.User1Id, chat.User2Id).SendAsync("MessageDeleted", deletedPayload);
         }
         else if (mode == "me")
         {
