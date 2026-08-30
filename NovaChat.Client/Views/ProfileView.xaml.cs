@@ -84,8 +84,9 @@ public partial class ProfileView : UserControl
 
     private async Task<BitmapImage?> LoadAvatarAsync(string userId, string avatarUrl)
     {
-        var cacheBust = Uri.EscapeDataString($"{avatarUrl}?v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}");
-        var endpoint = _apiService.BuildAbsoluteUrl($"api/avatar/{Uri.EscapeDataString(userId)}?v={cacheBust}");
+        var version = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
+        var endpointPath = $"api/avatar/{Uri.EscapeDataString(userId)}?v={Uri.EscapeDataString(avatarUrl)}-{version}";
+        var endpoint = _apiService.BuildAbsoluteUrl(endpointPath);
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
@@ -208,7 +209,7 @@ public partial class ProfileView : UserControl
     private static PasswordBox CreatePasswordBox(Panel parent, string label)
     {
         parent.Children.Add(new TextBlock { Text = label, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = (Brush)Application.Current.FindResource("TextBrush"), Margin = new Thickness(0, 6, 0, 5) });
-        var box = new PasswordBox { Height = 40, Padding = new Thickness(10), Background = (Brush)Application.Current.FindResource("InputBackgroundBrush"), Foreground = (Brush)Application.Current.FindResource("TextBrush"), BorderBrush = (Brush)Application.Current.FindResource("BorderBrush") });
+        var box = new PasswordBox { Height = 40, Padding = new Thickness(10), Background = (Brush)Application.Current.FindResource("InputBackgroundBrush"), Foreground = (Brush)Application.Current.FindResource("TextBrush"), BorderBrush = (Brush)Application.Current.FindResource("BorderBrush") };
         parent.Children.Add(box);
         return box;
     }
