@@ -58,7 +58,7 @@ public class ApiService
         await using var stream = File.OpenRead(filePath);
         using var fileContent = new StreamContent(stream);
 
-        var mediaType = Path.GetExtension(filePath).ToLowerInvariant() switch
+        var mediaType = System.IO.Path.GetExtension(filePath).ToLowerInvariant() switch
         {
             ".jpg" or ".jpeg" => "image/jpeg",
             ".png" => "image/png",
@@ -67,7 +67,7 @@ public class ApiService
         };
 
         fileContent.Headers.ContentType = new MediaTypeHeaderValue(mediaType);
-        form.Add(fileContent, fieldName, Path.GetFileName(filePath));
+        form.Add(fileContent, fieldName, System.IO.Path.GetFileName(filePath));
 
         var response = await _httpClient.PostAsync(endpoint, form);
         if (!response.IsSuccessStatusCode) return default;
