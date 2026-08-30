@@ -70,10 +70,6 @@ public partial class ProfileView : UserControl
                 AvatarImage.Visibility = Visibility.Visible;
                 AvatarInitialsText.Visibility = Visibility.Collapsed;
             }
-            else
-            {
-                ShowFeedback("Profile picture is saved, but NovaChat could not display it yet.");
-            }
         }
 
         var online = _profile.IsOnline;
@@ -88,39 +84,28 @@ public partial class ProfileView : UserControl
 
     private async Task<BitmapImage?> LoadAvatarAsync(string userId, string avatarUrl)
     {
-        var endpoints = new[]
+        var cacheBust = Uri.EscapeDataString($"{avatarUrl}?v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}");
+        var endpoint = _apiService.BuildAbsoluteUrl($"api/avatar/{Uri.EscapeDataString(userId)}?v={cacheBust}");
+        try
         {
-            _apiService.BuildAbsoluteUrl($"api/User/profile/{Uri.EscapeDataString(userId)}/avatar?v={Uri.EscapeDataString(avatarUrl)}"),
-            _apiService.BuildAbsoluteUrl(avatarUrl.StartsWith('/') ? avatarUrl : "/" + avatarUrl)
-        };
-
-        foreach (var url in endpoints)
-        {
-            try
-            {
-                using var request = new HttpRequestMessage(HttpMethod.Get, url);
-                if (!string.IsNullOrWhiteSpace(AuthState.Token))
-                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AuthState.Token);
-                using var response = await AvatarHttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
-                if (!response.IsSuccessStatusCode) continue;
-                var bytes = await response.Content.ReadAsByteArrayAsync();
-                if (bytes.Length == 0) continue;
-                using var stream = new MemoryStream(bytes);
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
-                bitmap.StreamSource = stream;
-                bitmap.EndInit();
-                bitmap.Freeze();
-                return bitmap;
-            }
-            catch
-            {
-                // Try the next supported source.
-            }
+            using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
+            if (!string.IsNullOrWhiteSpace(AuthState.Token))
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AuthState.Token);
+            using var response = await AvatarHttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+            if (!response.IsSuccessStatusCode) return null;
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            if (bytes.Length == 0) return null;
+            using var stream = new MemoryStream(bytes);
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+            bitmap.StreamSource = stream;
+            bitmap.EndInit();
+            bitmap.Freeze();
+            return bitmap;
         }
-        return null;
+        catch { return null; }
     }
 
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
@@ -223,7 +208,7 @@ public partial class ProfileView : UserControl
     private static PasswordBox CreatePasswordBox(Panel parent, string label)
     {
         parent.Children.Add(new TextBlock { Text = label, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = (Brush)Application.Current.FindResource("TextBrush"), Margin = new Thickness(0, 6, 0, 5) });
-        var box = new PasswordBox { Height = 40, Padding = new Thickness(10), Background = (Brush)Application.Current.FindResource("InputBackgroundBrush"), Foreground = (Brush)Application.Current.FindResource("TextBrush"), BorderBrush = (Brush)Application.Current.FindResource("BorderBrush") };
+        var box = new PasswordBox { Height = 40, Padding = new Thickness(10), Background = (Brush)Application.Current.FindResource("InputBackgroundBrush"), Foreground = (Brush)Application.Current.FindResource("TextBrush"), BorderBrush = (Brush)Application.Current.FindResource("BorderBrush") });
         parent.Children.Add(box);
         return box;
     }
