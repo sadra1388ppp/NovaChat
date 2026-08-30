@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 
 namespace NovaChat.Client.Views;
 
@@ -19,10 +20,17 @@ public partial class MainView
         if (sender is not TextBlock textBlock || textBlock.Name != "ChatUserNameText")
             return;
 
-        if (textBlock.DataContext is MainView view)
+        DependencyObject? current = textBlock;
+        while (current != null)
         {
-            view.ChatUserNameText_Click(textBlock, e);
-            e.Handled = true;
+            if (current is MainView view)
+            {
+                view.ChatUserNameText_Click(textBlock, e);
+                e.Handled = true;
+                return;
+            }
+
+            current = VisualTreeHelper.GetParent(current);
         }
     }
 }
