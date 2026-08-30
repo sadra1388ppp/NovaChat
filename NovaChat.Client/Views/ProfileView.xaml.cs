@@ -4,7 +4,6 @@ using NovaChat.Client.Services;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
 
 namespace NovaChat.Client.Views;
 
@@ -15,14 +14,12 @@ public partial class ProfileView : UserControl
     public event Action? SessionExpired;
 
     private readonly ApiService _apiService = new();
-    private readonly AvatarImageService _avatarImageService;
     private ProfileModel? _profile;
     private bool _busy;
 
     public ProfileView()
     {
         InitializeComponent();
-        _avatarImageService = new AvatarImageService(_apiService);
         Loaded += ProfileView_Loaded;
     }
 
@@ -44,11 +41,12 @@ public partial class ProfileView : UserControl
                 return;
             }
 
+            DataContext = _profile;
             DisplayNameBox.Text = _profile.DisplayName;
             UserIdBox.Text = _profile.Id;
             EmailBox.Text = _profile.Email;
             BioBox.Text = _profile.Bio;
-            await UpdateProfileUiAsync();
+            UpdateProfileTextUi();
         }
         catch (Exception ex)
         {
@@ -56,40 +54,16 @@ public partial class ProfileView : UserControl
         }
     }
 
-    private async Task UpdateProfileUiAsync()
+    private void UpdateProfileTextUi()
     {
         if (_profile == null) return;
 
         AvatarInitialsText.Text = GetInitials(_profile.DisplayName, _profile.Id);
-        AvatarInitialsText.Visibility = Visibility.Visible;
-        AvatarImage.Source = null;
-        AvatarImage.Visibility = Visibility.Collapsed;
         ProfileDisplayNameText.Text = _profile.DisplayName;
         ProfileUserIdText.Text = $"@{_profile.Id}";
         ProfileBioText.Text = string.IsNullOrWhiteSpace(_profile.Bio)
             ? "Add a short bio to tell people about yourself."
             : _profile.Bio;
-
-        if (!string.IsNullOrWhiteSpace(_profile.AvatarUrl))
-        {
-            BitmapImage? bitmap = null;
-
-            try
-            {
-                bitmap = await _avatarImageService.LoadAsync(_profile.Id, _profile.AvatarUrl);
-            }
-            catch
-            {
-                bitmap = null;
-            }
-
-            if (bitmap != null)
-            {
-                AvatarImage.Source = bitmap;
-                AvatarImage.Visibility = Visibility.Visible;
-                AvatarInitialsText.Visibility = Visibility.Collapsed;
-            }
-        }
 
         var online = _profile.IsOnline;
         StatusText.Text = online ? "● Online" : "● Offline";
@@ -98,7 +72,9 @@ public partial class ProfileView : UserControl
         PresenceSummaryText.Text = online ? "Visible as online" : "Visible as offline";
         LastSeenText.Text = online
             ? "Active now"
-            : (_profile.LastSeenAt.HasValue ? $"Last seen {FormatLastSeen(_profile.LastSeenAt.Value)}" : "Last seen not available");
+            : (_profile.LastSeenAt.HasValue
+                ? $"Last seen {FormatLastSeen(_profile.LastSeenAt.Value)}"
+                : "Last seen not available");
         JoinedText.Text = $"Joined {_profile.CreatedAt.ToLocalTime():dd MMM yyyy}";
         CopyUserIdButton.ToolTip = $"Copy @{_profile.Id}";
     }
@@ -140,7 +116,8 @@ public partial class ProfileView : UserControl
             }
 
             _profile = result.User;
-            await UpdateProfileUiAsync();
+            DataContext = _profile;
+            UpdateProfileTextUi();
             ShowFeedback(result.Message);
 
             if (!string.Equals(AuthState.UserId, _profile.Id, StringComparison.Ordinal))
@@ -193,7 +170,8 @@ public partial class ProfileView : UserControl
             else
             {
                 _profile = result.User;
-                await UpdateProfileUiAsync();
+                DataContext = _profile;
+                UpdateProfileTextUi();
                 ShowFeedback(result.Message);
             }
         }
@@ -220,7 +198,8 @@ public partial class ProfileView : UserControl
             if (removed)
             {
                 _profile.AvatarUrl = null;
-                await UpdateProfileUiAsync();
+                DataContext = _profile;
+                UpdateProfileTextUi();
                 ShowFeedback("Profile picture removed.");
             }
             else ShowFeedback("Profile picture could not be removed.");
