@@ -1,3 +1,4 @@
+using NovaChat.Client.Models;
 using NovaChat.Client.Services;
 
 namespace NovaChat.Client.Views;
@@ -8,30 +9,38 @@ public partial class MainView
 
     private void HookConversationAvatarRefresh()
     {
-        if (_conversationAvatarHooked) return;
+        // Refresh is driven explicitly by LoadChatsAsync and ProfileUpdated.
+        // No global Loaded/container handlers are used, because those caused
+        // repeated UI rebuilds and avatar flicker.
         _conversationAvatarHooked = true;
     }
 
-    private Task RefreshConversationAvatarsAsync()
+    private async Task RefreshConversationAvatarsAsync()
     {
-        var api = _apiService;
-
-        foreach (var item in _chats)
+        foreach (var item in _chats.ToArray())
         {
             var userId = item.Chat.OtherUserId(AuthState.UserId);
             if (string.IsNullOrWhiteSpace(userId)) continue;
 
-            var avatarPath = string.Equals(item.Chat.User1Id, userId, StringComparison.OrdinalIgnoreCase)
-                ? item.Chat.User1AvatarUrl
-                : item.Chat.User2AvatarUrl;
+            try
+            {
+                var profile = await _apiService.GetAsync<ProfileModel>(
+                    $"api/User/profile/{Uri.EscapeDataString(userId)}");
+                if (profile == null) continue;
 
-            item.AvatarUri = string.IsNullOrWhiteSpace(avatarPath)
-                ? null
-                : api.BuildAbsoluteUrl(avatarPath);
+                item.DisplayName = profile.DisplayName;
+                item.IsOnline = profile.IsOnline;
+                item.AvatarUri = string.IsNullOrWhiteSpace(profile.AvatarUrl)
+                    ? null
+                    : _apiService.BuildAbsoluteUrl(profile.AvatarUrl);
+            }
+            catch
+            {
+                // Keep the last known state on transient failures.
+            }
         }
 
         RefreshChatsList();
-        return Task.CompletedTask;
     }
 
     private void InitializeConversationAvatarFix()
