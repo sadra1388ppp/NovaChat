@@ -7,7 +7,6 @@ using System.Media;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
@@ -169,39 +168,21 @@ public partial class MainView
         if (border.Tag is string s && s == "media-rendered") return;
         var text = border.Child is StackPanel p ? p.Children.OfType<TextBlock>().FirstOrDefault()?.Text : null;
         if (string.IsNullOrWhiteSpace(text)) return;
-        var match = Regex.Match(text, @"\[NOVAMEDIA:(\d+)\]");
+        var match = Regex.Match(text, @"\u200B(\d+)$");
         if (!match.Success || !int.TryParse(match.Groups[1].Value, out var messageId)) return;
         border.Tag = "media-rendered";
         if (FindAncestorMainView(border) is MainView view) _ = view.RenderMediaBubbleAsync(border, messageId);
     }
 
-    private static bool IsMediaMessageBorder(Border border) => border.Child is StackPanel panel && panel.Children.OfType<TextBlock>().Any(t => t.Text.Contains("[NOVAMEDIA:", StringComparison.Ordinal));
+    private static bool IsMediaMessageBorder(Border border) => border.Child is StackPanel panel && panel.Children.OfType<TextBlock>().Any(t => t.Text.Contains("\u200B", StringComparison.Ordinal));
 
     private async Task RenderMediaBubbleAsync(Border border, int messageId)
     {
-        try
-        {
-            var bytes = await _apiService.GetBytesAsync($"api/ChatMedia/{messageId}");
-            if (bytes == null || bytes.Length == 0) return;
-            var media = await _apiService.GetAsync<MediaInfoDto>($"api/ChatMedia/{messageId}/info");
-        }
-        catch { }
-
-        // The media DTO is also available from history; use the bubble marker and download bytes directly.
         var existing = border.Child as StackPanel;
         var label = existing?.Children.OfType<TextBlock>().FirstOrDefault()?.Text ?? string.Empty;
-        if (label.StartsWith("🎙", StringComparison.Ordinal))
-        {
-            ReplaceWithVoiceBubble(border, messageId, label);
-        }
-        else if (label.StartsWith("📷", StringComparison.Ordinal))
-        {
-            await ReplaceWithImageBubbleAsync(border, messageId, label);
-        }
-        else
-        {
-            ReplaceWithFileBubble(border, messageId, label);
-        }
+        if (label.StartsWith("🎙", StringComparison.Ordinal)) ReplaceWithVoiceBubble(border, messageId);
+        else if (label.StartsWith("📷", StringComparison.Ordinal)) await ReplaceWithImageBubbleAsync(border, messageId, label);
+        else ReplaceWithFileBubble(border, messageId, label);
     }
 
     private async Task ReplaceWithImageBubbleAsync(Border border, int messageId, string label)
@@ -209,12 +190,10 @@ public partial class MainView
         var bytes = await _apiService.GetBytesAsync($"api/ChatMedia/{messageId}");
         if (bytes == null) return;
         var image = new BitmapImage();
-        using (var ms = new MemoryStream(bytes))
-        {
-            image.BeginInit(); image.CacheOption = BitmapCacheOption.OnLoad; image.StreamSource = ms; image.EndInit(); image.Freeze();
-        }
-        var stack = NewMediaStack(border);
-        stack.Children.Add(new Image { Source = image, Width = 320, MaxHeight = 320, Stretch = Stretch.UniformToFill, Margin = new Thickness(0, 0, 0, 6) });
+        using var ms = new MemoryStream(bytes);
+        image.BeginInit(); image.CacheOption = BitmapCacheOption.OnLoad; image.StreamSource = ms; image.EndInit(); image.Freeze();
+        var stack = NewMediaStack();
+        stack.Children.Add(new Image { Source = image, Width = 320, MaxHeight = 320, Stretch = Stretch.Uniform, Margin = new Thickness(0, 0, 0, 6) });
         stack.Children.Add(new TextBlock { Text = CleanMediaLabel(label), Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap });
         AddMediaTime(stack, border);
         border.Child = stack;
@@ -222,21 +201,21 @@ public partial class MainView
 
     private void ReplaceWithFileBubble(Border border, int messageId, string label)
     {
-        var stack = NewMediaStack(border);
-        var button = new Button { Content = $"{CleanMediaLabel(label)}\nOpen / Save file", Padding = new Thickness(12), Background = Brushes.Transparent, Foreground = Brushes.White, BorderBrush = Brushes.White };
+        var stack = NewMediaStack();
+        var button = new Button { Content = $"{CleanMediaLabel(label)}\nSave / Open file", Padding = new Thickness(12), Background = Brushes.Transparent, Foreground = Brushes.White, BorderBrush = Brushes.White };
         button.Click += async (_, _) => await DownloadMediaAsync(messageId, CleanMediaLabel(label));
         stack.Children.Add(button); AddMediaTime(stack, border); border.Child = stack;
     }
 
-    private void ReplaceWithVoiceBubble(Border border, int messageId, string label)
+    private void ReplaceWithVoiceBubble(Border border, int messageId)
     {
-        var stack = NewMediaStack(border);
+        var stack = NewMediaStack();
         var button = new Button { Content = "▶  Play voice message", Padding = new Thickness(12, 8, 12, 8), Background = Brushes.Transparent, Foreground = Brushes.White, BorderBrush = Brushes.White };
         button.Click += async (_, _) => await PlayVoiceAsync(messageId, button);
         stack.Children.Add(button); AddMediaTime(stack, border); border.Child = stack;
     }
 
-    private StackPanel NewMediaStack(Border border) => new() { Orientation = Orientation.Vertical, MaxWidth = 430 };
+    private static StackPanel NewMediaStack() => new() { Orientation = Orientation.Vertical, MaxWidth = 430 };
 
     private static void AddMediaTime(StackPanel stack, Border border)
     {
@@ -247,11 +226,7 @@ public partial class MainView
         }
     }
 
-    private static string CleanMediaLabel(string label)
-    {
-        var cleaned = Regex.Replace(label, @"\s*\[NOVAMEDIA:\d+\]", string.Empty).Trim();
-        return cleaned;
-    }
+    private static string CleanMediaLabel(string label) => Regex.Replace(label, @"\u200B\d+$", string.Empty).Trim();
 
     private async Task DownloadMediaAsync(int messageId, string suggestedName)
     {
@@ -267,7 +242,7 @@ public partial class MainView
     {
         try
         {
-            if (_voicePlayers.TryGetValue(messageId, out var existing)) { existing.Stop(); existing.Play(); button.Content = "⏹  Replay voice"; return; }
+            if (_voicePlayers.TryGetValue(messageId, out var existing)) { existing.Stop(); existing.Play(); button.Content = "▶  Replay voice"; return; }
             var bytes = await _apiService.GetBytesAsync($"api/ChatMedia/{messageId}");
             if (bytes == null) return;
             var path = Path.Combine(Path.GetTempPath(), $"NovaChatPlay_{messageId}.wav");
@@ -300,15 +275,5 @@ public partial class MainView
     {
         public string Message { get; set; } = string.Empty;
         public MessageModel? Data { get; set; }
-    }
-
-    private sealed class MediaInfoDto
-    {
-        public int Id { get; set; }
-        public string MessageType { get; set; } = "file";
-        public string? FileName { get; set; }
-        public string? ContentType { get; set; }
-        public long? FileSize { get; set; }
-        public double? DurationSeconds { get; set; }
     }
 }
