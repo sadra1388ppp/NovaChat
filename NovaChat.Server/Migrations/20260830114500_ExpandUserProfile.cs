@@ -1,9 +1,11 @@
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
 namespace NovaChat.Server.Migrations;
 
+[Migration("20260830114500_ExpandUserProfile")]
 public partial class ExpandUserProfile : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
