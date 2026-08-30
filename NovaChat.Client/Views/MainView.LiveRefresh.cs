@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.SignalR.Client;
 using NovaChat.Client.Models;
 using NovaChat.Client.Services;
 using System.Windows;
-using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
 namespace NovaChat.Client.Views;
@@ -56,7 +55,7 @@ public partial class MainView
 
     private async Task LiveRefreshOnceAsync()
     {
-        // Never compete with the explicit New Chat operation or a full chat reload.
+        // New Chat has its own controlled load. Never let the 100ms safety sync race it.
         if (_liveRefreshBusy || _isCreatingChatSafely || !AuthState.IsAuthenticated || _hubConnection == null)
             return;
 
@@ -73,8 +72,6 @@ public partial class MainView
             var onlineUsers = onlineTask.Status == TaskStatus.RanToCompletion ? await onlineTask : null;
             var serverChats = chatsTask.Status == TaskStatus.RanToCompletion ? await chatsTask : null;
 
-            // A New Chat may have started while the HTTP requests above were in flight.
-            // In that case, do not mutate the local list with a stale snapshot.
             if (_isCreatingChatSafely)
                 return;
 
@@ -117,20 +114,21 @@ public partial class MainView
     {
         if (serverChats == null || _isCreatingChatSafely) return;
 
-        // The API must be the source of truth. A Chat ID can exist only once in the UI.
+        // Collapse duplicate server/UI entries by the actual conversation pair, not by Chat.Id.
         var snapshot = serverChats
             .Where(x => x.Id > 0)
-            .GroupBy(x => x.Id)
-            .Select(g => g.First())
-            .ToDictionary(x => x.Id);
+            .GroupBy(x => GetConversationKey(x, AuthState.UserId), StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.OrderBy(x => x.Id).First())
+            .ToDictionary(x => GetConversationKey(x, AuthState.UserId), StringComparer.OrdinalIgnoreCase);
 
         var changed = false;
 
         foreach (var serverChat in snapshot.Values)
         {
-            if (_isCreatingChatSafely) return;
+            var key = GetConversationKey(serverChat, AuthState.UserId);
+            var existing = _chats.FirstOrDefault(x =>
+                string.Equals(GetConversationKey(x.Chat, AuthState.UserId), key, StringComparison.OrdinalIgnoreCase));
 
-            var existing = _chats.FirstOrDefault(x => x.Chat.Id == serverChat.Id);
             if (existing == null)
             {
                 var newItem = new ChatListItem
@@ -146,19 +144,22 @@ public partial class MainView
             }
         }
 
-        // Defensive cleanup for any duplicates produced by an earlier race.
-        foreach (var group in _chats.GroupBy(x => x.Chat.Id).ToList())
+        // Defensive cleanup for duplicate conversations created by an older version.
+        foreach (var duplicate in _chats
+            .GroupBy(x => GetConversationKey(x.Chat, AuthState.UserId), StringComparer.OrdinalIgnoreCase)
+            .SelectMany(g => g.OrderBy(x => x.Chat.Id).Skip(1))
+            .ToList())
         {
-            foreach (var duplicate in group.Skip(1))
-            {
-                _chats.Remove(duplicate);
-                changed = true;
-            }
+            _chats.Remove(duplicate);
+            if (_currentChatId == duplicate.Chat.Id)
+                ClearCurrentChatUi();
+            changed = true;
         }
 
         foreach (var item in _chats.ToList())
         {
-            if (!snapshot.TryGetValue(item.Chat.Id, out var serverChat))
+            var key = GetConversationKey(item.Chat, AuthState.UserId);
+            if (!snapshot.TryGetValue(key, out var serverChat))
             {
                 _chats.Remove(item);
                 if (_currentChatId == item.Chat.Id)
@@ -183,6 +184,9 @@ public partial class MainView
                 changed = true;
             }
 
+            item.Chat.User1AvatarUrl = serverChat.User1AvatarUrl;
+            item.Chat.User2AvatarUrl = serverChat.User2AvatarUrl;
+
             var online = IsUserOnline(serverChat.OtherUserId(AuthState.UserId));
             if (item.IsOnline != online) item.IsOnline = online;
 
@@ -191,6 +195,15 @@ public partial class MainView
 
         if (changed)
             RefreshChatsList();
+    }
+
+    private static string GetConversationKey(ChatModel chat, string currentUserId)
+    {
+        var otherUserId = chat.OtherUserId(currentUserId);
+        if (string.IsNullOrWhiteSpace(otherUserId))
+            return $"chat:{chat.Id}";
+
+        return $"user:{otherUserId.Trim().ToUpperInvariant()}";
     }
 
     private async Task LoadAvatarForNewChatItemAsync(ChatListItem item)
