@@ -50,6 +50,14 @@ public class ApiService
         return await response.Content.ReadFromJsonAsync<TResponse>();
     }
 
+    public async Task<byte[]?> GetBytesAsync(string endpoint)
+    {
+        AddAuthorization();
+        var response = await _httpClient.GetAsync(endpoint, HttpCompletionOption.ResponseHeadersRead);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadAsByteArrayAsync();
+    }
+
     public async Task<TResponse?> UploadFileAsync<TResponse>(string endpoint, string filePath, string fieldName = "file")
     {
         AddAuthorization();
