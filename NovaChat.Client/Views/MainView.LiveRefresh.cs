@@ -56,7 +56,8 @@ public partial class MainView
 
     private async Task LiveRefreshOnceAsync()
     {
-        if (_liveRefreshBusy || !AuthState.IsAuthenticated || _hubConnection == null)
+        // Never compete with the explicit New Chat operation or a full chat reload.
+        if (_liveRefreshBusy || _isCreatingChatSafely || !AuthState.IsAuthenticated || _hubConnection == null)
             return;
 
         _liveRefreshBusy = true;
@@ -72,8 +73,14 @@ public partial class MainView
             var onlineUsers = onlineTask.Status == TaskStatus.RanToCompletion ? await onlineTask : null;
             var serverChats = chatsTask.Status == TaskStatus.RanToCompletion ? await chatsTask : null;
 
+            // A New Chat may have started while the HTTP requests above were in flight.
+            // In that case, do not mutate the local list with a stale snapshot.
+            if (_isCreatingChatSafely)
+                return;
+
             await Dispatcher.InvokeAsync(() =>
             {
+                if (_isCreatingChatSafely) return;
                 ApplyOnlineUsers(onlineUsers);
                 ApplyChatSnapshot(serverChats);
                 UpdateCurrentChatPresence();
@@ -81,7 +88,6 @@ public partial class MainView
         }
         catch
         {
-            // SignalR push events remain the primary real-time path; this loop is a safety sync.
         }
         finally
         {
@@ -109,13 +115,21 @@ public partial class MainView
 
     private void ApplyChatSnapshot(IEnumerable<ChatModel>? serverChats)
     {
-        if (serverChats == null) return;
+        if (serverChats == null || _isCreatingChatSafely) return;
 
-        var snapshot = serverChats.ToDictionary(x => x.Id);
+        // The API must be the source of truth. A Chat ID can exist only once in the UI.
+        var snapshot = serverChats
+            .Where(x => x.Id > 0)
+            .GroupBy(x => x.Id)
+            .Select(g => g.First())
+            .ToDictionary(x => x.Id);
+
         var changed = false;
 
-        foreach (var serverChat in serverChats)
+        foreach (var serverChat in snapshot.Values)
         {
+            if (_isCreatingChatSafely) return;
+
             var existing = _chats.FirstOrDefault(x => x.Chat.Id == serverChat.Id);
             if (existing == null)
             {
@@ -128,6 +142,16 @@ public partial class MainView
                 };
                 _chats.Add(newItem);
                 _ = LoadAvatarForNewChatItemAsync(newItem);
+                changed = true;
+            }
+        }
+
+        // Defensive cleanup for any duplicates produced by an earlier race.
+        foreach (var group in _chats.GroupBy(x => x.Chat.Id).ToList())
+        {
+            foreach (var duplicate in group.Skip(1))
+            {
+                _chats.Remove(duplicate);
                 changed = true;
             }
         }
@@ -169,6 +193,22 @@ public partial class MainView
             RefreshChatsList();
     }
 
+    private async Task LoadAvatarForNewChatItemAsync(ChatListItem item)
+    {
+        var avatarUrl = item.Chat.OtherUserAvatarUrl;
+        if (string.IsNullOrWhiteSpace(avatarUrl)) return;
+
+        var absolute = _apiService.BuildAbsoluteUrl(avatarUrl);
+        item.AvatarUri = absolute;
+        try
+        {
+            var image = await LoadConversationAvatarAsync(absolute);
+            await Dispatcher.InvokeAsync(() => item.AvatarSource = image);
+            if (IsLoaded) RefreshChatsList();
+        }
+        catch { }
+    }
+
     private async Task RefreshAvatarOnlyWhenChangedAsync(ChatListItem item, ChatModel serverChat)
     {
         var avatarUrl = string.Equals(serverChat.User1Id, AuthState.UserId, StringComparison.OrdinalIgnoreCase)
@@ -176,8 +216,7 @@ public partial class MainView
             : serverChat.User1AvatarUrl;
 
         var absolute = string.IsNullOrWhiteSpace(avatarUrl) ? null : _apiService.BuildAbsoluteUrl(avatarUrl);
-        var current = item.AvatarUri;
-        if (string.Equals(current, absolute, StringComparison.OrdinalIgnoreCase)) return;
+        if (string.Equals(item.AvatarUri, absolute, StringComparison.OrdinalIgnoreCase)) return;
 
         item.Chat.User1AvatarUrl = serverChat.User1AvatarUrl;
         item.Chat.User2AvatarUrl = serverChat.User2AvatarUrl;
@@ -196,22 +235,6 @@ public partial class MainView
         {
             item.AvatarSource = null;
         }
-    }
-
-    private async Task LoadAvatarForNewChatItemAsync(ChatListItem item)
-    {
-        var avatarUrl = item.Chat.OtherUserAvatarUrl;
-        if (string.IsNullOrWhiteSpace(avatarUrl)) return;
-
-        var absolute = _apiService.BuildAbsoluteUrl(avatarUrl);
-        item.AvatarUri = absolute;
-        try
-        {
-            var image = await LoadConversationAvatarAsync(absolute);
-            await Dispatcher.InvokeAsync(() => item.AvatarSource = image);
-            RefreshChatsList();
-        }
-        catch { }
     }
 
     private void ClearCurrentChatUi()
