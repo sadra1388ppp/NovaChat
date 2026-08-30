@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using NovaChat.Server.DTOs;
 using NovaChat.Server.Services;
 using System.Security.Claims;
 
@@ -54,43 +55,23 @@ public class ChatHub : Hub
         var message = await _chatService.SendMessageAsync(chatId, senderId, content);
         var chat = await _chatService.GetChatByIdAsync(chatId);
         if (message == null || chat == null) throw new HubException("Unable to send message.");
-
-        await Clients.Users(chat.User1Id, chat.User2Id).SendAsync("ReceiveMessage", new
-        {
-            id = message.Id,
-            chatId = message.ChatId,
-            senderId = message.SenderId,
-            senderName = message.Sender?.DisplayName ?? "",
-            content = message.Content,
-            sentAt = message.SentAt
-        });
+        await Clients.Users(chat.User1Id, chat.User2Id).SendAsync("ReceiveMessage", MessageDtoMapper.Map(message));
     }
 
     public async Task DeleteMessage(int messageId)
     {
         var userId = CurrentUserId();
         if (string.IsNullOrWhiteSpace(userId)) throw new HubException("Unauthorized.");
-
         var message = await _chatService.GetMessageByIdAsync(messageId);
         if (message == null) throw new HubException("Message not found.");
 
         var isOwner = string.Equals(_configuration["Owner:UserId"], userId, StringComparison.OrdinalIgnoreCase);
-        if (!isOwner && !string.Equals(message.SenderId, userId, StringComparison.OrdinalIgnoreCase))
-            throw new HubException("You can only delete your own messages.");
-        if (!isOwner && !await _chatService.CanAccessChatAsync(message.ChatId, userId))
-            throw new HubException("You do not have access to this chat.");
+        if (!isOwner && !string.Equals(message.SenderId, userId, StringComparison.OrdinalIgnoreCase)) throw new HubException("You can only delete your own messages.");
+        if (!isOwner && !await _chatService.CanAccessChatAsync(message.ChatId, userId)) throw new HubException("You do not have access to this chat.");
 
         var chat = await _chatService.GetChatByIdAsync(message.ChatId);
         if (chat == null || !await _chatService.DeleteMessageAsync(messageId)) throw new HubException("Unable to delete message.");
-
-        await Clients.Users(chat.User1Id, chat.User2Id).SendAsync("MessageDeleted", new
-        {
-            id = message.Id,
-            chatId = message.ChatId,
-            senderId = message.SenderId,
-            content = message.Content,
-            sentAt = message.SentAt
-        });
+        await Clients.Users(chat.User1Id, chat.User2Id).SendAsync("MessageDeleted", new { id = message.Id, chatId = message.ChatId, senderId = message.SenderId, content = message.Content, sentAt = message.SentAt });
     }
 
     public async Task JoinChat(int chatId)
