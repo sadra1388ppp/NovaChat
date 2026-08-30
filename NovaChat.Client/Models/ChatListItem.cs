@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
+using System.Windows.Media.Imaging;
 
 namespace NovaChat.Client.Models;
 
@@ -9,6 +10,7 @@ public sealed class ChatListItem : INotifyPropertyChanged
     private string _displayName = string.Empty;
     private string _lastMessage = string.Empty;
     private bool _isOnline;
+    private BitmapImage? _avatarSource;
 
     public ChatModel Chat { get; set; } = new();
 
@@ -34,6 +36,12 @@ public sealed class ChatListItem : INotifyPropertyChanged
             OnPropertyChanged();
             OnPropertyChanged(nameof(OnlineVisibility));
         }
+    }
+
+    public BitmapImage? AvatarSource
+    {
+        get => _avatarSource;
+        set { if (ReferenceEquals(_avatarSource, value)) return; _avatarSource = value; OnPropertyChanged(); }
     }
 
     public Visibility OnlineVisibility => IsOnline ? Visibility.Visible : Visibility.Collapsed;
