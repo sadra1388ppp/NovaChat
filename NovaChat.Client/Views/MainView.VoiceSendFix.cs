@@ -14,39 +14,15 @@ public partial class MainView
 
         EventManager.RegisterClassHandler(
             typeof(Button),
-            Button.ClickEvent,
-            new RoutedEventHandler(VoiceAwareButtonClick),
+            Button.PreviewMouseLeftButtonDownEvent,
+            new System.Windows.Input.MouseButtonEventHandler(VoiceAwareButtonPreviewMouseDown),
             true);
-
-        EventManager.RegisterClassHandler(
-            typeof(MainView),
-            FrameworkElement.LoadedEvent,
-            new RoutedEventHandler(VoiceSendFixLoaded));
     }
 
-    private static void VoiceSendFixLoaded(object sender, RoutedEventArgs e)
-    {
-        if (sender is not MainView view) return;
-
-        view.Dispatcher.BeginInvoke(
-            System.Windows.Threading.DispatcherPriority.Loaded,
-            new Action(view.AttachVoiceAwareSendButton));
-    }
-
-    private void AttachVoiceAwareSendButton()
-    {
-        var send = FindDescendant<Button>(
-            this,
-            b => string.Equals(b.Content?.ToString(), "➤", StringComparison.Ordinal));
-
-        if (send == null) return;
-        send.Tag = "NovaChat.VoiceAwareSend";
-    }
-
-    private static void VoiceAwareButtonClick(object sender, RoutedEventArgs e)
+    private static void VoiceAwareButtonPreviewMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (sender is not Button button) return;
-        if (!string.Equals(button.Tag?.ToString(), "NovaChat.VoiceAwareSend", StringComparison.Ordinal)) return;
+        if (!string.Equals(button.Content?.ToString(), "➤", StringComparison.Ordinal)) return;
         if (FindMainViewFromButton(button) is not MainView view) return;
         if (view._voiceRecorder == null) return;
 
