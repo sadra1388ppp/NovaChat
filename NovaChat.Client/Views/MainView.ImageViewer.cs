@@ -24,14 +24,14 @@ public partial class MainView
     private static async void ImagePreviewMouseUp(object sender, MouseButtonEventArgs e)
     {
         if (sender is not Image image) return;
-        if (FindAncestorMainView(image) is not MainView view) return;
+        if (FindImageViewerMainView(image) is not MainView view) return;
         if (FindMessageId(image) is not int messageId || messageId <= 0) return;
 
         e.Handled = true;
         await view.ShowImageViewerAsync(messageId);
     }
 
-    private static MainView? FindAncestorMainView(DependencyObject element)
+    private static MainView? FindImageViewerMainView(DependencyObject element)
     {
         var current = VisualTreeHelper.GetParent(element);
         while (current != null)
