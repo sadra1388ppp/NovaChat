@@ -103,6 +103,10 @@ public partial class MainView
                 ChatUserNameText.Text = "Select a chat";
                 ChatStatusText.Text = "Offline";
                 ChatStatusIndicator.Fill = Brushes.Gray;
+                ChatHeaderAvatarImage.Source = null;
+                ChatHeaderAvatarImage.Visibility = Visibility.Collapsed;
+                ChatAvatarInitialsText.Text = "N";
+                ChatAvatarInitialsText.Visibility = Visibility.Visible;
                 MessagesPanel.Children.Clear();
                 MessageTextBox.Clear();
                 UpdateLoadOlderButton();
@@ -116,13 +120,19 @@ public partial class MainView
     {
         if (payload.Id <= 0) return;
 
+        // The caller already receives the CreateChat response and loads its own
+        // chat. Ignoring our own broadcast prevents a second UI refresh and the
+        // visual duplicate-chat effect. Other participants still refresh normally.
+        if (string.Equals(payload.CreatedBy, AuthState.UserId, StringComparison.OrdinalIgnoreCase))
+            return;
+
         try
         {
             await LoadChatsAsync();
         }
         catch
         {
-            // Ignore background refresh failures; the next real-time event can retry.
+            // Keep the current conversation list if a background refresh fails.
         }
     }
 
@@ -189,5 +199,6 @@ public partial class MainView
         public string User1Id { get; set; } = string.Empty;
         public string User2Id { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
+        public string CreatedBy { get; set; } = string.Empty;
     }
 }
