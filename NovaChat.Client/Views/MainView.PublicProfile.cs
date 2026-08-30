@@ -58,7 +58,9 @@ public partial class MainView
 
             if (string.IsNullOrWhiteSpace(profile.AvatarUrl)) return;
 
-            var bitmap = await LoadConversationAvatarAsync($"api/User/profile/{Uri.EscapeDataString(profile.Id)}/avatar");
+            // AvatarUrl is the canonical path returned by the server for this user.
+            // Load that exact file instead of reconstructing a second avatar URL.
+            var bitmap = await LoadConversationAvatarAsync(profile.AvatarUrl);
             if (bitmap == null || !string.Equals(_currentOtherUserId, profile.Id, StringComparison.OrdinalIgnoreCase)) return;
 
             await Dispatcher.InvokeAsync(() =>
@@ -201,7 +203,10 @@ public partial class MainView
 
         try
         {
-            var bitmap = await LoadConversationAvatarAsync($"api/User/profile/{Uri.EscapeDataString(profile.Id)}/avatar");
+            // Use the URL actually stored on the profile. The server exposes the
+            // uploads directory through UseStaticFiles, so this is the same file
+            // that the owner sees in ProfileView.
+            var bitmap = await LoadConversationAvatarAsync(profile.AvatarUrl);
             if (bitmap == null) return;
 
             await Dispatcher.InvokeAsync(() =>
