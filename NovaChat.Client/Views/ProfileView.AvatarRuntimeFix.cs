@@ -33,17 +33,12 @@ public partial class ProfileView
             var profile = await _apiService.GetAsync<ProfileModel>("api/User/profile/me");
             if (profile == null || string.IsNullOrWhiteSpace(profile.AvatarUrl)) return;
 
-            var endpoint = _apiService.BuildAbsoluteUrl(
-                $"api/avatar/{Uri.EscapeDataString(profile.Id)}?v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}");
-            var bytes = await _apiService.GetBytesAsync(endpoint);
-            if (bytes == null || bytes.Length == 0) return;
-
-            using var stream = new MemoryStream(bytes);
+            var url = _apiService.BuildAbsoluteUrl(profile.AvatarUrl);
             var bitmap = new BitmapImage();
             bitmap.BeginInit();
+            bitmap.UriSource = new Uri(url, UriKind.Absolute);
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
             bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
-            bitmap.StreamSource = stream;
             bitmap.EndInit();
             bitmap.Freeze();
 
@@ -56,7 +51,7 @@ public partial class ProfileView
         }
         catch
         {
-            // Keep the initials fallback when the avatar is unavailable.
+            // Keep initials fallback when the stored file is unavailable.
         }
     }
 }
