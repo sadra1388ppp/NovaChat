@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using NovaChat.Server.DTOs;
-using NovaChat.Server.Entities;
 using NovaChat.Server.Services;
 using System.Security.Claims;
 
@@ -24,20 +24,23 @@ public class ChatMediaController : ControllerBase
 
     private readonly ChatService _chatService;
     private readonly IWebHostEnvironment _environment;
+    private readonly IHubContext<NovaChat.Server.Hubs.ChatHub> _hub;
 
-    public ChatMediaController(ChatService chatService, IWebHostEnvironment environment)
+    public ChatMediaController(ChatService chatService, IWebHostEnvironment environment, IHubContext<NovaChat.Server.Hubs.ChatHub> hub)
     {
         _chatService = chatService;
         _environment = environment;
+        _hub = hub;
     }
 
     [HttpPost("{chatId}")]
     [RequestSizeLimit(MaxFileBytes)]
-    public async Task<IActionResult> Upload(int chatId, IFormFile file, [FromQuery] string type = "file")
+    public async Task<IActionResult> Upload(int chatId, IFormFile file, [FromQuery] string type = "file", [FromQuery] double? durationSeconds = null)
     {
         var userId = CurrentUserId();
         if (userId == null) return Unauthorized();
-        if (!await _chatService.CanAccessChatAsync(chatId, userId)) return Forbid();
+        var chat = await _chatService.GetChatByIdAsync(chatId);
+        if (chat == null || (chat.User1Id != userId && chat.User2Id != userId)) return Forbid();
         if (file == null || file.Length == 0) return BadRequest(new { message = "Please select a file." });
 
         type = type.Trim().ToLowerInvariant();
@@ -49,24 +52,15 @@ public class ChatMediaController : ControllerBase
         if (type == "voice" && !string.Equals(file.ContentType, "audio/wav", StringComparison.OrdinalIgnoreCase) && !string.Equals(file.ContentType, "audio/x-wav", StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { message = "Voice messages must be WAV audio." });
 
-        var maxBytes = type switch
-        {
-            "image" => MaxImageBytes,
-            "voice" => MaxVoiceBytes,
-            _ => MaxFileBytes
-        };
+        var maxBytes = type switch { "image" => MaxImageBytes, "voice" => MaxVoiceBytes, _ => MaxFileBytes };
         if (file.Length > maxBytes) return BadRequest(new { message = $"This {type} is too large." });
 
         var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
         var folder = Path.Combine(root, "uploads", "chat", type);
         Directory.CreateDirectory(folder);
-
         var storageName = $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
         var path = Path.Combine(folder, storageName);
-        await using (var stream = System.IO.File.Create(path))
-        {
-            await file.CopyToAsync(stream);
-        }
+        await using (var stream = System.IO.File.Create(path)) await file.CopyToAsync(stream);
 
         var envelope = new MediaMessageEnvelope
         {
@@ -75,7 +69,7 @@ public class ChatMediaController : ControllerBase
             FileName = Path.GetFileName(file.FileName),
             ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
             Size = file.Length,
-            DurationSeconds = null
+            DurationSeconds = type == "voice" && durationSeconds.HasValue ? Math.Max(0, durationSeconds.Value) : null
         };
 
         var message = await _chatService.SendMessageAsync(chatId, userId, envelope.Serialize());
@@ -85,8 +79,8 @@ public class ChatMediaController : ControllerBase
             return BadRequest(new { message = "Unable to create media message." });
         }
 
-        var baseUrl = $"{Request.Scheme}://{Request.Host}";
-        var dto = MessageDtoMapper.Map(message, baseUrl);
+        var dto = MessageDtoMapper.Map(message);
+        await _hub.Clients.Users(chat.User1Id, chat.User2Id).SendAsync("ReceiveMessage", dto);
         return Ok(new { message = "Media sent successfully.", data = dto });
     }
 
@@ -95,7 +89,6 @@ public class ChatMediaController : ControllerBase
     {
         var userId = CurrentUserId();
         if (userId == null) return Unauthorized();
-
         var message = await _chatService.GetMessageByIdAsync(messageId);
         if (message == null || !MediaMessageEnvelope.TryParse(message.Content, out var media) || media == null) return NotFound();
         if (!await _chatService.CanAccessChatAsync(message.ChatId, userId)) return Forbid();
@@ -103,7 +96,6 @@ public class ChatMediaController : ControllerBase
         var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
         var path = Path.Combine(root, "uploads", "chat", media.StorageName.Replace('/', Path.DirectorySeparatorChar));
         if (!System.IO.File.Exists(path)) return NotFound();
-
         Response.Headers.ContentDisposition = $"inline; filename=\"{Uri.EscapeDataString(media.FileName)}\"";
         Response.Headers.CacheControl = "private, max-age=3600";
         return PhysicalFile(path, media.ContentType, enableRangeProcessing: true);
