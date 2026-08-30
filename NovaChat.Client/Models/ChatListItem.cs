@@ -1,3 +1,4 @@
+using NovaChat.Client.Services;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
@@ -60,6 +61,8 @@ public sealed class ChatListItem : INotifyPropertyChanged
             OnPropertyChanged();
         }
     }
+
+    public string OtherUserId => Chat.OtherUserId(AuthState.UserId);
 
     public string Initials
     {
