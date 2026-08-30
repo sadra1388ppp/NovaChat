@@ -45,6 +45,7 @@ public partial class MainView
         _hubConnection.On<MessageDeletedPayload>("MessageDeleted", OnRealtimeMessageDeleted);
         _hubConnection.On<ChatDeletedPayload>("ChatDeleted", OnRealtimeChatDeleted);
         _hubConnection.On<ChatCreatedPayload>("ChatCreated", OnRealtimeChatCreated);
+        _hubConnection.On<ProfileUpdatedPayload>("ProfileUpdated", OnRealtimeProfileUpdated);
         _realtimeAttachedConnection = _hubConnection;
     }
 
@@ -100,6 +101,31 @@ public partial class MainView
         try { await LoadChatsAsync(); } catch { }
     }
 
+    private async void OnRealtimeProfileUpdated(ProfileUpdatedPayload payload)
+    {
+        if (string.IsNullOrWhiteSpace(payload.UserId)) return;
+
+        await Dispatcher.InvokeAsync(async () =>
+        {
+            ConversationAvatarCache.Clear();
+
+            foreach (var item in _chats.Where(x => string.Equals(x.Chat.OtherUserId(AuthState.UserId), payload.UserId, StringComparison.OrdinalIgnoreCase)))
+            {
+                item.Chat.User1AvatarUrl = string.Equals(item.Chat.User1Id, payload.UserId, StringComparison.OrdinalIgnoreCase) ? payload.AvatarUrl : item.Chat.User1AvatarUrl;
+                item.Chat.User2AvatarUrl = string.Equals(item.Chat.User2Id, payload.UserId, StringComparison.OrdinalIgnoreCase) ? payload.AvatarUrl : item.Chat.User2AvatarUrl;
+                if (!string.IsNullOrWhiteSpace(payload.DisplayName)) item.DisplayName = payload.DisplayName;
+                item.IsOnline = IsUserOnline(payload.UserId);
+                item.AvatarSource = null;
+            }
+
+            RefreshChatsList();
+            await RefreshConversationAvatarsAsync();
+
+            if (string.Equals(_currentOtherUserId, payload.UserId, StringComparison.OrdinalIgnoreCase))
+                await RefreshCurrentChatAvatarAsync();
+        });
+    }
+
     private async Task RefreshChatAfterRealtimeChangeAsync(int chatId)
     {
         try
@@ -147,5 +173,13 @@ public partial class MainView
         public string User2Id { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
         public string CreatedBy { get; set; } = string.Empty;
+    }
+
+    private sealed class ProfileUpdatedPayload
+    {
+        public string UserId { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+        public string Bio { get; set; } = string.Empty;
+        public string? AvatarUrl { get; set; }
     }
 }
