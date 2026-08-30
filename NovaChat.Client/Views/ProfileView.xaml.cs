@@ -1,6 +1,7 @@
 using Microsoft.Win32;
 using NovaChat.Client.Models;
 using NovaChat.Client.Services;
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
@@ -13,6 +14,7 @@ public partial class ProfileView : UserControl
     public event Action? ContactsRequested;
     public event Action? SessionExpired;
 
+    private static readonly HttpClient AvatarHttpClient = new();
     private readonly ApiService _apiService = new();
     private ProfileModel? _profile;
     private bool _busy;
@@ -40,25 +42,55 @@ public partial class ProfileView : UserControl
             UserIdBox.Text = _profile.Id;
             EmailBox.Text = _profile.Email;
             BioBox.Text = _profile.Bio;
-            UpdateProfileUi();
+            await UpdateProfileUiAsync();
         }
         catch (Exception ex) { ShowFeedback($"Could not load profile: {ex.Message}"); }
     }
 
-    private void UpdateProfileUi()
+    private async Task UpdateProfileUiAsync()
     {
         if (_profile == null) return;
         AvatarInitialsText.Text = GetInitials(_profile.DisplayName, _profile.Id);
-        AvatarInitialsText.Visibility = string.IsNullOrWhiteSpace(_profile.AvatarUrl) ? Visibility.Visible : Visibility.Collapsed;
-        AvatarImage.Visibility = string.IsNullOrWhiteSpace(_profile.AvatarUrl) ? Visibility.Collapsed : Visibility.Visible;
+        AvatarImage.Source = null;
+        AvatarInitialsText.Visibility = Visibility.Visible;
+        AvatarImage.Visibility = Visibility.Collapsed;
+
         if (!string.IsNullOrWhiteSpace(_profile.AvatarUrl))
         {
-            try { AvatarImage.Source = new BitmapImage(new Uri(_apiService.BuildAbsoluteUrl(_profile.AvatarUrl) + $"?v={DateTime.UtcNow.Ticks}")); }
-            catch { AvatarImage.Visibility = Visibility.Collapsed; AvatarInitialsText.Visibility = Visibility.Visible; }
+            var bitmap = await LoadAvatarAsync(_apiService.BuildAbsoluteUrl(_profile.AvatarUrl));
+            if (bitmap != null)
+            {
+                AvatarImage.Source = bitmap;
+                AvatarImage.Visibility = Visibility.Visible;
+                AvatarInitialsText.Visibility = Visibility.Collapsed;
+            }
+            else ShowFeedback("Profile loaded, but the profile picture could not be displayed.");
         }
+
         StatusText.Text = _profile.IsOnline ? "● Online" : "● Offline";
         LastSeenText.Text = _profile.IsOnline ? "Active now" : (_profile.LastSeenAt.HasValue ? $"Last seen {FormatLastSeen(_profile.LastSeenAt.Value)}" : "Last seen not available");
         JoinedText.Text = $"Joined {_profile.CreatedAt.ToLocalTime():dd MMM yyyy}";
+    }
+
+    private static async Task<BitmapImage?> LoadAvatarAsync(string url)
+    {
+        try
+        {
+            using var response = await AvatarHttpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+            if (!response.IsSuccessStatusCode) return null;
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            if (bytes.Length == 0) return null;
+            using var stream = new MemoryStream(bytes);
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+            bitmap.StreamSource = stream;
+            bitmap.EndInit();
+            bitmap.Freeze();
+            return bitmap;
+        }
+        catch { return null; }
     }
 
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
@@ -72,7 +104,7 @@ public partial class ProfileView : UserControl
             var request = new UpdateProfileRequest { DisplayName = DisplayNameBox.Text.Trim(), Email = EmailBox.Text.Trim(), Bio = BioBox.Text.Trim(), NewUserId = UserIdBox.Text.Trim() };
             var result = await _apiService.PutAsync<UpdateProfileRequest, ProfileActionResponse>($"api/User/{Uri.EscapeDataString(_profile.Id)}", request);
             if (result?.User == null) { ShowFeedback("Profile could not be updated. Check your values and try again."); return; }
-            _profile = result.User; UpdateProfileUi(); ShowFeedback(result.Message);
+            _profile = result.User; await UpdateProfileUiAsync(); ShowFeedback(result.Message);
             if (!string.Equals(AuthState.UserId, _profile.Id, StringComparison.Ordinal)) { AuthState.Clear(); SessionExpired?.Invoke(); }
             else AuthState.UpdateProfile(_profile.DisplayName, _profile.Email);
         }
@@ -90,7 +122,7 @@ public partial class ProfileView : UserControl
         {
             var result = await _apiService.UploadFileAsync<ProfileActionResponse>($"api/User/{Uri.EscapeDataString(AuthState.UserId)}/avatar", dialog.FileName);
             if (result?.User == null) ShowFeedback("Profile picture upload failed.");
-            else { _profile = result.User; UpdateProfileUi(); ShowFeedback(result.Message); }
+            else { _profile = result.User; await UpdateProfileUiAsync(); ShowFeedback(result.Message); }
         }
         catch (Exception ex) { ShowFeedback($"Picture upload failed: {ex.Message}"); }
         finally { _busy = false; SaveButton.IsEnabled = true; }
@@ -103,7 +135,7 @@ public partial class ProfileView : UserControl
         _busy = true;
         try
         {
-            if (await _apiService.DeleteAsync($"api/User/{Uri.EscapeDataString(_profile.Id)}/avatar")) { _profile.AvatarUrl = null; UpdateProfileUi(); ShowFeedback("Profile picture removed."); }
+            if (await _apiService.DeleteAsync($"api/User/{Uri.EscapeDataString(_profile.Id)}/avatar")) { _profile.AvatarUrl = null; await UpdateProfileUiAsync(); ShowFeedback("Profile picture removed."); }
             else ShowFeedback("Profile picture could not be removed.");
         }
         catch (Exception ex) { ShowFeedback($"Could not remove picture: {ex.Message}"); }
