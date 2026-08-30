@@ -107,22 +107,20 @@ public partial class MainView
 
         await Dispatcher.InvokeAsync(async () =>
         {
-            ConversationAvatarCache.Clear();
-
             foreach (var item in _chats.Where(x => string.Equals(x.Chat.OtherUserId(AuthState.UserId), payload.UserId, StringComparison.OrdinalIgnoreCase)))
             {
-                item.Chat.User1AvatarUrl = string.Equals(item.Chat.User1Id, payload.UserId, StringComparison.OrdinalIgnoreCase) ? payload.AvatarUrl : item.Chat.User1AvatarUrl;
-                item.Chat.User2AvatarUrl = string.Equals(item.Chat.User2Id, payload.UserId, StringComparison.OrdinalIgnoreCase) ? payload.AvatarUrl : item.Chat.User2AvatarUrl;
-                if (!string.IsNullOrWhiteSpace(payload.DisplayName)) item.DisplayName = payload.DisplayName;
+                if (!string.IsNullOrWhiteSpace(payload.DisplayName))
+                    item.DisplayName = payload.DisplayName;
                 item.IsOnline = IsUserOnline(payload.UserId);
-                item.AvatarSource = null;
             }
 
             RefreshChatsList();
             await RefreshConversationAvatarsAsync();
 
             if (string.Equals(_currentOtherUserId, payload.UserId, StringComparison.OrdinalIgnoreCase))
+            {
                 await RefreshCurrentChatAvatarAsync();
+            }
         });
     }
 
