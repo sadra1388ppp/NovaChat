@@ -9,6 +9,7 @@ public partial class App : Application
     {
         MainView.RegisterMediaFeatures();
         MainView.RegisterLiveRefresh();
+        MainView.RegisterVoiceSendFix();
         base.OnStartup(e);
     }
 }
