@@ -18,7 +18,18 @@
                             <Image x:Name="AvatarImage" Width="108" Height="108" Margin="2" Stretch="UniformToFill" IsHitTestVisible="False" Source="{Binding AvatarUrl, Converter={StaticResource AvatarUrlConverter}}" Panel.ZIndex="2">
                                 <Image.Clip><EllipseGeometry Center="54,54" RadiusX="54" RadiusY="54"/></Image.Clip>
                             </Image>
-                            <TextBlock x:Name="AvatarInitialsText" Text="?" FontSize="34" FontWeight="Bold" Foreground="{DynamicResource PrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Panel.ZIndex="1"/>
+                            <TextBlock x:Name="AvatarInitialsText" Text="?" FontSize="34" FontWeight="Bold" Foreground="{DynamicResource PrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Panel.ZIndex="1">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding AvatarUrl}" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
                             <Ellipse x:Name="ProfileStatusDot" Width="18" Height="18" Fill="{DynamicResource SecondaryTextBrush}" Stroke="{DynamicResource PanelBackgroundBrush}" StrokeThickness="3" HorizontalAlignment="Right" VerticalAlignment="Bottom" Panel.ZIndex="3"/>
                         </Grid>
                         <StackPanel Grid.Column="1" Margin="18,2,0,0">
