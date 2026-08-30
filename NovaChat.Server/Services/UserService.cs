@@ -82,14 +82,12 @@ public class UserService
                 await _context.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Contacts\" SET \"OwnerUserId\" = {newId} WHERE \"OwnerUserId\" = {id}");
                 await _context.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Contacts\" SET \"ContactUserId\" = {newId} WHERE \"ContactUserId\" = {id}");
 
-                // Keep group relations working when an older database still contains the group tables.
                 if (await TableExistsAsync("GroupMembers"))
                     await _context.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"GroupMembers\" SET \"UserId\" = {newId} WHERE \"UserId\" = {id}");
 
                 if (await TableExistsAsync("Groups"))
                     await _context.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Groups\" SET \"CreatorId\" = {newId} WHERE \"CreatorId\" = {id}");
 
-                // The old user cannot be deleted until every FK pointing at it has been moved.
                 await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"Users\" WHERE \"Id\" = {id}");
                 await transaction.CommitAsync();
             }
@@ -142,20 +140,25 @@ public class UserService
         await using var transaction = await _context.Database.BeginTransactionAsync();
         try
         {
-            // Current schema uses RESTRICT for user references, so clean dependent rows explicitly.
             await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"Messages\" WHERE \"SenderId\" = {id}");
             await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"Chats\" WHERE \"User1Id\" = {id} OR \"User2Id\" = {id}");
             await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"Contacts\" WHERE \"OwnerUserId\" = {id} OR \"ContactUserId\" = {id}");
 
-            // Clean legacy group tables if they still exist in the local database.
-            if (await TableExistsAsync("Groups") && await TableExistsAsync("GroupMembers"))
+            var groupsExist = await TableExistsAsync("Groups");
+            var groupMembersExist = await TableExistsAsync("GroupMembers");
+
+            if (groupsExist && groupMembersExist)
             {
                 await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"GroupMembers\" WHERE \"GroupId\" IN (SELECT \"Id\" FROM \"Groups\" WHERE \"CreatorId\" = {id}) OR \"UserId\" = {id}");
                 await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"Groups\" WHERE \"CreatorId\" = {id}");
             }
-            else if (await TableExistsAsync("GroupMembers"))
+            else if (groupMembersExist)
             {
                 await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"GroupMembers\" WHERE \"UserId\" = {id}");
+            }
+            else if (groupsExist)
+            {
+                await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"Groups\" WHERE \"CreatorId\" = {id}");
             }
 
             await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"Users\" WHERE \"Id\" = {id}");
@@ -182,8 +185,9 @@ public class UserService
 
     private async Task<bool> TableExistsAsync(string tableName)
     {
+        var quotedName = $"\"{tableName}\"";
         return await _context.Database
-            .SqlQueryRaw<bool>("SELECT to_regclass({0}) IS NOT NULL", $"\"{tableName}\"")
+            .SqlQueryRaw<bool>("SELECT (to_regclass({0}) IS NOT NULL) AS \"Value\"", quotedName)
             .FirstAsync();
     }
 
