@@ -73,12 +73,24 @@ public partial class ProfileView : UserControl
 
         if (!string.IsNullOrWhiteSpace(_profile.AvatarUrl))
         {
-            var bitmap = await _avatarImageService.LoadAsync(_profile.Id, _profile.AvatarUrl);
-            if (bitmap != null)
+            try
             {
+                var url = _apiService.BuildAbsoluteUrl(_profile.AvatarUrl);
+                var separator = url.Contains('?') ? '&' : '?';
+                var bitmap = new BitmapImage();
+                bitmap.BeginInit();
+                bitmap.UriSource = new Uri($"{url}{separator}v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}", UriKind.Absolute);
+                bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+                bitmap.EndInit();
+                bitmap.Freeze();
                 AvatarImage.Source = bitmap;
                 AvatarImage.Visibility = Visibility.Visible;
                 AvatarInitialsText.Visibility = Visibility.Collapsed;
+            }
+            catch
+            {
+                // Keep initials fallback if the static avatar file cannot be loaded.
             }
         }
 
@@ -202,8 +214,7 @@ public partial class ProfileView : UserControl
     private async void RemovePictureButton_Click(object sender, RoutedEventArgs e)
     {
         if (_busy || _profile == null || string.IsNullOrWhiteSpace(_profile.AvatarUrl)) return;
-        if (MessageBox.Show("Remove your profile picture?", "NovaChat", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
-            return;
+        if (MessageBox.Show("Remove your profile picture?", "NovaChat", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
 
         _busy = true;
         try
@@ -215,19 +226,10 @@ public partial class ProfileView : UserControl
                 await UpdateProfileUiAsync();
                 ShowFeedback("Profile picture removed.");
             }
-            else
-            {
-                ShowFeedback("Profile picture could not be removed.");
-            }
+            else ShowFeedback("Profile picture could not be removed.");
         }
-        catch (Exception ex)
-        {
-            ShowFeedback($"Could not remove picture: {ex.Message}");
-        }
-        finally
-        {
-            _busy = false;
-        }
+        catch (Exception ex) { ShowFeedback($"Could not remove picture: {ex.Message}"); }
+        finally { _busy = false; }
     }
 
     private void CopyUserIdButton_Click(object sender, RoutedEventArgs e)
@@ -241,17 +243,7 @@ public partial class ProfileView : UserControl
     {
         if (_busy || !AuthState.IsAuthenticated) return;
 
-        var dialog = new Window
-        {
-            Title = "Change password",
-            Width = 420,
-            Height = 360,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Owner = Window.GetWindow(this),
-            ResizeMode = ResizeMode.NoResize,
-            Background = (Brush)FindResource("PanelBackgroundBrush")
-        };
-
+        var dialog = new Window { Title = "Change password", Width = 420, Height = 360, WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = Window.GetWindow(this), ResizeMode = ResizeMode.NoResize, Background = (Brush)FindResource("PanelBackgroundBrush") };
         var root = new StackPanel { Margin = new Thickness(24) };
         root.Children.Add(new TextBlock { Text = "Change your password", FontSize = 20, FontWeight = FontWeights.Bold, Foreground = (Brush)FindResource("TextBrush") });
         root.Children.Add(new TextBlock { Text = "Choose a new password you do not reuse elsewhere.", FontSize = 12, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 4, 0, 18) });
@@ -266,7 +258,6 @@ public partial class ProfileView : UserControl
         var cancel = new Button { Content = "Cancel", Width = 82, Height = 36, Margin = new Thickness(0, 0, 8, 0), Background = Brushes.Transparent, Foreground = (Brush)FindResource("PrimaryBrush"), BorderBrush = (Brush)FindResource("PrimaryBrush") };
         var save = new Button { Content = "Update", Width = 82, Height = 36, Background = (Brush)FindResource("PrimaryBrush"), Foreground = Brushes.White, BorderThickness = new Thickness(0) };
         actions.Children.Add(cancel); actions.Children.Add(save); root.Children.Add(actions);
-
         cancel.Click += (_, _) => dialog.Close();
         save.Click += async (_, _) =>
         {
@@ -274,21 +265,18 @@ public partial class ProfileView : UserControl
             if (!string.Equals(newBox.Password, confirmBox.Password, StringComparison.Ordinal)) { feedback.Text = "New passwords do not match."; return; }
             if (newBox.Password.Length < 6) { feedback.Text = "New password must be at least 6 characters."; return; }
             if (string.Equals(currentBox.Password, newBox.Password, StringComparison.Ordinal)) { feedback.Text = "New password must be different from the current password."; return; }
-
             save.IsEnabled = false; cancel.IsEnabled = false;
             try
             {
                 var request = new ChangePasswordRequest { CurrentPassword = currentBox.Password, NewPassword = newBox.Password };
                 var response = await _apiService.PutAsync<ChangePasswordRequest, SimpleMessageResponse>($"api/User/{Uri.EscapeDataString(AuthState.UserId)}/password", request);
                 if (response == null) { feedback.Text = "Password could not be changed. Check your current password and try again."; return; }
-                feedback.Text = response.Message;
-                ShowFeedback(response.Message);
+                feedback.Text = response.Message; ShowFeedback(response.Message);
                 if (response.Message.Contains("success", StringComparison.OrdinalIgnoreCase)) dialog.Close();
             }
             catch (Exception ex) { feedback.Text = $"Password update failed: {ex.Message}"; }
             finally { save.IsEnabled = true; cancel.IsEnabled = true; }
         };
-
         dialog.Content = root;
         dialog.Loaded += (_, _) => currentBox.Focus();
         dialog.ShowDialog();
@@ -320,14 +308,6 @@ public partial class ProfileView : UserControl
     private void BackToChatButton_Click(object sender, RoutedEventArgs e) => BackToChatRequested?.Invoke();
     private void ContactsButton_Click(object sender, RoutedEventArgs e) => ContactsRequested?.Invoke();
 
-    private sealed class ChangePasswordRequest
-    {
-        public string CurrentPassword { get; set; } = string.Empty;
-        public string NewPassword { get; set; } = string.Empty;
-    }
-
-    private sealed class SimpleMessageResponse
-    {
-        public string Message { get; set; } = string.Empty;
-    }
+    private sealed class ChangePasswordRequest { public string CurrentPassword { get; set; } = string.Empty; public string NewPassword { get; set; } = string.Empty; }
+    private sealed class SimpleMessageResponse { public string Message { get; set; } = string.Empty; }
 }
