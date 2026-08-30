@@ -132,21 +132,12 @@ public partial class MainView : UserControl
     {
         var chats = await _apiService.GetAsync<List<ChatModel>>("api/Chat");
         _chats.Clear();
-
         foreach (var chat in chats ?? [])
         {
             var avatar = await LoadProfileAvatarForChatAsync(chat);
-            var item = new ChatListItem
-            {
-                Chat = chat,
-                DisplayName = chat.OtherUserName(AuthState.UserId),
-                LastMessage = chat.LastMessage == null ? "No messages yet." : FormatLastMessage(chat.LastMessage),
-                IsOnline = IsUserOnline(chat.OtherUserId(AuthState.UserId)),
-                AvatarSource = avatar
-            };
+            var item = new ChatListItem { Chat = chat, DisplayName = chat.OtherUserName(AuthState.UserId), LastMessage = chat.LastMessage == null ? "No messages yet." : FormatLastMessage(chat.LastMessage), IsOnline = IsUserOnline(chat.OtherUserId(AuthState.UserId)), AvatarSource = avatar };
             _chats.Add(item);
         }
-
         RefreshChatsList();
         await Dispatcher.InvokeAsync(async () => await RefreshConversationAvatarsAsync(), System.Windows.Threading.DispatcherPriority.Loaded);
     }
@@ -155,21 +146,14 @@ public partial class MainView : UserControl
     {
         var otherUserId = chat.OtherUserId(AuthState.UserId);
         if (string.IsNullOrWhiteSpace(otherUserId)) return null;
-
         try
         {
             var profile = await _apiService.GetAsync<ProfileModel>($"api/User/profile/{Uri.EscapeDataString(otherUserId)}");
             if (profile == null || string.IsNullOrWhiteSpace(profile.AvatarUrl)) return null;
-
-            if (string.Equals(chat.User1Id, otherUserId, StringComparison.OrdinalIgnoreCase)) chat.User1AvatarUrl = profile.AvatarUrl;
-            else chat.User2AvatarUrl = profile.AvatarUrl;
-
+            if (string.Equals(chat.User1Id, otherUserId, StringComparison.OrdinalIgnoreCase)) chat.User1AvatarUrl = profile.AvatarUrl; else chat.User2AvatarUrl = profile.AvatarUrl;
             return await LoadConversationAvatarAsync(_apiService.BuildAbsoluteUrl(profile.AvatarUrl));
         }
-        catch
-        {
-            return null;
-        }
+        catch { return null; }
     }
 
     private void RefreshChatsList() { ChatsList.ItemsSource = null; ChatsList.ItemsSource = _chats; NoChatsText.Visibility = _chats.Count == 0 ? Visibility.Visible : Visibility.Collapsed; }
@@ -177,12 +161,10 @@ public partial class MainView : UserControl
 
     private void UpdateChatPreview(MessageModel message)
     {
-        var item = _chats.FirstOrDefault(x => x.Chat.Id == message.ChatId);
-        if (item == null) return;
+        var item = _chats.FirstOrDefault(x => x.Chat.Id == message.ChatId); if (item == null) return;
         item.Chat.LastMessage = message; item.LastMessage = FormatLastMessage(message);
         var index = _chats.IndexOf(item); if (index > 0) { _chats.RemoveAt(index); _chats.Insert(0, item); }
-        RefreshChatsList();
-        _ = Dispatcher.InvokeAsync(RefreshConversationAvatarsAsync, System.Windows.Threading.DispatcherPriority.Loaded);
+        RefreshChatsList(); _ = Dispatcher.InvokeAsync(RefreshConversationAvatarsAsync, System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
     private async void NewChatButton_Click(object sender, RoutedEventArgs e)
@@ -213,8 +195,7 @@ public partial class MainView : UserControl
             _currentChatId = chat.Id; _currentOtherUserId = chat.OtherUserId(AuthState.UserId); ChatUserNameText.Text = chat.OtherUserName(AuthState.UserId); UpdateCurrentChatPresence();
             MessagesPanel.Children.Clear(); _loadedMessageIds.Clear(); _oldestLoadedMessageId = null; _hasMoreMessages = false; UpdateLoadOlderButton();
             if (_hubConnection?.State == HubConnectionState.Connected) await _hubConnection.InvokeAsync("JoinChat", chat.Id);
-            await LoadInitialMessagesAsync(chat.Id); await ScrollMessagesToBottomAsync();
-            await RefreshCurrentChatAvatarAsync();
+            await LoadInitialMessagesAsync(chat.Id); await ScrollMessagesToBottomAsync(); await RefreshCurrentChatAvatarAsync();
         }
         catch (Exception ex) { MessageBox.Show($"Could not open chat.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error); }
         finally { _isOpeningChat = false; }
@@ -222,8 +203,7 @@ public partial class MainView : UserControl
 
     private async Task LoadInitialMessagesAsync(int chatId)
     {
-        var response = await _apiService.GetAsync<ChatHistoryResponse>($"api/Chat/{chatId}/messages?pageSize={MessagePageSize}");
-        if (response == null) return;
+        var response = await _apiService.GetAsync<ChatHistoryResponse>($"api/Chat/{chatId}/messages?pageSize={MessagePageSize}"); if (response == null) return;
         foreach (var message in response.Messages.OrderBy(x => x.SentAt)) if (_loadedMessageIds.Add(message.Id)) AddMessageToUi(message);
         _oldestLoadedMessageId = response.NextBeforeMessageId; _hasMoreMessages = response.HasMore; UpdateLoadOlderButton();
     }
@@ -235,8 +215,7 @@ public partial class MainView : UserControl
         try
         {
             var oldHeight = MessagesScrollViewer.ExtentHeight; var oldOffset = MessagesScrollViewer.VerticalOffset;
-            var response = await _apiService.GetAsync<ChatHistoryResponse>($"api/Chat/{_currentChatId.Value}/messages?beforeMessageId={_oldestLoadedMessageId.Value}&pageSize={MessagePageSize}");
-            if (response == null) return;
+            var response = await _apiService.GetAsync<ChatHistoryResponse>($"api/Chat/{_currentChatId.Value}/messages?beforeMessageId={_oldestLoadedMessageId.Value}&pageSize={MessagePageSize}"); if (response == null) return;
             foreach (var message in response.Messages.OrderByDescending(x => x.SentAt)) if (_loadedMessageIds.Add(message.Id)) AddMessageToUi(message, true);
             await Dispatcher.InvokeAsync(() => MessagesScrollViewer.ScrollToVerticalOffset(oldOffset + (MessagesScrollViewer.ExtentHeight - oldHeight)), System.Windows.Threading.DispatcherPriority.Loaded);
             _oldestLoadedMessageId = response.NextBeforeMessageId; _hasMoreMessages = response.HasMore;
@@ -281,6 +260,7 @@ public partial class MainView : UserControl
         var mine = string.Equals(message.SenderId, AuthState.UserId, StringComparison.OrdinalIgnoreCase);
         var border = new Border { Background = mine ? (Brush)FindResource("PrimaryBrush") : (Brush)FindResource("PanelBackgroundBrush"), Padding = new Thickness(12), CornerRadius = new CornerRadius(12), HorizontalAlignment = mine ? HorizontalAlignment.Right : HorizontalAlignment.Left, MaxWidth = 450, Margin = new Thickness(0, 0, 0, 12) };
         var panel = new StackPanel(); panel.Children.Add(new TextBlock { Text = message.Content, TextWrapping = TextWrapping.Wrap, Foreground = mine ? Brushes.White : (Brush)FindResource("TextBrush") }); panel.Children.Add(new TextBlock { Text = message.SentAt.ToLocalTime().ToString("HH:mm"), FontSize = 10, Margin = new Thickness(0, 5, 0, 0), Foreground = mine ? Brushes.White : (Brush)FindResource("SecondaryTextBrush"), HorizontalAlignment = HorizontalAlignment.Right }); border.Child = panel;
+        if (message.MessageType is "image" or "file" or "voice") border.Loaded += (_, _) => _ = RenderMediaBubbleAsync(border, message.Id);
         if (insertAtTop) MessagesPanel.Children.Insert(Math.Min(1, MessagesPanel.Children.Count), border); else MessagesPanel.Children.Add(border);
     }
 
