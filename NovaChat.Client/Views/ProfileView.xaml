@@ -9,8 +9,11 @@
                     <TextBlock Text="Manage your NovaChat identity and profile" FontSize="13" Foreground="{DynamicResource SecondaryTextBrush}" HorizontalAlignment="Center" Margin="0,6,0,22"/>
                     <Grid Width="150" Height="150" HorizontalAlignment="Center">
                         <Ellipse Fill="{DynamicResource PrimaryBrush}"/>
-                        <Ellipse Margin="3" Fill="Transparent" Stroke="{DynamicResource PanelBackgroundBrush}" StrokeThickness="3"/>
-                        <Image x:Name="AvatarImage" Stretch="UniformToFill" Margin="3"/>
+                        <Image x:Name="AvatarImage" Stretch="UniformToFill" Margin="3">
+                            <Image.Clip>
+                                <EllipseGeometry Center="72,72" RadiusX="72" RadiusY="72"/>
+                            </Image.Clip>
+                        </Image>
                         <TextBlock x:Name="AvatarInitialsText" Text="?" FontSize="44" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Grid>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,14,0,24">
