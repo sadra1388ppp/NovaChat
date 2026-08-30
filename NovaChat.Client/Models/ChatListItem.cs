@@ -10,6 +10,7 @@ public sealed class ChatListItem : INotifyPropertyChanged
     private string _lastMessage = string.Empty;
     private bool _isOnline;
     private string? _avatarUri;
+    private object? _avatarSource;
 
     public ChatModel Chat { get; set; } = new();
 
@@ -49,8 +50,6 @@ public sealed class ChatListItem : INotifyPropertyChanged
         }
     }
 
-    // Absolute URL served by NovaChat's public avatar endpoint.
-    // Binding the URI directly lets WPF fetch the image without custom visual-tree logic.
     public string? AvatarUri
     {
         get => _avatarUri;
@@ -63,15 +62,19 @@ public sealed class ChatListItem : INotifyPropertyChanged
         }
     }
 
-    public bool HasAvatar => !string.IsNullOrWhiteSpace(AvatarUri);
-
-    // Kept as a compatibility alias for older code paths.
-    public string? AvatarSource
+    // Compatibility property used by older MainView initialization code.
+    public object? AvatarSource
     {
-        get => AvatarUri;
-        set => AvatarUri = value;
+        get => _avatarSource;
+        set
+        {
+            if (ReferenceEquals(_avatarSource, value)) return;
+            _avatarSource = value;
+            OnPropertyChanged();
+        }
     }
 
+    public bool HasAvatar => !string.IsNullOrWhiteSpace(AvatarUri);
     public string OtherUserId => Chat.OtherUserId(AuthState.UserId);
 
     public string Initials
@@ -90,7 +93,5 @@ public sealed class ChatListItem : INotifyPropertyChanged
     public System.Windows.Visibility OnlineVisibility => IsOnline ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
 
     public event PropertyChangedEventHandler? PropertyChanged;
-
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    private void OnPropertyChanged([CallerMemberName] string? propertyName = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }
