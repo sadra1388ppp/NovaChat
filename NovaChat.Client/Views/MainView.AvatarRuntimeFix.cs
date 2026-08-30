@@ -41,15 +41,13 @@ public partial class MainView
 
             await ForceRefreshAllAvatarsAsync();
         }
-        catch
-        {
-            // Existing initials fallback remains available.
-        }
+        catch { }
     }
 
     private async void OnAvatarProfileUpdated(AvatarProfileUpdatedPayload payload)
     {
         if (string.IsNullOrWhiteSpace(payload.UserId)) return;
+        ConversationAvatarCache.Clear();
         await ForceRefreshUserAvatarAsync(payload.UserId);
     }
 
@@ -66,56 +64,44 @@ public partial class MainView
             await ForceRefreshUserAvatarAsync(_currentOtherUserId);
     }
 
+    private static BitmapImage CreateAvatarBitmap(string userId)
+    {
+        var url = new ApiService().BuildAbsoluteUrl($"api/avatar/{Uri.EscapeDataString(userId)}?v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}");
+        var bitmap = new BitmapImage();
+        bitmap.BeginInit();
+        bitmap.UriSource = new Uri(url, UriKind.Absolute);
+        bitmap.CacheOption = BitmapCacheOption.OnLoad;
+        bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+        bitmap.EndInit();
+        bitmap.Freeze();
+        return bitmap;
+    }
+
     private async Task ForceRefreshUserAvatarAsync(string userId)
     {
         if (string.IsNullOrWhiteSpace(userId)) return;
-
         try
         {
-            var endpoint = $"api/avatar/{Uri.EscapeDataString(userId)}?v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
-            var bytes = await _apiService.GetBytesAsync(endpoint);
-            var bitmap = bytes == null || bytes.Length == 0 ? null : BytesToBitmap(bytes);
-
+            var bitmap = CreateAvatarBitmap(userId);
             await Dispatcher.InvokeAsync(() =>
             {
                 var items = _chats.Where(x => string.Equals(x.Chat.OtherUserId(AuthState.UserId), userId, StringComparison.OrdinalIgnoreCase)).ToList();
-                foreach (var item in items)
-                    item.AvatarSource = bitmap;
-
+                foreach (var item in items) item.AvatarSource = bitmap;
                 foreach (var item in items)
                 {
                     var container = ChatsList.ItemContainerGenerator.ContainerFromItem(item) as FrameworkElement;
                     var image = container == null ? null : FindAvatarImage(container);
                     if (image != null) image.Source = bitmap;
                 }
-
                 if (string.Equals(_currentOtherUserId, userId, StringComparison.OrdinalIgnoreCase))
                 {
                     ChatHeaderAvatarImage.Source = bitmap;
-                    ChatHeaderAvatarImage.Visibility = bitmap == null ? Visibility.Collapsed : Visibility.Visible;
-                    ChatAvatarInitialsText.Text = _chats.FirstOrDefault(x => string.Equals(x.Chat.OtherUserId(AuthState.UserId), userId, StringComparison.OrdinalIgnoreCase))?.Initials
-                        ?? ChatAvatarInitialsText.Text;
-                    ChatAvatarInitialsText.Visibility = bitmap == null ? Visibility.Visible : Visibility.Collapsed;
+                    ChatHeaderAvatarImage.Visibility = Visibility.Visible;
+                    ChatAvatarInitialsText.Visibility = Visibility.Collapsed;
                 }
             });
         }
-        catch
-        {
-            // Leave the current avatar/initials untouched on transient errors.
-        }
-    }
-
-    private static BitmapImage BytesToBitmap(byte[] bytes)
-    {
-        using var stream = new MemoryStream(bytes);
-        var bitmap = new BitmapImage();
-        bitmap.BeginInit();
-        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-        bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
-        bitmap.StreamSource = stream;
-        bitmap.EndInit();
-        bitmap.Freeze();
-        return bitmap;
+        catch { }
     }
 
     private static void OnProfileWindowLoaded(object sender, RoutedEventArgs e)
@@ -133,12 +119,7 @@ public partial class MainView
             var idText = FindTextStartingWithAt(window.Content as DependencyObject);
             var userId = idText?.TrimStart('@');
             if (string.IsNullOrWhiteSpace(userId)) return;
-
-            var api = new ApiService();
-            var bytes = await api.GetBytesAsync($"api/avatar/{Uri.EscapeDataString(userId)}?v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}");
-            if (bytes == null || bytes.Length == 0) return;
-            var bitmap = BytesToBitmap(bytes);
-
+            var bitmap = CreateAvatarBitmap(userId);
             await window.Dispatcher.InvokeAsync(() =>
             {
                 var firstGrid = FindFirstGrid(window.Content as DependencyObject);
@@ -149,33 +130,36 @@ public partial class MainView
                     image.Source = bitmap;
                     return;
                 }
-
                 var ellipse = firstGrid.Children.OfType<Ellipse>().FirstOrDefault();
                 if (ellipse == null) return;
-
-                var avatar = new Image
+                firstGrid.Children.Add(new Image
                 {
                     Width = 112,
                     Height = 112,
                     Stretch = Stretch.UniformToFill,
                     Clip = new EllipseGeometry(new Point(56, 56), 56, 56),
                     Source = bitmap
-                };
-                firstGrid.Children.Add(avatar);
+                });
                 foreach (var text in firstGrid.Children.OfType<TextBlock>()) text.Visibility = Visibility.Collapsed;
             });
         }
-        catch
+        catch { }
+    }
+
+    private static Image? FindAvatarImage(DependencyObject root)
+    {
+        if (root is Image image) return image;
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
         {
-            // Keep the initials profile fallback.
+            var result = FindAvatarImage(VisualTreeHelper.GetChild(root, i));
+            if (result != null) return result;
         }
+        return null;
     }
 
     private static string? FindTextStartingWithAt(DependencyObject? root)
     {
-        if (root is TextBlock text && !string.IsNullOrWhiteSpace(text.Text) && text.Text.TrimStart().StartsWith("@", StringComparison.Ordinal))
-            return text.Text.Trim();
-
+        if (root is TextBlock text && !string.IsNullOrWhiteSpace(text.Text) && text.Text.TrimStart().StartsWith("@", StringComparison.Ordinal)) return text.Text.Trim();
         if (root == null) return null;
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
         {
