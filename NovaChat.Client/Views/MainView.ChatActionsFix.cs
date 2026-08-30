@@ -24,13 +24,7 @@ public partial class MainView
             Background = (Brush)FindResource("PanelBackgroundBrush")
         };
 
-        var box = new TextBox
-        {
-            Margin = new Thickness(20),
-            Height = 40,
-            Padding = new Thickness(10)
-        };
-
+        var box = new TextBox { Margin = new Thickness(20), Height = 40, Padding = new Thickness(10) };
         var button = new Button
         {
             Content = "Start Chat",
@@ -54,20 +48,16 @@ public partial class MainView
         dialog.Content = panel;
 
         string? userId = null;
-
         button.Click += (_, _) =>
         {
             userId = box.Text.Trim();
-            if (!string.IsNullOrWhiteSpace(userId))
-                dialog.DialogResult = true;
+            if (!string.IsNullOrWhiteSpace(userId)) dialog.DialogResult = true;
         };
-
         box.KeyDown += (_, e) =>
         {
             if (e.Key == System.Windows.Input.Key.Enter)
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         };
-
         dialog.Loaded += (_, _) => box.Focus();
         dialog.ShowDialog();
 
@@ -84,11 +74,7 @@ public partial class MainView
 
             if (result?.Chat == null)
             {
-                MessageBox.Show(
-                    "User not found or chat could not be created.",
-                    "New Chat",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
+                MessageBox.Show("User not found or chat could not be created.", "New Chat", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
@@ -104,11 +90,7 @@ public partial class MainView
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                $"Could not create chat.\n\n{ex.Message}",
-                "New Chat",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            MessageBox.Show($"Could not create chat.\n\n{ex.Message}", "New Chat", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -118,12 +100,10 @@ public partial class MainView
 
     private async void DeleteSingleChatButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button { DataContext: ChatListItem item })
-            return;
+        if (sender is not Button { DataContext: ChatListItem item }) return;
 
         var chatId = item.Chat.Id;
-        if (chatId <= 0)
-            return;
+        if (chatId <= 0) return;
 
         if (MessageBox.Show(
                 $"Delete chat with {item.DisplayName}?\n\nAll messages in this chat will also be deleted.",
@@ -137,26 +117,18 @@ public partial class MainView
             var deleted = await _apiService.DeleteAsync($"api/Chat/{chatId}");
             if (!deleted)
             {
-                MessageBox.Show(
-                    "The selected chat could not be deleted.",
-                    "Delete Chat",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                MessageBox.Show("The selected chat could not be deleted.", "Delete Chat", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
 
-            // Remove only the exact selected item locally. The SignalR event may
-            // arrive as well, but it is harmless because the item is already gone.
             var localItem = _chats.FirstOrDefault(x => x.Chat.Id == chatId);
-            if (localItem != null)
-                _chats.Remove(localItem);
+            if (localItem != null) _chats.Remove(localItem);
 
             if (_currentChatId == chatId)
             {
                 if (_hubConnection?.State == Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Connected)
                 {
-                    try { await _hubConnection.InvokeAsync("LeaveChat", chatId); }
-                    catch { }
+                    try { await _hubConnection.InvokeAsync("LeaveChat", chatId); } catch { }
                 }
 
                 _currentChatId = null;
@@ -164,7 +136,6 @@ public partial class MainView
                 _loadedMessageIds.Clear();
                 _oldestLoadedMessageId = null;
                 _hasMoreMessages = false;
-
                 ChatUserNameText.Text = "Select a chat";
                 ChatStatusText.Text = "Offline";
                 ChatStatusIndicator.Fill = Brushes.Gray;
@@ -181,11 +152,30 @@ public partial class MainView
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                $"Could not delete chat.\n\n{ex.Message}",
-                "Delete Chat",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            MessageBox.Show($"Could not delete chat.\n\n{ex.Message}", "Delete Chat", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async void ChatHeaderProfile_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        if (string.IsNullOrWhiteSpace(_currentOtherUserId)) return;
+
+        try
+        {
+            var userId = _currentOtherUserId.Trim();
+            var profile = await _apiService.GetAsync<ProfileModel>($"api/User/profile/{Uri.EscapeDataString(userId)}");
+            if (profile == null)
+            {
+                MessageBox.Show("This user's profile could not be loaded.", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            ShowPublicProfile(profile);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Could not load this profile.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 }
