@@ -1,12 +1,11 @@
-using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using NovaChat.Client.Models;
+using NovaChat.Client.Services;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using NovaChat.Client.Models;
-using NovaChat.Client.Services;
 
 namespace NovaChat.Client.Views;
 
@@ -108,11 +107,7 @@ public partial class MainView
                 return;
             }
 
-            await Dispatcher.InvokeAsync(() =>
-            {
-                if (info.Border.Parent is Panel parent)
-                    parent.Children.Remove(info.Border);
-            });
+            await Dispatcher.InvokeAsync(() => RemoveMessageBubbleCompletely(info.Border, MessagesPanel));
 
             _loadedMessageIds.Remove(history.Id);
             await LoadChatsAsync();
@@ -121,6 +116,44 @@ public partial class MainView
         {
             MessageBox.Show($"Could not delete message.\n\n{ex.Message}", "Delete Message", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private static void RemoveMessageBubbleCompletely(Border clickedOrRoot, Panel messagesPanel)
+    {
+        var root = FindMessageRootBorder(clickedOrRoot, messagesPanel) ?? clickedOrRoot;
+
+        // Remove the actual direct child from MessagesPanel. This is important for
+        // media messages because their visual tree contains several nested Borders.
+        if (messagesPanel.Children.Contains(root))
+        {
+            messagesPanel.Children.Remove(root);
+            return;
+        }
+
+        // Some WPF templates insert an intermediate ContentPresenter/Panel. Walk up
+        // until we reach the element that is actually hosted by MessagesPanel.
+        DependencyObject current = root;
+        DependencyObject? hosted = null;
+        while (current != null && !ReferenceEquals(current, messagesPanel))
+        {
+            hosted = current;
+            current = VisualTreeHelper.GetParent(current);
+        }
+
+        if (hosted is UIElement ui && messagesPanel.Children.Contains(ui))
+        {
+            messagesPanel.Children.Remove(ui);
+            return;
+        }
+
+        // Last-resort visual cleanup: never leave an empty white media container.
+        root.Visibility = Visibility.Collapsed;
+        root.Height = 0;
+        root.MinHeight = 0;
+        root.MaxHeight = 0;
+        root.Margin = new Thickness(0);
+        root.Padding = new Thickness(0);
+        root.Child = null;
     }
 
     private async Task<MessageModel?> GetMessageByIdAsync(int chatId, int messageId)
