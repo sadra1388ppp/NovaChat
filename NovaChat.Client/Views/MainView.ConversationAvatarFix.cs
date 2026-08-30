@@ -2,16 +2,16 @@ using System.Collections.Concurrent;
 using System.Net.Http;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media.Imaging;
-using System.Windows.Media;
 using System.Windows.Controls.Primitives;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace NovaChat.Client.Views;
 
 public partial class MainView
 {
     private static readonly HttpClient ConversationAvatarHttpClient = new();
-    private static readonly ConcurrentDictionary<string, BitmapImage?> ConversationAvatarCache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, BitmapImage> ConversationAvatarCache = new(StringComparer.OrdinalIgnoreCase);
     private bool _conversationAvatarHooked;
 
     private void HookConversationAvatarRefresh()
@@ -44,10 +44,8 @@ public partial class MainView
             var image = FindAvatarImage(container);
             if (image == null) continue;
 
-            var absoluteUrl = _apiService.BuildAbsoluteUrl(url);
-            var bitmap = await LoadConversationAvatarAsync(absoluteUrl);
-            if (bitmap != null)
-                image.Source = bitmap;
+            var bitmap = await LoadConversationAvatarAsync(_apiService.BuildAbsoluteUrl(url));
+            if (bitmap != null) image.Source = bitmap;
         }
     }
 
@@ -89,7 +87,6 @@ public partial class MainView
         }
         catch
         {
-            ConversationAvatarCache[url] = null;
             return null;
         }
     }
