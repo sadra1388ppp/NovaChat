@@ -1,6 +1,7 @@
 using Microsoft.Win32;
 using NAudio.Wave;
 using NovaChat.Client.Models;
+using NovaChat.Client.Services;
 using System.Diagnostics;
 using System.IO;
 using System.Media;
@@ -9,6 +10,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using IOPath = System.IO.Path;
 
 namespace NovaChat.Client.Views;
 
@@ -78,7 +80,7 @@ public partial class MainView
         };
         if (dialog.ShowDialog() != true) return;
 
-        var ext = Path.GetExtension(dialog.FileName);
+        var ext = IOPath.GetExtension(dialog.FileName);
         var type = new[] { ".jpg", ".jpeg", ".png", ".webp", ".gif" }.Contains(ext, StringComparer.OrdinalIgnoreCase) ? "image" : "file";
         await UploadMediaAsync(type, dialog.FileName);
     }
@@ -94,7 +96,7 @@ public partial class MainView
 
         try
         {
-            var temp = Path.Combine(Path.GetTempPath(), $"NovaChatVoice_{Guid.NewGuid():N}.wav");
+            var temp = IOPath.Combine(IOPath.GetTempPath(), $"NovaChatVoice_{Guid.NewGuid():N}.wav");
             _voicePath = temp;
             _voiceStartedAt = DateTime.UtcNow;
             _voiceWriter = new WaveFileWriter(temp, new WaveFormat(44100, 16, 1));
@@ -245,7 +247,7 @@ public partial class MainView
             if (_voicePlayers.TryGetValue(messageId, out var existing)) { existing.Stop(); existing.Play(); button.Content = "▶  Replay voice"; return; }
             var bytes = await _apiService.GetBytesAsync($"api/ChatMedia/{messageId}");
             if (bytes == null) return;
-            var path = Path.Combine(Path.GetTempPath(), $"NovaChatPlay_{messageId}.wav");
+            var path = IOPath.Combine(IOPath.GetTempPath(), $"NovaChatPlay_{messageId}.wav");
             await File.WriteAllBytesAsync(path, bytes);
             var player = new SoundPlayer(path); player.Load(); player.Play(); _voicePlayers[messageId] = player;
             button.Content = "▶  Replay voice";
