@@ -4,7 +4,7 @@ namespace NovaChat.Server.Services;
 
 public class PresenceService
 {
-    private readonly ConcurrentDictionary<string, int> _connections = new();
+    private readonly ConcurrentDictionary<string, int> _connections = new(StringComparer.OrdinalIgnoreCase);
 
     public bool UserConnected(string userId)
     {
@@ -12,7 +12,7 @@ public class PresenceService
             return false;
 
         var count = _connections.AddOrUpdate(
-            userId,
+            userId.Trim(),
             1,
             (_, current) => current + 1);
 
@@ -24,34 +24,22 @@ public class PresenceService
         if (string.IsNullOrWhiteSpace(userId))
             return false;
 
+        userId = userId.Trim();
+
         while (true)
         {
-            if (!_connections.TryGetValue(
-                    userId,
-                    out var current))
-            {
+            if (!_connections.TryGetValue(userId, out var current))
                 return false;
-            }
 
             if (current <= 1)
             {
-                if (_connections.TryRemove(
-                        userId,
-                        out _))
-                {
+                if (_connections.TryRemove(userId, out _))
                     return true;
-                }
-
                 continue;
             }
 
-            if (_connections.TryUpdate(
-                    userId,
-                    current - 1,
-                    current))
-            {
+            if (_connections.TryUpdate(userId, current - 1, current))
                 return false;
-            }
         }
     }
 
@@ -60,7 +48,7 @@ public class PresenceService
         if (string.IsNullOrWhiteSpace(userId))
             return false;
 
-        return _connections.ContainsKey(userId);
+        return _connections.ContainsKey(userId.Trim());
     }
 
     public IReadOnlyCollection<string> GetOnlineUsers()
