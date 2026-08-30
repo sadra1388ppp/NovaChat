@@ -49,25 +49,42 @@ public class ChatMediaController : ControllerBase
         var extension = Path.GetExtension(file.FileName);
         if (type == "image" && !AllowedImages.Contains(extension)) return BadRequest(new { message = "Unsupported image type." });
         if (type == "file" && !AllowedFiles.Contains(extension)) return BadRequest(new { message = "Unsupported file type." });
-        if (type == "voice" && !string.Equals(file.ContentType, "audio/wav", StringComparison.OrdinalIgnoreCase) && !string.Equals(file.ContentType, "audio/x-wav", StringComparison.OrdinalIgnoreCase))
+
+        // WAV is identified by its extension as well as common browser/Windows MIME variants.
+        if (type == "voice" && !string.Equals(extension, ".wav", StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { message = "Voice messages must be WAV audio." });
 
-        var maxBytes = type switch { "image" => MaxImageBytes, "voice" => MaxVoiceBytes, _ => MaxFileBytes };
+        var maxBytes = type switch
+        {
+            "image" => MaxImageBytes,
+            "voice" => MaxVoiceBytes,
+            _ => MaxFileBytes
+        };
         if (file.Length > maxBytes) return BadRequest(new { message = $"This {type} is too large." });
 
         var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
         var folder = Path.Combine(root, "uploads", "chat", type);
         Directory.CreateDirectory(folder);
+
         var storageName = $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
         var path = Path.Combine(folder, storageName);
-        await using (var stream = System.IO.File.Create(path)) await file.CopyToAsync(stream);
+
+        await using (var stream = System.IO.File.Create(path))
+            await file.CopyToAsync(stream);
+
+        var contentType = type switch
+        {
+            "image" => string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
+            "voice" => "audio/wav",
+            _ => string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType
+        };
 
         var envelope = new MediaMessageEnvelope
         {
             Type = type,
             StorageName = $"{type}/{storageName}",
             FileName = Path.GetFileName(file.FileName),
-            ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
+            ContentType = contentType,
             Size = file.Length,
             DurationSeconds = type == "voice" && durationSeconds.HasValue ? Math.Max(0, durationSeconds.Value) : null
         };
@@ -89,6 +106,7 @@ public class ChatMediaController : ControllerBase
     {
         var userId = CurrentUserId();
         if (userId == null) return Unauthorized();
+
         var message = await _chatService.GetMessageByIdAsync(messageId);
         if (message == null || !MediaMessageEnvelope.TryParse(message.Content, out var media) || media == null) return NotFound();
         if (!await _chatService.CanAccessChatAsync(message.ChatId, userId)) return Forbid();
@@ -96,6 +114,7 @@ public class ChatMediaController : ControllerBase
         var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
         var path = Path.Combine(root, "uploads", "chat", media.StorageName.Replace('/', Path.DirectorySeparatorChar));
         if (!System.IO.File.Exists(path)) return NotFound();
+
         Response.Headers.ContentDisposition = $"inline; filename=\"{Uri.EscapeDataString(media.FileName)}\"";
         Response.Headers.CacheControl = "private, max-age=3600";
         return PhysicalFile(path, media.ContentType, enableRangeProcessing: true);
