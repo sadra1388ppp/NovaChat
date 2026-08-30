@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.SignalR.Client;
 using NovaChat.Client.Models;
+using NovaChat.Client.Services;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Media;
 
 namespace NovaChat.Client.Views;
@@ -13,37 +13,26 @@ public partial class MainView
 
     static MainView()
     {
-        EventManager.RegisterClassHandler(
-            typeof(MainView),
-            FrameworkElement.LoadedEvent,
-            new RoutedEventHandler(OnRealtimeViewLoaded));
+        EventManager.RegisterClassHandler(typeof(MainView), FrameworkElement.LoadedEvent, new RoutedEventHandler(OnRealtimeViewLoaded));
     }
 
     private static void OnRealtimeViewLoaded(object sender, RoutedEventArgs e)
     {
         if (sender is not MainView view) return;
-
         view._realtimeAttachAttempts = 0;
         view.QueueRealtimeHandlerAttach();
     }
 
     private void QueueRealtimeHandlerAttach()
     {
-        Dispatcher.BeginInvoke(
-            System.Windows.Threading.DispatcherPriority.Loaded,
-            new Action(AttachRealtimeHandlersWhenReady));
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(AttachRealtimeHandlersWhenReady));
     }
 
     private async void AttachRealtimeHandlersWhenReady()
     {
         AttachRealtimeHandlers();
-
-        if (_realtimeAttachedConnection != null || _hubConnection == null)
-            return;
-
-        if (_realtimeAttachAttempts++ >= 30)
-            return;
-
+        if (_realtimeAttachedConnection != null || _hubConnection == null) return;
+        if (_realtimeAttachAttempts++ >= 30) return;
         await Task.Delay(100);
         if (!IsLoaded) return;
         QueueRealtimeHandlerAttach();
@@ -51,13 +40,10 @@ public partial class MainView
 
     private void AttachRealtimeHandlers()
     {
-        if (_hubConnection == null || ReferenceEquals(_realtimeAttachedConnection, _hubConnection))
-            return;
-
+        if (_hubConnection == null || ReferenceEquals(_realtimeAttachedConnection, _hubConnection)) return;
         _hubConnection.On<MessageDeletedPayload>("MessageDeleted", OnRealtimeMessageDeleted);
         _hubConnection.On<ChatDeletedPayload>("ChatDeleted", OnRealtimeChatDeleted);
         _hubConnection.On<ChatCreatedPayload>("ChatCreated", OnRealtimeChatCreated);
-
         _realtimeAttachedConnection = _hubConnection;
     }
 
@@ -66,19 +52,14 @@ public partial class MainView
         await Dispatcher.InvokeAsync(() =>
         {
             _loadedMessageIds.Remove(payload.Id);
-
             if (_currentChatId == payload.ChatId)
             {
-                var candidates = MessagesPanel.Children
-                    .OfType<Border>()
+                var candidates = MessagesPanel.Children.OfType<Border>()
                     .Where(IsRealtimeMessageBubble)
                     .Where(b => RealtimeMessageBubbleMatches(b, payload.Content, payload.SentAt))
                     .ToList();
-
-                if (candidates.Count > 0)
-                    MessagesPanel.Children.Remove(candidates[^1]);
+                if (candidates.Count > 0) MessagesPanel.Children.Remove(candidates[^1]);
             }
-
             if (_chats.FirstOrDefault(x => x.Chat.Id == payload.ChatId)?.Chat.LastMessage?.Id == payload.Id)
                 _ = RefreshChatAfterRealtimeChangeAsync(payload.ChatId);
         });
@@ -88,10 +69,7 @@ public partial class MainView
     {
         await Dispatcher.InvokeAsync(() =>
         {
-            var item = _chats.FirstOrDefault(x => x.Chat.Id == payload.ChatId);
-            if (item != null)
-                _chats.Remove(item);
-
+            _chats.RemoveAll(x => x.Chat.Id == payload.ChatId);
             if (_currentChatId == payload.ChatId)
             {
                 _currentChatId = null;
@@ -99,7 +77,6 @@ public partial class MainView
                 _oldestLoadedMessageId = null;
                 _hasMoreMessages = false;
                 _loadedMessageIds.Clear();
-
                 ChatUserNameText.Text = "Select a chat";
                 ChatStatusText.Text = "Offline";
                 ChatStatusIndicator.Fill = Brushes.Gray;
@@ -111,7 +88,6 @@ public partial class MainView
                 MessageTextBox.Clear();
                 UpdateLoadOlderButton();
             }
-
             RefreshChatsList();
         });
     }
@@ -119,21 +95,8 @@ public partial class MainView
     private async void OnRealtimeChatCreated(ChatCreatedPayload payload)
     {
         if (payload.Id <= 0) return;
-
-        // The caller already receives the CreateChat response and loads its own
-        // chat. Ignoring our own broadcast prevents a second UI refresh and the
-        // visual duplicate-chat effect. Other participants still refresh normally.
-        if (string.Equals(payload.CreatedBy, AuthState.UserId, StringComparison.OrdinalIgnoreCase))
-            return;
-
-        try
-        {
-            await LoadChatsAsync();
-        }
-        catch
-        {
-            // Keep the current conversation list if a background refresh fails.
-        }
+        if (string.Equals(payload.CreatedBy, AuthState.UserId, StringComparison.OrdinalIgnoreCase)) return;
+        try { await LoadChatsAsync(); } catch { }
     }
 
     private async Task RefreshChatAfterRealtimeChangeAsync(int chatId)
@@ -143,39 +106,22 @@ public partial class MainView
             var chats = await _apiService.GetAsync<List<ChatModel>>("api/Chat");
             var updated = chats?.FirstOrDefault(x => x.Id == chatId);
             var item = _chats.FirstOrDefault(x => x.Chat.Id == chatId);
-
             if (updated == null || item == null) return;
-
             item.Chat.LastMessage = updated.LastMessage;
-            item.LastMessage = updated.LastMessage == null
-                ? "No messages yet."
-                : FormatLastMessage(updated.LastMessage);
-
+            item.LastMessage = updated.LastMessage == null ? "No messages yet." : FormatLastMessage(updated.LastMessage);
             RefreshChatsList();
         }
-        catch
-        {
-            // Ignore background refresh failures; the next real-time event can retry.
-        }
+        catch { }
     }
 
-    private static bool IsRealtimeMessageBubble(Border border)
-    {
-        return border.Child is StackPanel panel &&
-               panel.Children.OfType<TextBlock>().Any();
-    }
+    private static bool IsRealtimeMessageBubble(Border border) => border.Child is StackPanel panel && panel.Children.OfType<TextBlock>().Any();
 
     private static bool RealtimeMessageBubbleMatches(Border border, string content, DateTime sentAt)
     {
         if (border.Child is not StackPanel panel) return false;
-
         var text = panel.Children.OfType<TextBlock>().FirstOrDefault();
         var time = panel.Children.OfType<TextBlock>().Skip(1).FirstOrDefault();
-
-        return text != null &&
-               time != null &&
-               string.Equals(text.Text, content, StringComparison.Ordinal) &&
-               string.Equals(time.Text, sentAt.ToLocalTime().ToString("HH:mm"), StringComparison.Ordinal);
+        return text != null && time != null && string.Equals(text.Text, content, StringComparison.Ordinal) && string.Equals(time.Text, sentAt.ToLocalTime().ToString("HH:mm"), StringComparison.Ordinal);
     }
 
     private sealed class MessageDeletedPayload
