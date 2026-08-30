@@ -27,17 +27,8 @@ namespace NovaChat.Client
             MainContainer.Children.Add(loginView);
         }
 
-        private void HandleNormalUserLogin()
-        {
-            _isOwner = false;
-            ShowMain();
-        }
-
-        private void HandleOwnerLogin()
-        {
-            _isOwner = true;
-            ShowMain();
-        }
+        private void HandleNormalUserLogin() { _isOwner = false; ShowMain(); }
+        private void HandleOwnerLogin() { _isOwner = true; ShowMain(); }
 
         public void ShowRegister()
         {
@@ -69,6 +60,7 @@ namespace NovaChat.Client
             ProfileView profileView = new ProfileView();
             profileView.BackToChatRequested += ShowMain;
             profileView.ContactsRequested += ShowContacts;
+            profileView.SessionExpired += ShowLogin;
             MainContainer.Children.Add(profileView);
         }
 
@@ -77,11 +69,7 @@ namespace NovaChat.Client
             MainContainer.Children.Clear();
             ContactsView contactsView = new ContactsView();
             contactsView.BackToChatRequested += ShowMain;
-            contactsView.ChatRequested += userId =>
-            {
-                _pendingChatUserId = userId;
-                ShowMain();
-            };
+            contactsView.ChatRequested += userId => { _pendingChatUserId = userId; ShowMain(); };
             MainContainer.Children.Add(contactsView);
         }
 
@@ -96,11 +84,7 @@ namespace NovaChat.Client
         private void LoadLightTheme()
         {
             Application.Current.Resources.MergedDictionaries.Clear();
-            Application.Current.Resources.MergedDictionaries.Add(
-                new ResourceDictionary
-                {
-                    Source = new System.Uri("Resources/LightTheme.xaml", System.UriKind.Relative)
-                });
+            Application.Current.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new System.Uri("Resources/LightTheme.xaml", System.UriKind.Relative) });
         }
     }
 }
