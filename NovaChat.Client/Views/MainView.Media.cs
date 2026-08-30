@@ -165,12 +165,12 @@ public partial class MainView
     private static void MediaBubbleLoaded(object sender, RoutedEventArgs e)
     {
         if (sender is not Border border || !IsMediaMessageBorder(border)) return;
-        if (border.Tag is string s && s == "media-rendered") return;
+        if (border.Tag is int) return;
         var text = border.Child is StackPanel p ? p.Children.OfType<TextBlock>().FirstOrDefault()?.Text : null;
         if (string.IsNullOrWhiteSpace(text)) return;
         var match = Regex.Match(text, @"\u200B(\d+)$");
         if (!match.Success || !int.TryParse(match.Groups[1].Value, out var messageId)) return;
-        border.Tag = "media-rendered";
+        border.Tag = messageId;
         if (FindAncestorMainView(border) is MainView view) _ = view.RenderMediaBubbleAsync(border, messageId);
     }
 
