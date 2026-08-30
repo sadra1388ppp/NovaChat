@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.SignalR.Client;
 using NovaChat.Client.Models;
 using NovaChat.Client.Services;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
@@ -86,10 +87,11 @@ public partial class MainView
 
                 if (string.Equals(_currentOtherUserId, userId, StringComparison.OrdinalIgnoreCase))
                 {
+                    var online = IsUserOnline(userId);
                     ChatAvatarInitialsText.Text = GetPublicProfileInitials(profile.DisplayName, profile.Id);
-                    ChatStatusText.Text = IsUserOnline(userId) ? "Online" : "Offline";
-                    ChatStatusIndicator.Fill = IsUserOnline(userId) ? Brushes.LimeGreen : Brushes.Gray;
-                    ChatAvatarStatusDot.Fill = IsUserOnline(userId) ? Brushes.LimeGreen : Brushes.Gray;
+                    ChatStatusText.Text = online ? "Online" : "Offline";
+                    ChatStatusIndicator.Fill = online ? Brushes.LimeGreen : Brushes.Gray;
+                    ChatAvatarStatusDot.Fill = online ? Brushes.LimeGreen : Brushes.Gray;
 
                     if (string.IsNullOrWhiteSpace(avatarUri))
                     {
