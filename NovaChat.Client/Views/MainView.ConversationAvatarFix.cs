@@ -1,5 +1,7 @@
 using NovaChat.Client.Models;
 using NovaChat.Client.Services;
+using System.Net.Http;
+using System.Windows.Media.Imaging;
 
 namespace NovaChat.Client.Views;
 
@@ -41,6 +43,41 @@ public partial class MainView
         }
 
         RefreshChatsList();
+    }
+
+    // Compatibility helper for existing MainView code paths.
+    // It performs one direct HTTP read and never mutates the chat list.
+    private static async Task<BitmapImage?> LoadConversationAvatarAsync(string endpoint)
+    {
+        if (string.IsNullOrWhiteSpace(endpoint)) return null;
+
+        try
+        {
+            var absolute = Uri.TryCreate(endpoint, UriKind.Absolute, out var parsed)
+                ? parsed.ToString()
+                : new ApiService().BuildAbsoluteUrl(endpoint);
+
+            using var http = new HttpClient();
+            using var response = await http.GetAsync(absolute, HttpCompletionOption.ResponseHeadersRead);
+            if (!response.IsSuccessStatusCode) return null;
+
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            if (bytes.Length == 0) return null;
+
+            using var stream = new MemoryStream(bytes);
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+            bitmap.StreamSource = stream;
+            bitmap.EndInit();
+            bitmap.Freeze();
+            return bitmap;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private void InitializeConversationAvatarFix()
