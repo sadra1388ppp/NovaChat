@@ -61,36 +61,33 @@ public partial class ProfileView : UserControl
         if (_profile == null) return;
 
         AvatarInitialsText.Text = GetInitials(_profile.DisplayName, _profile.Id);
+        AvatarInitialsText.Visibility = Visibility.Visible;
+        AvatarImage.Source = null;
+        AvatarImage.Visibility = Visibility.Collapsed;
         ProfileDisplayNameText.Text = _profile.DisplayName;
         ProfileUserIdText.Text = $"@{_profile.Id}";
         ProfileBioText.Text = string.IsNullOrWhiteSpace(_profile.Bio)
             ? "Add a short bio to tell people about yourself."
             : _profile.Bio;
 
-        AvatarImage.Source = null;
-        AvatarInitialsText.Visibility = Visibility.Visible;
-        AvatarImage.Visibility = Visibility.Collapsed;
-
         if (!string.IsNullOrWhiteSpace(_profile.AvatarUrl))
         {
+            BitmapImage? bitmap = null;
+
             try
             {
-                var url = _apiService.BuildAbsoluteUrl(_profile.AvatarUrl);
-                var separator = url.Contains('?') ? '&' : '?';
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.UriSource = new Uri($"{url}{separator}v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}", UriKind.Absolute);
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
-                bitmap.EndInit();
-                bitmap.Freeze();
-                AvatarImage.Source = bitmap;
-                AvatarImage.Visibility = Visibility.Visible;
-                AvatarInitialsText.Visibility = Visibility.Collapsed;
+                bitmap = await _avatarImageService.LoadAsync(_profile.Id, _profile.AvatarUrl);
             }
             catch
             {
-                // Keep initials fallback if the static avatar file cannot be loaded.
+                bitmap = null;
+            }
+
+            if (bitmap != null)
+            {
+                AvatarImage.Source = bitmap;
+                AvatarImage.Visibility = Visibility.Visible;
+                AvatarInitialsText.Visibility = Visibility.Collapsed;
             }
         }
 
