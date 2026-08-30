@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
 
 namespace NovaChat.Client.Views;
 
@@ -13,8 +12,38 @@ public partial class MainView
     {
         base.OnInitialized(e);
         ChatUserNameText.MouseLeftButtonUp += ChatUserNameText_MouseLeftButtonUp;
+        ChatUserNameText.TextChanged += ChatUserNameText_TextChanged;
         ChatUserNameText.Cursor = Cursors.Hand;
         InitializeConversationAvatarFix();
+    }
+
+    private async void ChatUserNameText_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_currentOtherUserId))
+        {
+            ChatHeaderAvatarImage.Source = null;
+            ChatHeaderAvatarImage.Visibility = Visibility.Collapsed;
+            ChatAvatarInitialsText.Text = "N";
+            return;
+        }
+
+        try
+        {
+            var profile = await _apiService.GetAsync<ProfileModel>($"api/User/profile/{Uri.EscapeDataString(_currentOtherUserId)}");
+            if (profile == null) return;
+
+            await Dispatcher.InvokeAsync(() => ChatAvatarInitialsText.Text = GetPublicProfileInitials(profile.DisplayName, profile.Id));
+            var bitmap = await LoadConversationAvatarAsync(_apiService.BuildAbsoluteUrl(profile.AvatarUrl ?? string.Empty));
+            if (bitmap == null) return;
+
+            await Dispatcher.InvokeAsync(() =>
+            {
+                ChatHeaderAvatarImage.Source = bitmap;
+                ChatHeaderAvatarImage.Visibility = Visibility.Visible;
+                ChatAvatarInitialsText.Visibility = Visibility.Collapsed;
+            });
+        }
+        catch { }
     }
 
     private async void ChatUserNameText_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -32,12 +61,7 @@ public partial class MainView
 
     private void ShowPublicProfile(ProfileModel profile)
     {
-        var window = new Window
-        {
-            Title = $"{profile.DisplayName} · Profile", Width = 390, Height = 470, MinWidth = 350, MinHeight = 430,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = Window.GetWindow(this), ResizeMode = ResizeMode.NoResize,
-            Background = (Brush)FindResource("PanelBackgroundBrush")
-        };
+        var window = new Window { Title = $"{profile.DisplayName} · Profile", Width = 390, Height = 470, MinWidth = 350, MinHeight = 430, WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = Window.GetWindow(this), ResizeMode = ResizeMode.NoResize, Background = (Brush)FindResource("PanelBackgroundBrush") };
         var root = new StackPanel { Margin = new Thickness(28) };
         var avatarGrid = new Grid { Width = 112, Height = 112, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 18) };
         avatarGrid.Children.Add(new Ellipse { Fill = (Brush)FindResource("SelectedChatBrush") });
@@ -65,7 +89,7 @@ public partial class MainView
         if (bitmap == null) return;
         await Dispatcher.InvokeAsync(() =>
         {
-            var image = new Image { Width = 112, Height = 112, Stretch = Stretch.UniformToFill, Clip = new EllipseGeometry(new Point(56, 56), 56, 56), Source = bitmap };
+            var image = new Image { Width = 112, Height = 112, Stretch = Stretch.UniformToFill, Clip = new System.Windows.Media.EllipseGeometry(new Point(56, 56), 56, 56), Source = bitmap };
             avatarGrid.Children.Add(image);
             initials.Visibility = Visibility.Collapsed;
         });
