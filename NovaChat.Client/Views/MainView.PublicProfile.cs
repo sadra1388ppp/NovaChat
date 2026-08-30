@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.SignalR.Client;
 using NovaChat.Client.Models;
+using NovaChat.Client.Services;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -20,6 +22,17 @@ public partial class MainView
                 MessageBox.Show("This user's profile could not be loaded.", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
+
+            if (_hubConnection?.State == HubConnectionState.Connected)
+            {
+                try { profile.IsOnline = await _hubConnection.InvokeAsync<bool>("IsUserOnline", userId); }
+                catch { profile.IsOnline = IsUserOnline(userId); }
+            }
+            else
+            {
+                profile.IsOnline = IsUserOnline(userId);
+            }
+
             ShowPublicProfile(profile);
         }
         catch (Exception ex)
@@ -45,9 +58,18 @@ public partial class MainView
             var profile = await _apiService.GetAsync<ProfileModel>($"api/User/profile/{Uri.EscapeDataString(userId)}");
             if (profile == null) return;
 
+            var online = IsUserOnline(userId);
+            if (_hubConnection?.State == HubConnectionState.Connected)
+            {
+                try { online = await _hubConnection.InvokeAsync<bool>("IsUserOnline", userId); }
+                catch { }
+            }
+
             await Dispatcher.InvokeAsync(() =>
             {
                 ChatAvatarInitialsText.Text = GetPublicProfileInitials(profile.DisplayName, profile.Id);
+                ChatStatusText.Text = online ? "Online" : "Offline";
+                ChatStatusIndicator.Fill = online ? Brushes.LimeGreen : Brushes.Gray;
                 ChatAvatarInitialsText.Visibility = Visibility.Visible;
                 ChatHeaderAvatarImage.Source = null;
                 ChatHeaderAvatarImage.Visibility = Visibility.Collapsed;
