@@ -14,18 +14,22 @@ public partial class MainView
 {
     private static void OnMessageBubbleRightClick(object sender, MouseButtonEventArgs e)
     {
-        if (sender is not Border border)
+        if (sender is not Border clickedBorder)
             return;
 
-        var mainView = FindAncestor<MainView>(border);
-        if (mainView == null || mainView._currentChatId == null || !IsInsideMessagePanel(border, mainView.MessagesPanel))
+        var mainView = FindAncestor<MainView>(clickedBorder);
+        if (mainView == null || mainView._currentChatId == null)
             return;
 
-        var messageId = border.Tag is int id ? id : (int?)null;
+        var messageBorder = FindMessageRootBorder(clickedBorder, mainView.MessagesPanel);
+        if (messageBorder == null)
+            return;
+
+        var messageId = messageBorder.Tag is int id ? id : (int?)null;
         string content = string.Empty;
         string timeText = string.Empty;
 
-        if (border.Child is StackPanel panel)
+        if (messageBorder.Child is StackPanel panel)
         {
             content = panel.Children.OfType<TextBlock>().FirstOrDefault()?.Text ?? string.Empty;
             timeText = panel.Children.OfType<TextBlock>().Skip(1).FirstOrDefault()?.Text ?? string.Empty;
@@ -33,13 +37,31 @@ public partial class MainView
 
         var menu = new ContextMenu();
         var deleteItem = new MenuItem { Header = "Delete message" };
-        deleteItem.Tag = new MessageBubbleInfo(border, messageId, content, timeText);
+        deleteItem.Tag = new MessageBubbleInfo(messageBorder, messageId, content, timeText);
         deleteItem.Click += mainView.DeleteMessageMenuItem_Click;
         menu.Items.Add(deleteItem);
 
-        border.ContextMenu = menu;
+        messageBorder.ContextMenu = menu;
         menu.IsOpen = true;
         e.Handled = true;
+    }
+
+    private static Border? FindMessageRootBorder(DependencyObject element, DependencyObject messagePanel)
+    {
+        var current = element;
+        while (current != null)
+        {
+            if (current is Border border &&
+                (ReferenceEquals(border.Parent, messagePanel) ||
+                 messagePanel is Panel panel && panel.Children.Contains(border)))
+            {
+                return border;
+            }
+
+            current = VisualTreeHelper.GetParent(current);
+        }
+
+        return null;
     }
 
     private async void DeleteMessageMenuItem_Click(object sender, RoutedEventArgs e)
@@ -155,17 +177,6 @@ public partial class MainView
         };
         using var response = await client.SendAsync(request);
         return response.IsSuccessStatusCode;
-    }
-
-    private static bool IsInsideMessagePanel(DependencyObject element, DependencyObject messagePanel)
-    {
-        var current = element;
-        while (current != null)
-        {
-            if (ReferenceEquals(current, messagePanel)) return true;
-            current = VisualTreeHelper.GetParent(current);
-        }
-        return false;
     }
 
     private static T? FindAncestor<T>(DependencyObject element) where T : DependencyObject
