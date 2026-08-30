@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.SignalR.Client;
 using NovaChat.Client.Models;
+using NovaChat.Client.Services;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -80,7 +81,7 @@ public partial class MainView
         }
         catch
         {
-            // The SignalR push events remain the primary path; the 100ms loop is a safety sync.
+            // SignalR push events remain the primary real-time path; this loop is a safety sync.
         }
         finally
         {
@@ -113,7 +114,6 @@ public partial class MainView
         var snapshot = serverChats.ToDictionary(x => x.Id);
         var changed = false;
 
-        // Add newly-created chats without rebuilding the whole list.
         foreach (var serverChat in serverChats)
         {
             var existing = _chats.FirstOrDefault(x => x.Chat.Id == serverChat.Id);
@@ -132,14 +132,13 @@ public partial class MainView
             }
         }
 
-        // Update only changed fields; never refresh/re-download every avatar on every 100ms tick.
         foreach (var item in _chats.ToList())
         {
             if (!snapshot.TryGetValue(item.Chat.Id, out var serverChat))
             {
                 _chats.Remove(item);
                 if (_currentChatId == item.Chat.Id)
-                    _ = Dispatcher.InvokeAsync(() => ClearCurrentChatUi());
+                    ClearCurrentChatUi();
                 changed = true;
                 continue;
             }
