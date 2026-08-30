@@ -1,8 +1,6 @@
 using NovaChat.Client.Services;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using System.Windows;
-using System.Windows.Media.Imaging;
 
 namespace NovaChat.Client.Models;
 
@@ -11,7 +9,7 @@ public sealed class ChatListItem : INotifyPropertyChanged
     private string _displayName = string.Empty;
     private string _lastMessage = string.Empty;
     private bool _isOnline;
-    private BitmapImage? _avatarSource;
+    private string? _avatarUri;
 
     public ChatModel Chat { get; set; } = new();
 
@@ -51,15 +49,27 @@ public sealed class ChatListItem : INotifyPropertyChanged
         }
     }
 
-    public BitmapImage? AvatarSource
+    // Absolute URL served by NovaChat's public avatar endpoint.
+    // Binding the URI directly lets WPF fetch the image without custom visual-tree logic.
+    public string? AvatarUri
     {
-        get => _avatarSource;
+        get => _avatarUri;
         set
         {
-            if (ReferenceEquals(_avatarSource, value)) return;
-            _avatarSource = value;
+            if (string.Equals(_avatarUri, value, StringComparison.Ordinal)) return;
+            _avatarUri = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(HasAvatar));
         }
+    }
+
+    public bool HasAvatar => !string.IsNullOrWhiteSpace(AvatarUri);
+
+    // Kept as a compatibility alias for older code paths.
+    public string? AvatarSource
+    {
+        get => AvatarUri;
+        set => AvatarUri = value;
     }
 
     public string OtherUserId => Chat.OtherUserId(AuthState.UserId);
@@ -77,7 +87,7 @@ public sealed class ChatListItem : INotifyPropertyChanged
     }
 
     public string ProfileStatusText => IsOnline ? "Online" : "Offline";
-    public Visibility OnlineVisibility => IsOnline ? Visibility.Visible : Visibility.Collapsed;
+    public System.Windows.Visibility OnlineVisibility => IsOnline ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
