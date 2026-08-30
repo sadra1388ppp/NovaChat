@@ -88,7 +88,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+// NovaChat desktop client runs against the HTTP development endpoint on port 5256.
+// HTTPS redirection would return a redirect to an unavailable HTTPS port and prevent
+// WPF BitmapImage from loading avatar files. Keep the development endpoint on HTTP.
 app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
