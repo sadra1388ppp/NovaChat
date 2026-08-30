@@ -13,6 +13,12 @@ public partial class MainView
         _voiceSendFixRegistered = true;
 
         EventManager.RegisterClassHandler(
+            typeof(Button),
+            Button.ClickEvent,
+            new RoutedEventHandler(VoiceAwareButtonClick),
+            true);
+
+        EventManager.RegisterClassHandler(
             typeof(MainView),
             FrameworkElement.LoadedEvent,
             new RoutedEventHandler(VoiceSendFixLoaded));
@@ -34,20 +40,7 @@ public partial class MainView
             b => string.Equals(b.Content?.ToString(), "➤", StringComparison.Ordinal));
 
         if (send == null) return;
-
         send.Tag = "NovaChat.VoiceAwareSend";
-    }
-
-    static MainView? FindMainViewFromButton(DependencyObject element)
-    {
-        var current = System.Windows.Media.VisualTreeHelper.GetParent(element);
-        while (current != null)
-        {
-            if (current is MainView view) return view;
-            current = System.Windows.Media.VisualTreeHelper.GetParent(current);
-        }
-
-        return null;
     }
 
     private static void VoiceAwareButtonClick(object sender, RoutedEventArgs e)
@@ -61,12 +54,15 @@ public partial class MainView
         view.StopVoiceRecording();
     }
 
-    static MainView()
+    private static MainView? FindMainViewFromButton(DependencyObject element)
     {
-        EventManager.RegisterClassHandler(
-            typeof(Button),
-            Button.ClickEvent,
-            new RoutedEventHandler(VoiceAwareButtonClick),
-            true);
+        var current = System.Windows.Media.VisualTreeHelper.GetParent(element);
+        while (current != null)
+        {
+            if (current is MainView view) return view;
+            current = System.Windows.Media.VisualTreeHelper.GetParent(current);
+        }
+
+        return null;
     }
 }
