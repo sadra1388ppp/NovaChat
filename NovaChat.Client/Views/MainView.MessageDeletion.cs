@@ -1,3 +1,4 @@
+using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using NovaChat.Client.Models;
@@ -122,16 +123,12 @@ public partial class MainView
     {
         var root = FindMessageRootBorder(clickedOrRoot, messagesPanel) ?? clickedOrRoot;
 
-        // Remove the actual direct child from MessagesPanel. This is important for
-        // media messages because their visual tree contains several nested Borders.
         if (messagesPanel.Children.Contains(root))
         {
             messagesPanel.Children.Remove(root);
             return;
         }
 
-        // Some WPF templates insert an intermediate ContentPresenter/Panel. Walk up
-        // until we reach the element that is actually hosted by MessagesPanel.
         DependencyObject current = root;
         DependencyObject? hosted = null;
         while (current != null && !ReferenceEquals(current, messagesPanel))
@@ -146,7 +143,6 @@ public partial class MainView
             return;
         }
 
-        // Last-resort visual cleanup: never leave an empty white media container.
         root.Visibility = Visibility.Collapsed;
         root.Height = 0;
         root.MinHeight = 0;
