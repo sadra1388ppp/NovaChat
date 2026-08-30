@@ -68,21 +68,46 @@ public partial class MainView
 
         try
         {
-            var version = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            var avatarUri = new ApiService().BuildAbsoluteUrl($"api/avatar/{Uri.EscapeDataString(userId)}?v={version}");
+            var profile = await _apiService.GetAsync<ProfileModel>($"api/User/profile/{Uri.EscapeDataString(userId)}");
+            if (profile == null) return;
+
+            var avatarUri = string.IsNullOrWhiteSpace(profile.AvatarUrl)
+                ? null
+                : _apiService.BuildAbsoluteUrl(profile.AvatarUrl);
 
             await Dispatcher.InvokeAsync(() =>
             {
                 foreach (var item in _chats.Where(x => string.Equals(x.Chat.OtherUserId(AuthState.UserId), userId, StringComparison.OrdinalIgnoreCase)))
+                {
                     item.AvatarUri = avatarUri;
+                    item.DisplayName = profile.DisplayName;
+                    item.IsOnline = IsUserOnline(userId);
+                }
 
                 if (string.Equals(_currentOtherUserId, userId, StringComparison.OrdinalIgnoreCase))
                 {
+                    ChatAvatarInitialsText.Text = GetPublicProfileInitials(profile.DisplayName, profile.Id);
+                    ChatStatusText.Text = IsUserOnline(userId) ? "Online" : "Offline";
+                    ChatStatusIndicator.Fill = IsUserOnline(userId) ? Brushes.LimeGreen : Brushes.Gray;
+                    ChatAvatarStatusDot.Fill = IsUserOnline(userId) ? Brushes.LimeGreen : Brushes.Gray;
+
+                    if (string.IsNullOrWhiteSpace(avatarUri))
+                    {
+                        ChatHeaderAvatarImage.Source = null;
+                        ChatHeaderAvatarImage.Visibility = Visibility.Collapsed;
+                        ChatAvatarInitialsText.Visibility = Visibility.Visible;
+                        return;
+                    }
+
                     try
                     {
-                        var bitmap = new BitmapImage(new Uri(avatarUri, UriKind.Absolute));
+                        var bitmap = new BitmapImage();
+                        bitmap.BeginInit();
+                        bitmap.UriSource = new Uri(avatarUri, UriKind.Absolute);
                         bitmap.CacheOption = BitmapCacheOption.OnLoad;
                         bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+                        bitmap.EndInit();
+                        bitmap.Freeze();
                         ChatHeaderAvatarImage.Source = bitmap;
                         ChatHeaderAvatarImage.Visibility = Visibility.Visible;
                         ChatAvatarInitialsText.Visibility = Visibility.Collapsed;
@@ -115,10 +140,18 @@ public partial class MainView
             var userId = idText?.TrimStart('@');
             if (string.IsNullOrWhiteSpace(userId)) return;
 
-            var url = new ApiService().BuildAbsoluteUrl($"api/avatar/{Uri.EscapeDataString(userId)}?v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}");
-            var bitmap = new BitmapImage(new Uri(url, UriKind.Absolute));
+            var api = new ApiService();
+            var profile = await api.GetAsync<ProfileModel>($"api/User/profile/{Uri.EscapeDataString(userId)}");
+            if (profile == null || string.IsNullOrWhiteSpace(profile.AvatarUrl)) return;
+
+            var url = api.BuildAbsoluteUrl(profile.AvatarUrl);
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.UriSource = new Uri(url, UriKind.Absolute);
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
             bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+            bitmap.EndInit();
+            bitmap.Freeze();
 
             await window.Dispatcher.InvokeAsync(() =>
             {
@@ -133,7 +166,6 @@ public partial class MainView
 
                 var ellipse = firstGrid.Children.OfType<Ellipse>().FirstOrDefault();
                 if (ellipse == null) return;
-
                 firstGrid.Children.Add(new Image
                 {
                     Width = 112,
@@ -150,8 +182,7 @@ public partial class MainView
 
     private static string? FindTextStartingWithAt(DependencyObject? root)
     {
-        if (root is TextBlock text && !string.IsNullOrWhiteSpace(text.Text) && text.Text.TrimStart().StartsWith("@", StringComparison.Ordinal))
-            return text.Text.Trim();
+        if (root is TextBlock text && !string.IsNullOrWhiteSpace(text.Text) && text.Text.TrimStart().StartsWith("@", StringComparison.Ordinal)) return text.Text.Trim();
         if (root == null) return null;
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
         {
