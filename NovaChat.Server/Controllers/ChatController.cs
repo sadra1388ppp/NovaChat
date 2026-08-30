@@ -51,15 +51,7 @@ public class ChatController : ControllerBase
         if (currentUserId == null) return Unauthorized();
 
         var chats = await _chatService.GetUserChatsAsync(currentUserId);
-        var result = new List<ChatListDto>();
-
-        foreach (var chat in chats)
-        {
-            var lastMessage = await _chatService.GetLastMessageAsync(chat.Id);
-            result.Add(MapChat(chat, lastMessage));
-        }
-
-        return Ok(result);
+        return Ok(chats.Select(chat => MapChat(chat, chat.Messages.FirstOrDefault())).ToList());
     }
 
     [HttpGet("all")]
@@ -67,15 +59,7 @@ public class ChatController : ControllerBase
     public async Task<IActionResult> GetAllChats()
     {
         var chats = await _chatService.GetAllChatsAsync();
-        var result = new List<ChatListDto>();
-
-        foreach (var chat in chats)
-        {
-            var lastMessage = await _chatService.GetLastMessageAsync(chat.Id);
-            result.Add(MapChat(chat, lastMessage));
-        }
-
-        return Ok(result);
+        return Ok(chats.Select(chat => MapChat(chat, chat.Messages.FirstOrDefault())).ToList());
     }
 
     [HttpGet("{chatId}/messages")]
