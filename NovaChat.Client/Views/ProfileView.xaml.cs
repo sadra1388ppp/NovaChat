@@ -2,6 +2,7 @@ using Microsoft.Win32;
 using NovaChat.Client.Models;
 using NovaChat.Client.Services;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
@@ -50,6 +51,7 @@ public partial class ProfileView : UserControl
     private async Task UpdateProfileUiAsync()
     {
         if (_profile == null) return;
+
         AvatarInitialsText.Text = GetInitials(_profile.DisplayName, _profile.Id);
         AvatarImage.Source = null;
         AvatarInitialsText.Visibility = Visibility.Visible;
@@ -57,14 +59,21 @@ public partial class ProfileView : UserControl
 
         if (!string.IsNullOrWhiteSpace(_profile.AvatarUrl))
         {
-            var bitmap = await LoadAvatarAsync(_apiService.BuildAbsoluteUrl(_profile.AvatarUrl));
+            // Load through the authenticated API endpoint instead of relying on a
+            // separate static-file request. This guarantees WPF receives the exact
+            // avatar belonging to this profile and avoids stale/cached images.
+            var avatarEndpoint = _apiService.BuildAbsoluteUrl($"api/User/profile/{Uri.EscapeDataString(_profile.Id)}/avatar");
+            var bitmap = await LoadAvatarAsync(avatarEndpoint);
             if (bitmap != null)
             {
                 AvatarImage.Source = bitmap;
                 AvatarImage.Visibility = Visibility.Visible;
                 AvatarInitialsText.Visibility = Visibility.Collapsed;
             }
-            else ShowFeedback("Profile loaded, but the profile picture could not be displayed.");
+            else
+            {
+                ShowFeedback("Profile picture exists, but NovaChat could not load the image from the server.");
+            }
         }
 
         StatusText.Text = _profile.IsOnline ? "● Online" : "● Offline";
@@ -76,21 +85,30 @@ public partial class ProfileView : UserControl
     {
         try
         {
-            using var response = await AvatarHttpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            if (!string.IsNullOrWhiteSpace(AuthState.Token))
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AuthState.Token);
+
+            using var response = await AvatarHttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
             if (!response.IsSuccessStatusCode) return null;
+
             var bytes = await response.Content.ReadAsByteArrayAsync();
             if (bytes.Length == 0) return null;
+
             using var stream = new MemoryStream(bytes);
             var bitmap = new BitmapImage();
             bitmap.BeginInit();
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+            bitmap.CreateOptions = BitmapCreateOptions.PreservePixelFormat;
             bitmap.StreamSource = stream;
             bitmap.EndInit();
             bitmap.Freeze();
             return bitmap;
         }
-        catch { return null; }
+        catch
+        {
+            return null;
+        }
     }
 
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
