@@ -9,6 +9,7 @@ namespace NovaChat.Client.Views;
 public partial class MainView
 {
     private HubConnection? _realtimeAttachedConnection;
+    private int _realtimeAttachAttempts;
 
     static MainView()
     {
@@ -22,9 +23,30 @@ public partial class MainView
     {
         if (sender is not MainView view) return;
 
-        view.Dispatcher.BeginInvoke(
+        view._realtimeAttachAttempts = 0;
+        view.QueueRealtimeHandlerAttach();
+    }
+
+    private void QueueRealtimeHandlerAttach()
+    {
+        Dispatcher.BeginInvoke(
             System.Windows.Threading.DispatcherPriority.Loaded,
-            new Action(view.AttachRealtimeHandlers));
+            new Action(AttachRealtimeHandlersWhenReady));
+    }
+
+    private async void AttachRealtimeHandlersWhenReady()
+    {
+        AttachRealtimeHandlers();
+
+        if (_realtimeAttachedConnection != null || _hubConnection == null)
+            return;
+
+        if (_realtimeAttachAttempts++ >= 30)
+            return;
+
+        await Task.Delay(100);
+        if (!IsLoaded) return;
+        QueueRealtimeHandlerAttach();
     }
 
     private void AttachRealtimeHandlers()
@@ -100,7 +122,7 @@ public partial class MainView
         }
         catch
         {
-            // The normal chat list remains intact if a background refresh fails.
+            // Ignore background refresh failures; the next real-time event can retry.
         }
     }
 
