@@ -43,8 +43,11 @@ public partial class MainView
             var image = FindAvatarImage(container);
             if (image == null) continue;
 
-            var avatarEndpoint = $"api/User/profile/{Uri.EscapeDataString(userId)}/avatar";
-            var bitmap = await LoadConversationAvatarAsync(avatarEndpoint);
+            var profile = await new ApiService().GetAsync<NovaChat.Client.Models.ProfileModel>($"api/User/profile/{Uri.EscapeDataString(userId)}");
+            var avatarUrl = profile?.AvatarUrl;
+            if (string.IsNullOrWhiteSpace(avatarUrl)) continue;
+
+            var bitmap = await LoadConversationAvatarAsync(userId, avatarUrl);
             if (bitmap != null)
             {
                 item.AvatarSource = bitmap;
@@ -64,41 +67,42 @@ public partial class MainView
         return null;
     }
 
-    private async Task<BitmapImage?> LoadConversationAvatarAsync(string endpoint)
+    private async Task<BitmapImage?> LoadConversationAvatarAsync(string userId, string avatarUrl)
     {
-        if (string.IsNullOrWhiteSpace(endpoint)) return null;
+        if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(avatarUrl)) return null;
 
-        try
+        var apiEndpoint = $"api/User/profile/{Uri.EscapeDataString(userId)}/avatar?v={Uri.EscapeDataString(avatarUrl)}";
+        var staticEndpoint = avatarUrl.StartsWith('/') ? avatarUrl : "/" + avatarUrl;
+
+        foreach (var endpoint in new[] { apiEndpoint, staticEndpoint })
         {
-            // Avatar endpoints are authenticated API routes. Do not request the
-            // stored /uploads path directly because the server may not expose it.
-            var absoluteUrl = new ApiService().BuildAbsoluteUrl(endpoint);
-            if (string.IsNullOrWhiteSpace(absoluteUrl)) return null;
+            try
+            {
+                var cacheKey = new ApiService().BuildAbsoluteUrl(endpoint);
+                if (ConversationAvatarCache.TryGetValue(cacheKey, out var cached)) return cached;
 
-            // Use the endpoint itself as the stable cache key. The server disables
-            // caching, and removing/replacing an avatar therefore reloads cleanly.
-            if (ConversationAvatarCache.TryGetValue(absoluteUrl, out var cached)) return cached;
+                var bytes = await new ApiService().GetBytesAsync(endpoint);
+                if (bytes == null || bytes.Length == 0) continue;
 
-            var api = new ApiService();
-            var bytes = await api.GetBytesAsync(endpoint);
-            if (bytes == null || bytes.Length == 0) return null;
+                using var memoryStream = new MemoryStream(bytes);
+                var bitmap = new BitmapImage();
+                bitmap.BeginInit();
+                bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+                bitmap.StreamSource = memoryStream;
+                bitmap.EndInit();
+                bitmap.Freeze();
 
-            using var memoryStream = new MemoryStream(bytes);
-            var bitmap = new BitmapImage();
-            bitmap.BeginInit();
-            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
-            bitmap.StreamSource = memoryStream;
-            bitmap.EndInit();
-            bitmap.Freeze();
-
-            ConversationAvatarCache[absoluteUrl] = bitmap;
-            return bitmap;
+                ConversationAvatarCache[cacheKey] = bitmap;
+                return bitmap;
+            }
+            catch
+            {
+                // Try the next supported avatar source.
+            }
         }
-        catch
-        {
-            return null;
-        }
+
+        return null;
     }
 
     private void InitializeConversationAvatarFix()
