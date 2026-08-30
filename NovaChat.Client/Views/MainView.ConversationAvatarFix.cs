@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Net.Http;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -10,7 +9,6 @@ namespace NovaChat.Client.Views;
 
 public partial class MainView
 {
-    private static readonly HttpClient ConversationAvatarHttpClient = new();
     private static readonly ConcurrentDictionary<string, BitmapImage> ConversationAvatarCache = new(StringComparer.OrdinalIgnoreCase);
     private bool _conversationAvatarHooked;
 
@@ -35,8 +33,8 @@ public partial class MainView
     {
         foreach (var item in _chats)
         {
-            var url = item.Chat.OtherUserAvatarUrl;
-            if (string.IsNullOrWhiteSpace(url)) continue;
+            var userId = item.Chat.OtherUserId(AuthState.UserId);
+            if (string.IsNullOrWhiteSpace(userId)) continue;
 
             var container = ChatsList.ItemContainerGenerator.ContainerFromItem(item) as FrameworkElement;
             if (container == null) continue;
@@ -44,8 +42,12 @@ public partial class MainView
             var image = FindAvatarImage(container);
             if (image == null) continue;
 
-            var bitmap = await LoadConversationAvatarAsync(_apiService.BuildAbsoluteUrl(url));
-            if (bitmap != null) image.Source = bitmap;
+            var bitmap = await LoadConversationAvatarAsync($"api/User/profile/{Uri.EscapeDataString(userId)}/avatar");
+            if (bitmap != null)
+            {
+                item.AvatarSource = bitmap;
+                image.Source = bitmap;
+            }
         }
     }
 
@@ -60,20 +62,20 @@ public partial class MainView
         return null;
     }
 
-    private static async Task<BitmapImage?> LoadConversationAvatarAsync(string url)
+    private async Task<BitmapImage?> LoadConversationAvatarAsync(string endpoint)
     {
-        if (ConversationAvatarCache.TryGetValue(url, out var cached)) return cached;
+        if (string.IsNullOrWhiteSpace(endpoint)) return null;
+        var absoluteUrl = _apiService.BuildAbsoluteUrl(endpoint);
+        if (string.IsNullOrWhiteSpace(absoluteUrl)) return null;
+
+        if (ConversationAvatarCache.TryGetValue(absoluteUrl, out var cached)) return cached;
 
         try
         {
-            using var response = await ConversationAvatarHttpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
-            if (!response.IsSuccessStatusCode) return null;
+            var bytes = await _apiService.GetBytesAsync(endpoint);
+            if (bytes == null || bytes.Length == 0) return null;
 
-            await using var networkStream = await response.Content.ReadAsStreamAsync();
-            using var memoryStream = new MemoryStream();
-            await networkStream.CopyToAsync(memoryStream);
-            memoryStream.Position = 0;
-
+            using var memoryStream = new MemoryStream(bytes);
             var bitmap = new BitmapImage();
             bitmap.BeginInit();
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
@@ -82,7 +84,7 @@ public partial class MainView
             bitmap.EndInit();
             bitmap.Freeze();
 
-            ConversationAvatarCache[url] = bitmap;
+            ConversationAvatarCache[absoluteUrl] = bitmap;
             return bitmap;
         }
         catch
