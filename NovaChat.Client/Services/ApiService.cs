@@ -53,11 +53,22 @@ public class ApiService
     public async Task<TResponse?> UploadFileAsync<TResponse>(string endpoint, string filePath, string fieldName = "file")
     {
         AddAuthorization();
+
         using var form = new MultipartFormDataContent();
         await using var stream = File.OpenRead(filePath);
         using var fileContent = new StreamContent(stream);
-        fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+
+        var mediaType = Path.GetExtension(filePath).ToLowerInvariant() switch
+        {
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            ".webp" => "image/webp",
+            _ => "application/octet-stream"
+        };
+
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue(mediaType);
         form.Add(fileContent, fieldName, Path.GetFileName(filePath));
+
         var response = await _httpClient.PostAsync(endpoint, form);
         if (!response.IsSuccessStatusCode) return default;
         return await response.Content.ReadFromJsonAsync<TResponse>();
