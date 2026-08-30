@@ -63,6 +63,26 @@ public class UserController : ControllerBase
     }
 
     [Authorize]
+    [HttpGet("profile/{id}/avatar")]
+    public async Task<IActionResult> GetAvatar(string id)
+    {
+        var user = await _userService.GetUserByIdAsync(id);
+        if (user == null || string.IsNullOrWhiteSpace(user.AvatarUrl)) return NotFound();
+
+        var fileName = Path.GetFileName(user.AvatarUrl);
+        if (string.IsNullOrWhiteSpace(fileName)) return NotFound();
+
+        var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
+        var path = Path.Combine(root, "uploads", "avatars", fileName);
+        if (!System.IO.File.Exists(path)) return NotFound();
+
+        Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
+        Response.Headers.Pragma = "no-cache";
+        Response.Headers.Expires = "0";
+        return PhysicalFile(path, "image/jpeg");
+    }
+
+    [Authorize]
     [HttpGet("search")]
     public async Task<IActionResult> Search([FromQuery] string q)
     {
