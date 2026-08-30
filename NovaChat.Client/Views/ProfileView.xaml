@@ -1,19 +1,50 @@
 <UserControl x:Class="NovaChat.Client.Views.ProfileView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Grid Background="{DynamicResource AppBackgroundBrush}">
-        <Border Width="500" Padding="35" Background="{DynamicResource PanelBackgroundBrush}" CornerRadius="20" HorizontalAlignment="Center" VerticalAlignment="Center">
-            <StackPanel>
-                <TextBlock Text="Profile" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Center"/>
-                <Ellipse Width="90" Height="90" Fill="{DynamicResource PrimaryBrush}" Margin="0,25,0,15"/>
-                <TextBlock Text="Sadra" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Center"/>
-                <TextBlock Text="@sadra123" FontSize="14" Foreground="{DynamicResource SecondaryTextBrush}" HorizontalAlignment="Center" Margin="0,5,0,25"/>
-                <TextBlock Text="Email" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/>
-                <TextBox Text="example@email.com" Height="40" Margin="0,6,0,18" Padding="10" Background="{DynamicResource InputBackgroundBrush}" Foreground="{DynamicResource TextBrush}"/>
-                <Button Content="Edit Profile" Height="42" Background="{DynamicResource PrimaryBrush}" Foreground="White" BorderThickness="0" Margin="0,0,0,10"/>
-                <Button Content="Contacts" Height="42" Background="Transparent" Foreground="{DynamicResource PrimaryBrush}" BorderThickness="0" Click="ContactsButton_Click" Margin="0,0,0,10"/>
-                <Button Content="Back to Chat" Height="42" Background="Transparent" Foreground="{DynamicResource PrimaryBrush}" BorderThickness="0" Click="BackToChatButton_Click"/>
-            </StackPanel>
-        </Border>
-    </Grid>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Background="{DynamicResource AppBackgroundBrush}">
+            <Border MaxWidth="620" Margin="30" Padding="34" Background="{DynamicResource PanelBackgroundBrush}" CornerRadius="24" HorizontalAlignment="Center">
+                <StackPanel>
+                    <TextBlock Text="My Profile" FontSize="30" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Center"/>
+                    <TextBlock Text="Manage your NovaChat identity and profile" FontSize="13" Foreground="{DynamicResource SecondaryTextBrush}" HorizontalAlignment="Center" Margin="0,6,0,22"/>
+
+                    <Grid Width="150" Height="150" HorizontalAlignment="Center">
+                        <Ellipse Fill="{DynamicResource PrimaryBrush}"/>
+                        <Image x:Name="AvatarImage" Stretch="UniformToFill" Clip="{Binding RelativeSource={RelativeSource Self}, Path=RenderSize}"/>
+                        <TextBlock x:Name="AvatarInitialsText" Text="?" FontSize="44" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,14,0,24">
+                        <Button Content="Change Picture" Click="ChangePictureButton_Click" Height="34" Padding="18,0" Background="{DynamicResource PrimaryBrush}" Foreground="White" BorderThickness="0"/>
+                        <Button Content="Remove" Click="RemovePictureButton_Click" Height="34" Padding="18,0" Margin="8,0,0,0" Background="Transparent" Foreground="{DynamicResource PrimaryBrush}" BorderBrush="{DynamicResource PrimaryBrush}"/>
+                    </StackPanel>
+
+                    <TextBlock Text="Display Name" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/>
+                    <TextBox x:Name="DisplayNameBox" Height="42" Margin="0,6,0,16" Padding="10" Background="{DynamicResource InputBackgroundBrush}" Foreground="{DynamicResource TextBrush}"/>
+
+                    <TextBlock Text="User ID" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/>
+                    <TextBox x:Name="UserIdBox" Height="42" Margin="0,6,0,16" Padding="10" Background="{DynamicResource InputBackgroundBrush}" Foreground="{DynamicResource TextBrush}"/>
+
+                    <TextBlock Text="Email" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/>
+                    <TextBox x:Name="EmailBox" Height="42" Margin="0,6,0,16" Padding="10" Background="{DynamicResource InputBackgroundBrush}" Foreground="{DynamicResource TextBrush}"/>
+
+                    <TextBlock Text="About / Bio" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/>
+                    <TextBox x:Name="BioBox" Height="90" Margin="0,6,0,8" Padding="10" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Background="{DynamicResource InputBackgroundBrush}" Foreground="{DynamicResource TextBrush}"/>
+                    <TextBlock Text="Maximum 160 characters" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" HorizontalAlignment="Right"/>
+
+                    <Border Margin="0,20,0,20" Padding="14" Background="{DynamicResource InputBackgroundBrush}" CornerRadius="12">
+                        <StackPanel>
+                            <TextBlock x:Name="StatusText" Text="Status" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/>
+                            <TextBlock x:Name="LastSeenText" Margin="0,4,0,0" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                            <TextBlock x:Name="JoinedText" Margin="0,4,0,0" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock x:Name="FeedbackText" Foreground="{DynamicResource PrimaryBrush}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                    <Button x:Name="SaveButton" Content="Save Changes" Click="SaveButton_Click" Height="44" Background="{DynamicResource PrimaryBrush}" Foreground="White" BorderThickness="0"/>
+                    <Button Content="Contacts" Click="ContactsButton_Click" Height="42" Margin="0,10,0,0" Background="Transparent" Foreground="{DynamicResource PrimaryBrush}" BorderThickness="0"/>
+                    <Button Content="Back to Chat" Click="BackToChatButton_Click" Height="42" Background="Transparent" Foreground="{DynamicResource PrimaryBrush}" BorderThickness="0"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </ScrollViewer>
 </UserControl>
