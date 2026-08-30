@@ -56,11 +56,19 @@ public partial class MainView
             _loadedMessageIds.Remove(payload.Id);
             if (_currentChatId == payload.ChatId)
             {
-                var candidates = MessagesPanel.Children.OfType<Border>()
-                    .Where(IsRealtimeMessageBubble)
-                    .Where(b => RealtimeMessageBubbleMatches(b, payload.Content, payload.SentAt))
-                    .ToList();
-                if (candidates.Count > 0) MessagesPanel.Children.Remove(candidates[^1]);
+                var mediaBubble = MessagesPanel.Children.OfType<Border>().FirstOrDefault(b => b.Tag is int id && id == payload.Id);
+                if (mediaBubble != null)
+                {
+                    MessagesPanel.Children.Remove(mediaBubble);
+                }
+                else
+                {
+                    var candidates = MessagesPanel.Children.OfType<Border>()
+                        .Where(IsRealtimeMessageBubble)
+                        .Where(b => RealtimeMessageBubbleMatches(b, payload.Content, payload.SentAt))
+                        .ToList();
+                    if (candidates.Count > 0) MessagesPanel.Children.Remove(candidates[^1]);
+                }
             }
             if (_chats.FirstOrDefault(x => x.Chat.Id == payload.ChatId)?.Chat.LastMessage?.Id == payload.Id)
                 _ = RefreshChatAfterRealtimeChangeAsync(payload.ChatId);
@@ -114,21 +122,15 @@ public partial class MainView
 
             foreach (var item in updatedItems)
             {
-                if (!string.IsNullOrWhiteSpace(payload.DisplayName))
-                    item.DisplayName = payload.DisplayName;
+                if (!string.IsNullOrWhiteSpace(payload.DisplayName)) item.DisplayName = payload.DisplayName;
                 item.IsOnline = IsUserOnline(payload.UserId);
-                item.AvatarUri = string.IsNullOrWhiteSpace(payload.AvatarUrl)
-                    ? null
-                    : _apiService.BuildAbsoluteUrl(payload.AvatarUrl);
+                item.AvatarUri = string.IsNullOrWhiteSpace(payload.AvatarUrl) ? null : _apiService.BuildAbsoluteUrl(payload.AvatarUrl);
             }
 
             shouldRefreshHeader = string.Equals(_currentOtherUserId, payload.UserId, StringComparison.OrdinalIgnoreCase);
-            // Keep existing ItemsControl containers and bindings intact. PropertyChanged
-            // on ChatListItem updates the visible row without rebuilding the whole list.
         });
 
-        if (shouldRefreshHeader)
-            await RefreshCurrentChatAvatarAsync();
+        if (shouldRefreshHeader) await RefreshCurrentChatAvatarAsync();
     }
 
     private async Task RefreshChatAfterRealtimeChangeAsync(int chatId)
