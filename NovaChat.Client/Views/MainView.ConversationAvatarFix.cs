@@ -54,17 +54,6 @@ public partial class MainView
         }
     }
 
-    private static Image? FindAvatarImage(DependencyObject root)
-    {
-        if (root is Image image) return image;
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
-        {
-            var result = FindAvatarImage(VisualTreeHelper.GetChild(root, i));
-            if (result != null) return result;
-        }
-        return null;
-    }
-
     private async Task<BitmapImage?> LoadConversationAvatarAsync(string userId, string avatarUrl)
     {
         if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(avatarUrl)) return null;
