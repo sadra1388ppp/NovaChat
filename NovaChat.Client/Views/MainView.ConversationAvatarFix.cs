@@ -1,3 +1,4 @@
+using NovaChat.Client.Services;
 using System.Collections.Concurrent;
 using System.Windows;
 using System.Windows.Controls;
