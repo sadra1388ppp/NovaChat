@@ -105,23 +105,30 @@ public partial class MainView
     {
         if (string.IsNullOrWhiteSpace(payload.UserId)) return;
 
-        await Dispatcher.InvokeAsync(async () =>
+        var shouldRefreshHeader = false;
+        await Dispatcher.InvokeAsync(() =>
         {
-            foreach (var item in _chats.Where(x => string.Equals(x.Chat.OtherUserId(AuthState.UserId), payload.UserId, StringComparison.OrdinalIgnoreCase)))
+            var updatedItems = _chats
+                .Where(x => string.Equals(x.Chat.OtherUserId(AuthState.UserId), payload.UserId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            foreach (var item in updatedItems)
             {
                 if (!string.IsNullOrWhiteSpace(payload.DisplayName))
                     item.DisplayName = payload.DisplayName;
                 item.IsOnline = IsUserOnline(payload.UserId);
+                item.AvatarUri = string.IsNullOrWhiteSpace(payload.AvatarUrl)
+                    ? null
+                    : _apiService.BuildAbsoluteUrl(payload.AvatarUrl);
             }
 
-            RefreshChatsList();
-            await RefreshConversationAvatarsAsync();
-
-            if (string.Equals(_currentOtherUserId, payload.UserId, StringComparison.OrdinalIgnoreCase))
-            {
-                await RefreshCurrentChatAvatarAsync();
-            }
+            shouldRefreshHeader = string.Equals(_currentOtherUserId, payload.UserId, StringComparison.OrdinalIgnoreCase);
+            // Keep existing ItemsControl containers and bindings intact. PropertyChanged
+            // on ChatListItem updates the visible row without rebuilding the whole list.
         });
+
+        if (shouldRefreshHeader)
+            await RefreshCurrentChatAvatarAsync();
     }
 
     private async Task RefreshChatAfterRealtimeChangeAsync(int chatId)
