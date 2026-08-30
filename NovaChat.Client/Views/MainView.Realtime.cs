@@ -8,37 +8,27 @@ namespace NovaChat.Client.Views;
 
 public partial class MainView
 {
-    private bool _realtimeHandlersAttached;
+    private HubConnection? _realtimeAttachedConnection;
 
     static MainView()
     {
-        EventManager.RegisterClassHandler(
-            typeof(MainView),
-            FrameworkElement.LoadedEvent,
-            new RoutedEventHandler(OnRealtimeViewLoaded));
-
-        EventManager.RegisterClassHandler(
-            typeof(Border),
-            UIElement.MouseRightButtonUpEvent,
-            new MouseButtonEventHandler(OnMessageBubbleRightClick),
-            true);
+        EventManager.RegisterClassHandler(typeof(MainView), FrameworkElement.LoadedEvent, new RoutedEventHandler(OnRealtimeViewLoaded));
+        EventManager.RegisterClassHandler(typeof(Border), UIElement.MouseRightButtonUpEvent, new MouseButtonEventHandler(OnMessageBubbleRightClick), true);
     }
 
     private static void OnRealtimeViewLoaded(object sender, RoutedEventArgs e)
     {
         if (sender is not MainView view) return;
-        view.Dispatcher.BeginInvoke(
-            System.Windows.Threading.DispatcherPriority.Loaded,
-            new Action(view.AttachRealtimeHandlers));
+        view.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(view.AttachRealtimeHandlers));
     }
 
     private void AttachRealtimeHandlers()
     {
-        if (_realtimeHandlersAttached || _hubConnection == null) return;
+        if (_hubConnection == null || ReferenceEquals(_realtimeAttachedConnection, _hubConnection)) return;
         _hubConnection.On<MessageDeletedPayload>("MessageDeleted", OnRealtimeMessageDeleted);
         _hubConnection.On<ChatDeletedPayload>("ChatDeleted", OnRealtimeChatDeleted);
         _hubConnection.On<ChatCreatedPayload>("ChatCreated", OnRealtimeChatCreated);
-        _realtimeHandlersAttached = true;
+        _realtimeAttachedConnection = _hubConnection;
     }
 
     private async void OnRealtimeMessageDeleted(MessageDeletedPayload payload)
@@ -48,16 +38,9 @@ public partial class MainView
             _loadedMessageIds.Remove(payload.Id);
             if (_currentChatId == payload.ChatId)
             {
-                var candidates = MessagesPanel.Children
-                    .OfType<Border>()
-                    .Where(IsMessageBubble)
-                    .Where(b => MessageBubbleMatches(b, payload.Content, payload.SenderId, payload.SentAt))
-                    .ToList();
-
-                if (candidates.Count > 0)
-                    MessagesPanel.Children.Remove(candidates[^1]);
+                var candidates = MessagesPanel.Children.OfType<Border>().Where(IsMessageBubble).Where(b => MessageBubbleMatches(b, payload.Content, payload.SentAt)).ToList();
+                if (candidates.Count > 0) MessagesPanel.Children.Remove(candidates[^1]);
             }
-
             if (_chats.FirstOrDefault(x => x.Chat.Id == payload.ChatId)?.Chat.LastMessage?.Id == payload.Id)
                 _ = RefreshChatAfterRealtimeChangeAsync(payload.ChatId);
         });
@@ -69,7 +52,6 @@ public partial class MainView
         {
             var item = _chats.FirstOrDefault(x => x.Chat.Id == payload.ChatId);
             if (item != null) _chats.Remove(item);
-
             if (_currentChatId == payload.ChatId)
             {
                 _currentChatId = null;
@@ -84,7 +66,6 @@ public partial class MainView
                 MessageTextBox.Clear();
                 UpdateLoadOlderButton();
             }
-
             RefreshChatsList();
         });
     }
@@ -101,9 +82,8 @@ public partial class MainView
         {
             var chats = await _apiService.GetAsync<List<ChatModel>>("api/Chat");
             var updated = chats?.FirstOrDefault(x => x.Id == chatId);
-            if (updated == null) return;
             var item = _chats.FirstOrDefault(x => x.Chat.Id == chatId);
-            if (item == null) return;
+            if (updated == null || item == null) return;
             item.Chat.LastMessage = updated.LastMessage;
             item.LastMessage = updated.LastMessage == null ? "No messages yet." : FormatLastMessage(updated.LastMessage);
             RefreshChatsList();
@@ -111,34 +91,24 @@ public partial class MainView
         catch { }
     }
 
-    private static bool IsMessageBubble(Border border)
-    {
-        return border.Child is StackPanel panel &&
-               panel.Children.OfType<TextBlock>().Any();
-    }
+    private static bool IsMessageBubble(Border border) => border.Child is StackPanel panel && panel.Children.OfType<TextBlock>().Any();
 
-    private static bool MessageBubbleMatches(Border border, string content, string senderId, DateTime sentAt)
+    private static bool MessageBubbleMatches(Border border, string content, DateTime sentAt)
     {
         if (border.Child is not StackPanel panel) return false;
         var text = panel.Children.OfType<TextBlock>().FirstOrDefault();
         var time = panel.Children.OfType<TextBlock>().Skip(1).FirstOrDefault();
-        if (text == null || time == null) return false;
-
-        var sameContent = string.Equals(text.Text, content, StringComparison.Ordinal);
-        var sameTime = string.Equals(time.Text, sentAt.ToLocalTime().ToString("HH:mm"), StringComparison.Ordinal);
-        return sameContent && sameTime;
+        return text != null && time != null && string.Equals(text.Text, content, StringComparison.Ordinal) && string.Equals(time.Text, sentAt.ToLocalTime().ToString("HH:mm"), StringComparison.Ordinal);
     }
 
     private static async void OnMessageBubbleRightClick(object sender, MouseButtonEventArgs e)
     {
-        if (sender is not Border border || border.TemplatedParent is not null) return;
+        if (sender is not Border border) return;
         if (FindAncestor<MainView>(border) is not MainView view) return;
-        if (!border.IsDescendantOf(view.MessagesPanel) || !IsMessageBubble(border)) return;
-        if (view._currentChatId == null) return;
+        if (!border.IsDescendantOf(view.MessagesPanel) || !IsMessageBubble(border) || view._currentChatId == null) return;
 
         var text = (border.Child as StackPanel)?.Children.OfType<TextBlock>().FirstOrDefault()?.Text;
         if (string.IsNullOrWhiteSpace(text)) return;
-
         var isMine = border.HorizontalAlignment == HorizontalAlignment.Right;
         if (!isMine && !view._isOwner) return;
 
@@ -154,29 +124,18 @@ public partial class MainView
     private async Task DeleteMessageBubbleAsync(Border bubble, string content)
     {
         if (_currentChatId == null || _hubConnection?.State != HubConnectionState.Connected) return;
-
         try
         {
-            var history = await _apiService.GetAsync<ChatHistoryResponse>(
-                $"api/Chat/{_currentChatId.Value}/messages?pageSize=100");
+            var history = await _apiService.GetAsync<ChatHistoryResponse>($"api/Chat/{_currentChatId.Value}/messages?pageSize=100");
             if (history?.Messages == null) return;
-
             var senderId = bubble.HorizontalAlignment == HorizontalAlignment.Right ? AuthState.UserId : _currentOtherUserId;
             var timeText = (bubble.Child as StackPanel)?.Children.OfType<TextBlock>().Skip(1).FirstOrDefault()?.Text;
-            var candidates = history.Messages
-                .Where(m => string.Equals(m.Content, content, StringComparison.Ordinal))
-                .Where(m => string.Equals(m.SenderId, senderId, StringComparison.OrdinalIgnoreCase))
-                .Where(m => timeText == null || m.SentAt.ToLocalTime().ToString("HH:mm") == timeText)
-                .ToList();
-
+            var candidates = history.Messages.Where(m => string.Equals(m.Content, content, StringComparison.Ordinal) && string.Equals(m.SenderId, senderId, StringComparison.OrdinalIgnoreCase) && (timeText == null || m.SentAt.ToLocalTime().ToString("HH:mm") == timeText)).ToList();
             if (candidates.Count == 0) return;
-
             var visibleBubbles = MessagesPanel.Children.OfType<Border>().Where(IsMessageBubble).ToList();
             var bubbleIndex = visibleBubbles.IndexOf(bubble);
-            var message = candidates
-                .OrderBy(m => Math.Abs(history.Messages.IndexOf(m) - Math.Max(0, history.Messages.Count - visibleBubbles.Count + bubbleIndex)))
-                .LastOrDefault() ?? candidates[^1];
-
+            var targetIndex = Math.Max(0, history.Messages.Count - visibleBubbles.Count + bubbleIndex);
+            var message = candidates.OrderBy(m => Math.Abs(history.Messages.IndexOf(m) - targetIndex)).First();
             await _hubConnection.InvokeAsync("DeleteMessage", message.Id);
         }
         catch (Exception ex)
