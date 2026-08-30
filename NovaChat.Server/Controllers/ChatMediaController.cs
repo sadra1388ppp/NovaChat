@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using NovaChat.Server.DTOs;
 using NovaChat.Server.Services;
+using System.Globalization;
 using System.Security.Claims;
 
 namespace NovaChat.Server.Controllers;
@@ -35,22 +36,28 @@ public class ChatMediaController : ControllerBase
 
     [HttpPost("{chatId}")]
     [RequestSizeLimit(MaxFileBytes)]
-    public async Task<IActionResult> Upload(int chatId, IFormFile file, [FromQuery] string type = "file", [FromQuery] double? durationSeconds = null)
+    public async Task<IActionResult> Upload(
+        int chatId,
+        IFormFile file,
+        [FromQuery] string type = "file",
+        [FromQuery] string? durationSeconds = null)
     {
         var userId = CurrentUserId();
         if (userId == null) return Unauthorized();
+
         var chat = await _chatService.GetChatByIdAsync(chatId);
         if (chat == null || (chat.User1Id != userId && chat.User2Id != userId)) return Forbid();
         if (file == null || file.Length == 0) return BadRequest(new { message = "Please select a file." });
 
         type = type.Trim().ToLowerInvariant();
-        if (type is not ("image" or "file" or "voice")) return BadRequest(new { message = "Invalid media type." });
+        if (type is not ("image" or "file" or "voice"))
+            return BadRequest(new { message = "Invalid media type." });
 
         var extension = Path.GetExtension(file.FileName);
-        if (type == "image" && !AllowedImages.Contains(extension)) return BadRequest(new { message = "Unsupported image type." });
-        if (type == "file" && !AllowedFiles.Contains(extension)) return BadRequest(new { message = "Unsupported file type." });
-
-        // WAV is identified by its extension as well as common browser/Windows MIME variants.
+        if (type == "image" && !AllowedImages.Contains(extension))
+            return BadRequest(new { message = "Unsupported image type." });
+        if (type == "file" && !AllowedFiles.Contains(extension))
+            return BadRequest(new { message = "Unsupported file type." });
         if (type == "voice" && !string.Equals(extension, ".wav", StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { message = "Voice messages must be WAV audio." });
 
@@ -60,7 +67,20 @@ public class ChatMediaController : ControllerBase
             "voice" => MaxVoiceBytes,
             _ => MaxFileBytes
         };
-        if (file.Length > maxBytes) return BadRequest(new { message = $"This {type} is too large." });
+        if (file.Length > maxBytes)
+            return BadRequest(new { message = $"This {type} is too large." });
+
+        double? parsedDuration = null;
+        if (type == "voice" && !string.IsNullOrWhiteSpace(durationSeconds))
+        {
+            if (!double.TryParse(durationSeconds, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) &&
+                !double.TryParse(durationSeconds, NumberStyles.Float, CultureInfo.CurrentCulture, out value))
+            {
+                return BadRequest(new { message = "Invalid voice duration." });
+            }
+
+            parsedDuration = Math.Max(0, value);
+        }
 
         var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
         var folder = Path.Combine(root, "uploads", "chat", type);
@@ -86,7 +106,7 @@ public class ChatMediaController : ControllerBase
             FileName = Path.GetFileName(file.FileName),
             ContentType = contentType,
             Size = file.Length,
-            DurationSeconds = type == "voice" && durationSeconds.HasValue ? Math.Max(0, durationSeconds.Value) : null
+            DurationSeconds = parsedDuration
         };
 
         var message = await _chatService.SendMessageAsync(chatId, userId, envelope.Serialize());
