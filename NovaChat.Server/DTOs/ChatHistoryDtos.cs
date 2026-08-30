@@ -1,3 +1,4 @@
+using NovaChat.Server.Entities;
 using NovaChat.Server.Services;
 
 namespace NovaChat.Server.DTOs;
@@ -40,7 +41,7 @@ public class ChatListDto
 
 public static class MessageDtoMapper
 {
-    public static MessageDto Map(NovaChat.Server.Entities.Message message, string baseUrl)
+    public static MessageDto Map(Message message, string? ignoredBaseUrl = null)
     {
         var dto = new MessageDto
         {
@@ -59,14 +60,16 @@ public static class MessageDtoMapper
             dto.ContentType = media.ContentType;
             dto.FileSize = media.Size;
             dto.DurationSeconds = media.DurationSeconds;
-            dto.AttachmentUrl = $"{baseUrl.TrimEnd('/')}/api/ChatMedia/{message.Id}";
-            dto.Content = media.Type switch
+            dto.AttachmentUrl = $"/api/ChatMedia/{message.Id}";
+            var icon = media.Type switch
             {
-                "image" => $"📷 {media.FileName}",
-                "voice" => "🎙 Voice message",
-                _ => $"📎 {media.FileName}"
+                "image" => "📷",
+                "voice" => "🎙",
+                _ => "📎"
             };
+            dto.Content = $"{icon} {media.FileName} [NOVAMEDIA:{message.Id}]";
         }
+
         return dto;
     }
 }
