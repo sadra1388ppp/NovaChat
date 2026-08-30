@@ -1,6 +1,7 @@
 using Microsoft.Win32;
 using NovaChat.Client.Models;
 using NovaChat.Client.Services;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -72,7 +73,9 @@ public partial class ProfileView : UserControl
             ? "Add a short bio to tell people about yourself."
             : _profile.Bio;
 
-        var online = _profile.IsOnline;
+        // This is the signed-in user's own profile, so an authenticated,
+        // active NovaChat session should be represented as online here.
+        var online = AuthState.IsAuthenticated;
         StatusText.Text = online ? "● Online" : "● Offline";
         StatusText.Foreground = online ? Brushes.LimeGreen : (Brush)FindResource("SecondaryTextBrush");
         ProfileStatusDot.Fill = online ? Brushes.LimeGreen : (Brush)FindResource("SecondaryTextBrush");
@@ -82,7 +85,7 @@ public partial class ProfileView : UserControl
             : (_profile.LastSeenAt.HasValue
                 ? $"Last seen {FormatLastSeen(_profile.LastSeenAt.Value)}"
                 : "Last seen not available");
-        JoinedText.Text = $"Joined {_profile.CreatedAt.ToLocalTime():dd MMM yyyy}";
+        JoinedText.Text = $"Joined {_profile.CreatedAt.ToLocalTime().ToString("dd MMM yyyy", CultureInfo.InvariantCulture)}";
         CopyUserIdButton.ToolTip = $"Copy @{_profile.Id}";
     }
 
