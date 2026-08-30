@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using NovaChat.Server.DTOs;
 using NovaChat.Server.Entities;
+using NovaChat.Server.Hubs;
 using NovaChat.Server.Services;
 using System.Security.Claims;
 
@@ -14,11 +16,13 @@ public class ChatController : ControllerBase
 {
     private readonly ChatService _chatService;
     private readonly IConfiguration _configuration;
+    private readonly IHubContext<ChatHub> _hub;
 
-    public ChatController(ChatService chatService, IConfiguration configuration)
+    public ChatController(ChatService chatService, IConfiguration configuration, IHubContext<ChatHub> hub)
     {
         _chatService = chatService;
         _configuration = configuration;
+        _hub = hub;
     }
 
     [HttpPost]
@@ -26,22 +30,18 @@ public class ChatController : ControllerBase
     {
         var currentUserId = GetCurrentUserId();
         if (currentUserId == null) return Unauthorized();
-
         var chat = await _chatService.CreatePrivateChatAsync(currentUserId, dto.UserId);
-        if (chat == null)
-            return BadRequest(new { message = "Unable to create private chat." });
+        if (chat == null) return BadRequest(new { message = "Unable to create private chat." });
 
-        return Ok(new
+        await _hub.Clients.Users(chat.User1Id, chat.User2Id).SendAsync("ChatCreated", new
         {
-            message = "Private chat created successfully.",
-            chat = new
-            {
-                chat.Id,
-                chat.User1Id,
-                chat.User2Id,
-                chat.CreatedAt
-            }
+            id = chat.Id,
+            user1Id = chat.User1Id,
+            user2Id = chat.User2Id,
+            createdAt = chat.CreatedAt
         });
+
+        return Ok(new { message = "Private chat created successfully.", chat = new { chat.Id, chat.User1Id, chat.User2Id, chat.CreatedAt } });
     }
 
     [HttpGet]
@@ -49,7 +49,6 @@ public class ChatController : ControllerBase
     {
         var currentUserId = GetCurrentUserId();
         if (currentUserId == null) return Unauthorized();
-
         var chats = await _chatService.GetUserChatsAsync(currentUserId);
         return Ok(chats.Select(chat => MapChat(chat, chat.Messages.FirstOrDefault())).ToList());
     }
@@ -68,16 +67,13 @@ public class ChatController : ControllerBase
         var currentUserId = GetCurrentUserId();
         if (currentUserId == null) return Unauthorized();
         if (!await CanAccessChat(chatId, currentUserId)) return Forbid();
-
         pageSize = Math.Clamp(pageSize, 1, 100);
         var messages = await _chatService.GetMessagesAsync(chatId, beforeMessageId, pageSize);
         var firstMessage = messages.FirstOrDefault();
-        var hasMore = firstMessage != null && await _chatService.HasOlderMessagesAsync(chatId, firstMessage.Id);
-
         return Ok(new ChatHistoryResponseDto
         {
             Messages = messages.Select(MapMessage).ToList(),
-            HasMore = hasMore,
+            HasMore = firstMessage != null && await _chatService.HasOlderMessagesAsync(chatId, firstMessage.Id),
             NextBeforeMessageId = firstMessage?.Id
         });
     }
@@ -88,11 +84,14 @@ public class ChatController : ControllerBase
         var currentUserId = GetCurrentUserId();
         if (currentUserId == null) return Unauthorized();
         if (!await CanAccessChat(chatId, currentUserId)) return Forbid();
-
         var message = await _chatService.SendMessageAsync(chatId, currentUserId, dto.Content);
-        if (message == null)
-            return BadRequest(new { message = "Unable to send message." });
+        if (message == null) return BadRequest(new { message = "Unable to send message." });
 
+        var chat = await _chatService.GetChatByIdAsync(chatId);
+        if (chat != null)
+        {
+            await _hub.Clients.Users(chat.User1Id, chat.User2Id).SendAsync("ReceiveMessage", MapMessage(message));
+        }
         return Ok(new { message = "Message sent successfully.", data = MapMessage(message) });
     }
 
@@ -101,12 +100,13 @@ public class ChatController : ControllerBase
     {
         var currentUserId = GetCurrentUserId();
         if (currentUserId == null) return Unauthorized();
-
         if (!IsOwner() && !await CanAccessChat(chatId, currentUserId)) return Forbid();
 
-        var deleted = await _chatService.DeleteChatAsync(chatId);
-        if (!deleted) return NotFound(new { message = "Chat not found." });
+        var chat = await _chatService.GetChatByIdAsync(chatId);
+        if (chat == null) return NotFound(new { message = "Chat not found." });
+        if (!await _chatService.DeleteChatAsync(chatId)) return NotFound(new { message = "Chat not found." });
 
+        await _hub.Clients.Users(chat.User1Id, chat.User2Id).SendAsync("ChatDeleted", new { chatId, deletedBy = currentUserId });
         return Ok(new { message = "Chat deleted successfully." });
     }
 
@@ -116,35 +116,40 @@ public class ChatController : ControllerBase
         var currentUserId = GetCurrentUserId();
         if (currentUserId == null) return Unauthorized();
 
+        var message = await _chatService.GetMessageByIdAsync(messageId);
+        if (message == null) return NotFound(new { message = "Message not found." });
         if (!IsOwner())
         {
-            var message = await _chatService.GetMessageByIdAsync(messageId);
-            if (message == null) return NotFound(new { message = "Message not found." });
             if (!await CanAccessChat(message.ChatId, currentUserId)) return Forbid();
-            if (message.SenderId != currentUserId) return Forbid();
+            if (!string.Equals(message.SenderId, currentUserId, StringComparison.OrdinalIgnoreCase)) return Forbid();
         }
 
-        var deleted = await _chatService.DeleteMessageAsync(messageId);
-        if (!deleted) return NotFound(new { message = "Message not found." });
+        var chat = await _chatService.GetChatByIdAsync(message.ChatId);
+        if (chat == null || !await _chatService.DeleteMessageAsync(messageId)) return NotFound(new { message = "Message not found." });
 
+        await _hub.Clients.Users(chat.User1Id, chat.User2Id).SendAsync("MessageDeleted", new
+        {
+            id = message.Id,
+            chatId = message.ChatId,
+            senderId = message.SenderId,
+            content = message.Content,
+            sentAt = message.SentAt
+        });
         return Ok(new { message = "Message deleted successfully." });
     }
 
-    private ChatListDto MapChat(Chat chat, Message? lastMessage)
+    private ChatListDto MapChat(Chat chat, Message? lastMessage) => new()
     {
-        return new ChatListDto
-        {
-            Id = chat.Id,
-            User1Id = chat.User1Id,
-            User2Id = chat.User2Id,
-            User1Name = chat.User1?.DisplayName ?? string.Empty,
-            User2Name = chat.User2?.DisplayName ?? string.Empty,
-            User1AvatarUrl = ToAbsoluteAvatarUrl(chat.User1?.AvatarUrl),
-            User2AvatarUrl = ToAbsoluteAvatarUrl(chat.User2?.AvatarUrl),
-            CreatedAt = chat.CreatedAt,
-            LastMessage = lastMessage == null ? null : MapMessage(lastMessage)
-        };
-    }
+        Id = chat.Id,
+        User1Id = chat.User1Id,
+        User2Id = chat.User2Id,
+        User1Name = chat.User1?.DisplayName ?? string.Empty,
+        User2Name = chat.User2?.DisplayName ?? string.Empty,
+        User1AvatarUrl = ToAbsoluteAvatarUrl(chat.User1?.AvatarUrl),
+        User2AvatarUrl = ToAbsoluteAvatarUrl(chat.User2?.AvatarUrl),
+        CreatedAt = chat.CreatedAt,
+        LastMessage = lastMessage == null ? null : MapMessage(lastMessage)
+    };
 
     private string? ToAbsoluteAvatarUrl(string? avatarUrl)
     {
@@ -153,31 +158,17 @@ public class ChatController : ControllerBase
         return $"{Request.Scheme}://{Request.Host}{(avatarUrl.StartsWith('/') ? avatarUrl : "/" + avatarUrl)}";
     }
 
-    private static MessageDto MapMessage(Message message)
+    private static MessageDto MapMessage(Message message) => new()
     {
-        return new MessageDto
-        {
-            Id = message.Id,
-            ChatId = message.ChatId,
-            SenderId = message.SenderId,
-            SenderName = message.Sender?.DisplayName ?? string.Empty,
-            Content = message.Content,
-            SentAt = message.SentAt
-        };
-    }
+        Id = message.Id,
+        ChatId = message.ChatId,
+        SenderId = message.SenderId,
+        SenderName = message.Sender?.DisplayName ?? string.Empty,
+        Content = message.Content,
+        SentAt = message.SentAt
+    };
 
     private string? GetCurrentUserId() => User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-    private bool IsOwner()
-    {
-        var ownerUserId = _configuration["Owner:UserId"];
-        var currentUserId = GetCurrentUserId();
-        return !string.IsNullOrWhiteSpace(ownerUserId) && currentUserId == ownerUserId;
-    }
-
-    private async Task<bool> CanAccessChat(int chatId, string userId)
-    {
-        if (IsOwner()) return true;
-        return await _chatService.CanAccessChatAsync(chatId, userId);
-    }
+    private bool IsOwner() => !string.IsNullOrWhiteSpace(_configuration["Owner:UserId"]) && string.Equals(_configuration["Owner:UserId"], GetCurrentUserId(), StringComparison.OrdinalIgnoreCase);
+    private async Task<bool> CanAccessChat(int chatId, string userId) => IsOwner() || await _chatService.CanAccessChatAsync(chatId, userId);
 }
