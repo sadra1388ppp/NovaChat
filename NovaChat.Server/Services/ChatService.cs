@@ -6,6 +6,7 @@ namespace NovaChat.Server.Services;
 
 public class ChatService
 {
+    private static readonly SemaphoreSlim CreateChatLock = new(1, 1);
     private readonly AppDbContext _context;
 
     public ChatService(AppDbContext context)
@@ -23,29 +24,49 @@ public class ChatService
         if (!currentUserExists || !otherUserExists)
             return null;
 
-        var existingChat = await _context.Chats
-            .Include(c => c.User1)
-            .Include(c => c.User2)
-            .FirstOrDefaultAsync(c =>
-                (c.User1Id == currentUserId && c.User2Id == otherUserId) ||
-                (c.User1Id == otherUserId && c.User2Id == currentUserId));
-
-        if (existingChat != null)
-            return existingChat;
-
-        var chat = new Chat
+        await CreateChatLock.WaitAsync();
+        try
         {
-            User1Id = currentUserId,
-            User2Id = otherUserId
-        };
+            var existingChats = await _context.Chats
+                .Include(c => c.User1)
+                .Include(c => c.User2)
+                .Where(c =>
+                    (c.User1Id == currentUserId && c.User2Id == otherUserId) ||
+                    (c.User1Id == otherUserId && c.User2Id == currentUserId))
+                .OrderBy(c => c.Id)
+                .ToListAsync();
 
-        _context.Chats.Add(chat);
-        await _context.SaveChangesAsync();
+            if (existingChats.Count > 0)
+            {
+                var existingChat = existingChats[0];
 
-        await _context.Entry(chat).Reference(c => c.User1).LoadAsync();
-        await _context.Entry(chat).Reference(c => c.User2).LoadAsync();
+                if (existingChats.Count > 1)
+                {
+                    _context.Chats.RemoveRange(existingChats.Skip(1));
+                    await _context.SaveChangesAsync();
+                }
 
-        return chat;
+                return existingChat;
+            }
+
+            var chat = new Chat
+            {
+                User1Id = currentUserId,
+                User2Id = otherUserId
+            };
+
+            _context.Chats.Add(chat);
+            await _context.SaveChangesAsync();
+
+            await _context.Entry(chat).Reference(c => c.User1).LoadAsync();
+            await _context.Entry(chat).Reference(c => c.User2).LoadAsync();
+
+            return chat;
+        }
+        finally
+        {
+            CreateChatLock.Release();
+        }
     }
 
     public async Task<List<Chat>> GetUserChatsAsync(string userId)
