@@ -26,7 +26,6 @@ public partial class MainView
     internal static void RegisterMediaFeatures()
     {
         EventManager.RegisterClassHandler(typeof(MainView), FrameworkElement.LoadedEvent, new RoutedEventHandler(MediaMainViewLoaded));
-        EventManager.RegisterClassHandler(typeof(Border), FrameworkElement.LoadedEvent, new RoutedEventHandler(MediaBubbleLoaded));
     }
 
     private static void MediaMainViewLoaded(object sender, RoutedEventArgs e)
@@ -96,39 +95,74 @@ public partial class MainView
 
         try
         {
+            if (WaveInEvent.DeviceCount <= 0)
+            {
+                MessageBox.Show("No microphone was detected on this computer.", "Voice Message", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
             var temp = IOPath.Combine(IOPath.GetTempPath(), $"NovaChatVoice_{Guid.NewGuid():N}.wav");
             _voicePath = temp;
             _voiceStartedAt = DateTime.UtcNow;
             _voiceWriter = new WaveFileWriter(temp, new WaveFormat(44100, 16, 1));
             _voiceRecorder = new WaveInEvent { WaveFormat = new WaveFormat(44100, 16, 1) };
             _voiceRecorder.DataAvailable += (_, args) => _voiceWriter?.Write(args.Buffer, 0, args.BytesRecorded);
-            _voiceRecorder.RecordingStopped += async (_, _) =>
-            {
-                _voiceWriter?.Dispose(); _voiceWriter = null;
-                var recorder = _voiceRecorder; _voiceRecorder = null; recorder?.Dispose();
-                var path = _voicePath; _voicePath = null;
-                if (path == null || !File.Exists(path)) return;
-                try
-                {
-                    var seconds = Math.Max(0.1, (DateTime.UtcNow - _voiceStartedAt).TotalSeconds);
-                    await UploadMediaAsync("voice", path, seconds);
-                }
-                finally { try { File.Delete(path); } catch { } }
-            };
+            _voiceRecorder.RecordingStopped += (_, _) => _ = FinishVoiceRecordingAsync();
             _voiceRecorder.StartRecording();
             UpdateVoiceButtonState(true);
         }
         catch (Exception ex)
         {
-            StopVoiceRecording();
+            CleanupVoiceResources(deleteFile: true);
             MessageBox.Show($"Could not start voice recording.\n\n{ex.Message}", "Voice Message", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async Task FinishVoiceRecordingAsync()
+    {
+        _voiceWriter?.Dispose();
+        _voiceWriter = null;
+        var recorder = _voiceRecorder;
+        _voiceRecorder = null;
+        recorder?.Dispose();
+
+        var path = _voicePath;
+        _voicePath = null;
+        if (path == null || !File.Exists(path))
+        {
+            await Dispatcher.InvokeAsync(() => UpdateVoiceButtonState(false));
+            return;
+        }
+
+        try
+        {
+            var seconds = Math.Max(0.1, (DateTime.UtcNow - _voiceStartedAt).TotalSeconds);
+            await UploadMediaAsync("voice", path, seconds);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
         }
     }
 
     private void StopVoiceRecording()
     {
-        try { _voiceRecorder?.StopRecording(); } catch { _voiceRecorder?.Dispose(); _voiceRecorder = null; }
+        try { _voiceRecorder?.StopRecording(); }
+        catch { CleanupVoiceResources(deleteFile: true); }
         UpdateVoiceButtonState(false);
+    }
+
+    private void CleanupVoiceResources(bool deleteFile)
+    {
+        try { _voiceRecorder?.Dispose(); } catch { }
+        _voiceRecorder = null;
+        try { _voiceWriter?.Dispose(); } catch { }
+        _voiceWriter = null;
+        if (deleteFile && !string.IsNullOrWhiteSpace(_voicePath))
+        {
+            try { File.Delete(_voicePath); } catch { }
+            _voicePath = null;
+        }
     }
 
     private void UpdateVoiceButtonState(bool recording)
@@ -150,52 +184,65 @@ public partial class MainView
             var result = await _apiService.UploadFileAsync<MediaUploadResponse>(endpoint, path);
             if (result?.Data == null)
             {
-                MessageBox.Show(result?.Message ?? "Media upload failed.", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Warning);
+                await Dispatcher.InvokeAsync(() => MessageBox.Show(result?.Message ?? "Media upload failed.", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Warning));
                 return;
             }
 
-            if (_loadedMessageIds.Add(result.Data.Id)) AddMessageToUi(result.Data);
-            UpdateChatPreview(result.Data);
+            await Dispatcher.InvokeAsync(() =>
+            {
+                if (_loadedMessageIds.Add(result.Data.Id)) AddMessageToUi(result.Data);
+                UpdateChatPreview(result.Data);
+            });
             await ScrollMessagesToBottomAsync();
+            await Dispatcher.InvokeAsync(() => UpdateVoiceButtonState(false));
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Media could not be sent.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error);
+            await Dispatcher.InvokeAsync(() => MessageBox.Show($"Media could not be sent.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error));
         }
     }
 
-    private static void MediaBubbleLoaded(object sender, RoutedEventArgs e)
-    {
-        if (sender is not Border border || !IsMediaMessageBorder(border)) return;
-        if (border.Tag is int) return;
-        var text = border.Child is StackPanel p ? p.Children.OfType<TextBlock>().FirstOrDefault()?.Text : null;
-        if (string.IsNullOrWhiteSpace(text)) return;
-        var match = Regex.Match(text, @"\u200B(\d+)$");
-        if (!match.Success || !int.TryParse(match.Groups[1].Value, out var messageId)) return;
-        border.Tag = messageId;
-        if (FindAncestorMainView(border) is MainView view) _ = view.RenderMediaBubbleAsync(border, messageId);
-    }
-
-    private static bool IsMediaMessageBorder(Border border) => border.Child is StackPanel panel && panel.Children.OfType<TextBlock>().Any(t => t.Text.Contains("\u200B", StringComparison.Ordinal));
-
     private async Task RenderMediaBubbleAsync(Border border, int messageId)
     {
-        var existing = border.Child as StackPanel;
-        var label = existing?.Children.OfType<TextBlock>().FirstOrDefault()?.Text ?? string.Empty;
-        if (label.StartsWith("🎙", StringComparison.Ordinal)) ReplaceWithVoiceBubble(border, messageId);
-        else if (label.StartsWith("📷", StringComparison.Ordinal)) await ReplaceWithImageBubbleAsync(border, messageId, label);
-        else ReplaceWithFileBubble(border, messageId, label);
+        try
+        {
+            var existing = border.Child as StackPanel;
+            var label = existing?.Children.OfType<TextBlock>().FirstOrDefault()?.Text ?? string.Empty;
+
+            if (label.StartsWith("🎙", StringComparison.Ordinal))
+            {
+                ReplaceWithVoiceBubble(border, messageId);
+                return;
+            }
+
+            if (label.StartsWith("📷", StringComparison.Ordinal))
+            {
+                await ReplaceWithImageBubbleAsync(border, messageId, label);
+                return;
+            }
+
+            ReplaceWithFileBubble(border, messageId, label);
+        }
+        catch { }
     }
 
     private async Task ReplaceWithImageBubbleAsync(Border border, int messageId, string label)
     {
         var bytes = await _apiService.GetBytesAsync($"api/ChatMedia/{messageId}");
-        if (bytes == null) return;
+        if (bytes == null || bytes.Length == 0) return;
+
         var image = new BitmapImage();
         using var ms = new MemoryStream(bytes);
-        image.BeginInit(); image.CacheOption = BitmapCacheOption.OnLoad; image.StreamSource = ms; image.EndInit(); image.Freeze();
+        image.BeginInit();
+        image.CacheOption = BitmapCacheOption.OnLoad;
+        image.StreamSource = ms;
+        image.EndInit();
+        image.Freeze();
+
         var stack = NewMediaStack();
-        stack.Children.Add(new Image { Source = image, Width = 320, MaxHeight = 320, Stretch = Stretch.Uniform, Margin = new Thickness(0, 0, 0, 6) });
+        var imageControl = new Image { Source = image, Width = 320, MaxHeight = 320, Stretch = Stretch.Uniform, Margin = new Thickness(0, 0, 0, 6), Cursor = System.Windows.Input.Cursors.Hand };
+        imageControl.MouseLeftButtonUp += async (_, _) => await SaveImageCopyAsync(messageId, CleanMediaLabel(label));
+        stack.Children.Add(imageControl);
         stack.Children.Add(new TextBlock { Text = CleanMediaLabel(label), Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap });
         AddMediaTime(stack, border);
         border.Child = stack;
@@ -230,6 +277,17 @@ public partial class MainView
 
     private static string CleanMediaLabel(string label) => Regex.Replace(label, @"\u200B\d+$", string.Empty).Trim();
 
+    private async Task SaveImageCopyAsync(int messageId, string suggestedName)
+    {
+        var bytes = await _apiService.GetBytesAsync($"api/ChatMedia/{messageId}");
+        if (bytes == null || bytes.Length == 0) return;
+        var baseName = IOPath.GetFileNameWithoutExtension(suggestedName.Replace("📷 ", string.Empty));
+        var dialog = new SaveFileDialog { FileName = string.IsNullOrWhiteSpace(baseName) ? "NovaChatImage" : baseName + ".jpg", Filter = "Image|*.jpg;*.png;*.webp;*.gif|All files|*.*", Title = "Save image" };
+        if (dialog.ShowDialog() != true) return;
+        await File.WriteAllBytesAsync(dialog.FileName, bytes);
+        Process.Start(new ProcessStartInfo(dialog.FileName) { UseShellExecute = true });
+    }
+
     private async Task DownloadMediaAsync(int messageId, string suggestedName)
     {
         var bytes = await _apiService.GetBytesAsync($"api/ChatMedia/{messageId}");
@@ -246,7 +304,7 @@ public partial class MainView
         {
             if (_voicePlayers.TryGetValue(messageId, out var existing)) { existing.Stop(); existing.Play(); button.Content = "▶  Replay voice"; return; }
             var bytes = await _apiService.GetBytesAsync($"api/ChatMedia/{messageId}");
-            if (bytes == null) return;
+            if (bytes == null || bytes.Length == 0) return;
             var path = IOPath.Combine(IOPath.GetTempPath(), $"NovaChatPlay_{messageId}.wav");
             await File.WriteAllBytesAsync(path, bytes);
             var player = new SoundPlayer(path); player.Load(); player.Play(); _voicePlayers[messageId] = player;
