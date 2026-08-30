@@ -30,7 +30,10 @@ public class ChatController : ControllerBase
     {
         var currentUserId = GetCurrentUserId();
         if (currentUserId == null) return Unauthorized();
-        var chat = await _chatService.CreatePrivateChatAsync(currentUserId, dto.UserId);
+        if (dto == null || string.IsNullOrWhiteSpace(dto.UserId))
+            return BadRequest(new { message = "User ID is required." });
+
+        var chat = await _chatService.CreatePrivateChatAsync(currentUserId, dto.UserId.Trim());
         if (chat == null) return BadRequest(new { message = "Unable to create private chat." });
 
         await _hub.Clients.Users(chat.User1Id, chat.User2Id).SendAsync("ChatCreated", new
@@ -38,10 +41,15 @@ public class ChatController : ControllerBase
             id = chat.Id,
             user1Id = chat.User1Id,
             user2Id = chat.User2Id,
-            createdAt = chat.CreatedAt
+            createdAt = chat.CreatedAt,
+            createdBy = currentUserId
         });
 
-        return Ok(new { message = "Private chat created successfully.", chat = new { chat.Id, chat.User1Id, chat.User2Id, chat.CreatedAt } });
+        return Ok(new
+        {
+            message = "Private chat created successfully.",
+            chat = new { chat.Id, chat.User1Id, chat.User2Id, chat.CreatedAt }
+        });
     }
 
     [HttpGet]
@@ -100,13 +108,19 @@ public class ChatController : ControllerBase
     {
         var currentUserId = GetCurrentUserId();
         if (currentUserId == null) return Unauthorized();
+        if (chatId <= 0) return BadRequest(new { message = "Invalid chat ID." });
         if (!IsOwner() && !await CanAccessChat(chatId, currentUserId)) return Forbid();
 
         var chat = await _chatService.GetChatByIdAsync(chatId);
         if (chat == null) return NotFound(new { message = "Chat not found." });
         if (!await _chatService.DeleteChatAsync(chatId)) return NotFound(new { message = "Chat not found." });
 
-        await _hub.Clients.Users(chat.User1Id, chat.User2Id).SendAsync("ChatDeleted", new { chatId, deletedBy = currentUserId });
+        await _hub.Clients.Users(chat.User1Id, chat.User2Id).SendAsync("ChatDeleted", new
+        {
+            chatId = chat.Id,
+            deletedBy = currentUserId
+        });
+
         return Ok(new { message = "Chat deleted successfully." });
     }
 
