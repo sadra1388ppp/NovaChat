@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using NovaChat.Server.DTOs;
+using NovaChat.Server.Hubs;
 using NovaChat.Server.Services;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Jpeg;
@@ -17,12 +19,14 @@ public class UserController : ControllerBase
     private readonly UserService _userService;
     private readonly JwtService _jwtService;
     private readonly IWebHostEnvironment _environment;
+    private readonly IHubContext<ChatHub> _hub;
 
-    public UserController(UserService userService, JwtService jwtService, IWebHostEnvironment environment)
+    public UserController(UserService userService, JwtService jwtService, IWebHostEnvironment environment, IHubContext<ChatHub> hub)
     {
         _userService = userService;
         _jwtService = jwtService;
         _environment = environment;
+        _hub = hub;
     }
 
     [AllowAnonymous]
@@ -116,6 +120,7 @@ public class UserController : ControllerBase
             if (result.Message == "User not found.") return NotFound(new { message = result.Message });
             return Conflict(new { message = result.Message });
         }
+        await _hub.Clients.All.SendAsync("ProfileUpdated", new { userId = id, displayName = result.User?.DisplayName ?? string.Empty, bio = result.User?.Bio ?? string.Empty, avatarUrl = result.User?.AvatarUrl });
         return Ok(new { message = result.Message, user = result.User });
     }
 
@@ -153,6 +158,7 @@ public class UserController : ControllerBase
             DeleteStoredAvatar(oldProfile?.AvatarUrl);
 
             var refreshedUser = await _userService.GetUserByIdAsync(id);
+            await _hub.Clients.All.SendAsync("ProfileUpdated", new { userId = id, displayName = refreshedUser?.DisplayName ?? string.Empty, bio = refreshedUser?.Bio ?? string.Empty, avatarUrl = refreshedUser?.AvatarUrl });
             return Ok(new { message = result.Message, user = refreshedUser });
         }
         catch (UnknownImageFormatException)
@@ -169,6 +175,8 @@ public class UserController : ControllerBase
         var result = await _userService.ClearAvatarAsync(id);
         if (!result.Success) return NotFound(new { message = result.Message });
         DeleteStoredAvatar(result.OldAvatarUrl);
+        var user = await _userService.GetUserByIdAsync(id);
+        await _hub.Clients.All.SendAsync("ProfileUpdated", new { userId = id, displayName = user?.DisplayName ?? string.Empty, bio = user?.Bio ?? string.Empty, avatarUrl = (string?)null });
         return Ok(new { message = result.Message });
     }
 
