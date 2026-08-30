@@ -43,7 +43,8 @@ public partial class MainView
             var image = FindAvatarImage(container);
             if (image == null) continue;
 
-            var bitmap = await LoadConversationAvatarAsync($"api/User/profile/{Uri.EscapeDataString(userId)}/avatar");
+            var avatarEndpoint = $"api/User/profile/{Uri.EscapeDataString(userId)}/avatar";
+            var bitmap = await LoadConversationAvatarAsync(avatarEndpoint);
             if (bitmap != null)
             {
                 item.AvatarSource = bitmap;
@@ -66,14 +67,20 @@ public partial class MainView
     private async Task<BitmapImage?> LoadConversationAvatarAsync(string endpoint)
     {
         if (string.IsNullOrWhiteSpace(endpoint)) return null;
-        var absoluteUrl = _apiService.BuildAbsoluteUrl(endpoint);
-        if (string.IsNullOrWhiteSpace(absoluteUrl)) return null;
-
-        if (ConversationAvatarCache.TryGetValue(absoluteUrl, out var cached)) return cached;
 
         try
         {
-            var bytes = await _apiService.GetBytesAsync(endpoint);
+            // Avatar endpoints are authenticated API routes. Do not request the
+            // stored /uploads path directly because the server may not expose it.
+            var absoluteUrl = new ApiService().BuildAbsoluteUrl(endpoint);
+            if (string.IsNullOrWhiteSpace(absoluteUrl)) return null;
+
+            // Use the endpoint itself as the stable cache key. The server disables
+            // caching, and removing/replacing an avatar therefore reloads cleanly.
+            if (ConversationAvatarCache.TryGetValue(absoluteUrl, out var cached)) return cached;
+
+            var api = new ApiService();
+            var bytes = await api.GetBytesAsync(endpoint);
             if (bytes == null || bytes.Length == 0) return null;
 
             using var memoryStream = new MemoryStream(bytes);
