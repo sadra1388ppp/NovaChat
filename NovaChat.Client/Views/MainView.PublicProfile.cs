@@ -1,4 +1,5 @@
 using NovaChat.Client.Models;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -8,21 +9,28 @@ namespace NovaChat.Client.Views;
 
 public partial class MainView
 {
+    private DependencyPropertyDescriptor? _chatUserNameTextDescriptor;
+
     protected override void OnInitialized(EventArgs e)
     {
         base.OnInitialized(e);
         ChatUserNameText.MouseLeftButtonUp += ChatUserNameText_MouseLeftButtonUp;
-        ChatUserNameText.TextChanged += ChatUserNameText_TextChanged;
         ChatUserNameText.Cursor = Cursors.Hand;
+        _chatUserNameTextDescriptor = DependencyPropertyDescriptor.FromProperty(TextBlock.TextProperty, typeof(TextBlock));
+        _chatUserNameTextDescriptor?.AddValueChanged(ChatUserNameText, ChatUserNameText_ValueChanged);
         InitializeConversationAvatarFix();
     }
 
-    private async void ChatUserNameText_TextChanged(object sender, TextChangedEventArgs e)
+    private void ChatUserNameText_ValueChanged(object? sender, EventArgs e)
+        => _ = RefreshCurrentChatAvatarAsync();
+
+    private async Task RefreshCurrentChatAvatarAsync()
     {
         if (string.IsNullOrWhiteSpace(_currentOtherUserId))
         {
             ChatHeaderAvatarImage.Source = null;
             ChatHeaderAvatarImage.Visibility = Visibility.Collapsed;
+            ChatAvatarInitialsText.Visibility = Visibility.Visible;
             ChatAvatarInitialsText.Text = "N";
             return;
         }
@@ -32,9 +40,18 @@ public partial class MainView
             var profile = await _apiService.GetAsync<ProfileModel>($"api/User/profile/{Uri.EscapeDataString(_currentOtherUserId)}");
             if (profile == null) return;
 
-            await Dispatcher.InvokeAsync(() => ChatAvatarInitialsText.Text = GetPublicProfileInitials(profile.DisplayName, profile.Id));
-            var bitmap = await LoadConversationAvatarAsync(_apiService.BuildAbsoluteUrl(profile.AvatarUrl ?? string.Empty));
-            if (bitmap == null) return;
+            await Dispatcher.InvokeAsync(() =>
+            {
+                ChatAvatarInitialsText.Text = GetPublicProfileInitials(profile.DisplayName, profile.Id);
+                ChatAvatarInitialsText.Visibility = Visibility.Visible;
+                ChatHeaderAvatarImage.Source = null;
+                ChatHeaderAvatarImage.Visibility = Visibility.Collapsed;
+            });
+
+            if (string.IsNullOrWhiteSpace(profile.AvatarUrl)) return;
+
+            var bitmap = await LoadConversationAvatarAsync(_apiService.BuildAbsoluteUrl(profile.AvatarUrl));
+            if (bitmap == null || !string.Equals(_currentOtherUserId, profile.Id, StringComparison.OrdinalIgnoreCase)) return;
 
             await Dispatcher.InvokeAsync(() =>
             {
@@ -53,10 +70,17 @@ public partial class MainView
         try
         {
             var profile = await _apiService.GetAsync<ProfileModel>($"api/User/profile/{Uri.EscapeDataString(_currentOtherUserId)}");
-            if (profile == null) { MessageBox.Show("This user's profile could not be loaded.", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+            if (profile == null)
+            {
+                MessageBox.Show("This user's profile could not be loaded.", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
             ShowPublicProfile(profile);
         }
-        catch (Exception ex) { MessageBox.Show($"Could not load this profile.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error); }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Could not load this profile.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void ShowPublicProfile(ProfileModel profile)
