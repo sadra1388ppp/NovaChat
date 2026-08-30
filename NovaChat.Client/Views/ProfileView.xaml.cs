@@ -63,13 +63,16 @@ public partial class ProfileView : UserControl
 
         if (!string.IsNullOrWhiteSpace(_profile.AvatarUrl))
         {
-            var avatarEndpoint = _apiService.BuildAbsoluteUrl($"api/User/profile/{Uri.EscapeDataString(_profile.Id)}/avatar?avatar={Uri.EscapeDataString(_profile.AvatarUrl)}");
-            var bitmap = await LoadAvatarAsync(avatarEndpoint);
+            var bitmap = await LoadAvatarAsync(_profile.Id, _profile.AvatarUrl);
             if (bitmap != null)
             {
                 AvatarImage.Source = bitmap;
                 AvatarImage.Visibility = Visibility.Visible;
                 AvatarInitialsText.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                ShowFeedback("Profile picture is saved, but NovaChat could not display it yet.");
             }
         }
 
@@ -83,27 +86,41 @@ public partial class ProfileView : UserControl
         CopyUserIdButton.ToolTip = $"Copy @{_profile.Id}";
     }
 
-    private static async Task<BitmapImage?> LoadAvatarAsync(string url)
+    private async Task<BitmapImage?> LoadAvatarAsync(string userId, string avatarUrl)
     {
-        try
+        var endpoints = new[]
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            if (!string.IsNullOrWhiteSpace(AuthState.Token)) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AuthState.Token);
-            using var response = await AvatarHttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
-            if (!response.IsSuccessStatusCode) return null;
-            var bytes = await response.Content.ReadAsByteArrayAsync();
-            if (bytes.Length == 0) return null;
-            using var stream = new MemoryStream(bytes);
-            var bitmap = new BitmapImage();
-            bitmap.BeginInit();
-            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
-            bitmap.StreamSource = stream;
-            bitmap.EndInit();
-            bitmap.Freeze();
-            return bitmap;
+            _apiService.BuildAbsoluteUrl($"api/User/profile/{Uri.EscapeDataString(userId)}/avatar?v={Uri.EscapeDataString(avatarUrl)}"),
+            _apiService.BuildAbsoluteUrl(avatarUrl.StartsWith('/') ? avatarUrl : "/" + avatarUrl)
+        };
+
+        foreach (var url in endpoints)
+        {
+            try
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                if (!string.IsNullOrWhiteSpace(AuthState.Token))
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AuthState.Token);
+                using var response = await AvatarHttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+                if (!response.IsSuccessStatusCode) continue;
+                var bytes = await response.Content.ReadAsByteArrayAsync();
+                if (bytes.Length == 0) continue;
+                using var stream = new MemoryStream(bytes);
+                var bitmap = new BitmapImage();
+                bitmap.BeginInit();
+                bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+                bitmap.StreamSource = stream;
+                bitmap.EndInit();
+                bitmap.Freeze();
+                return bitmap;
+            }
+            catch
+            {
+                // Try the next supported source.
+            }
         }
-        catch { return null; }
+        return null;
     }
 
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
@@ -118,9 +135,7 @@ public partial class ProfileView : UserControl
             var request = new UpdateProfileRequest { DisplayName = DisplayNameBox.Text.Trim(), Email = EmailBox.Text.Trim(), Bio = BioBox.Text.Trim(), NewUserId = UserIdBox.Text.Trim() };
             var result = await _apiService.PutAsync<UpdateProfileRequest, ProfileActionResponse>($"api/User/{Uri.EscapeDataString(oldId)}", request);
             if (result?.User == null) { ShowFeedback("Profile could not be updated. Check your values and try again."); return; }
-            _profile = result.User;
-            await UpdateProfileUiAsync();
-            ShowFeedback(result.Message);
+            _profile = result.User; await UpdateProfileUiAsync(); ShowFeedback(result.Message);
             if (!string.Equals(AuthState.UserId, _profile.Id, StringComparison.Ordinal)) { AuthState.Clear(); SessionExpired?.Invoke(); }
             else AuthState.UpdateProfile(_profile.DisplayName, _profile.Email);
         }
@@ -192,11 +207,7 @@ public partial class ProfileView : UserControl
             try
             {
                 var response = await _apiService.PutAsync<ChangePasswordRequest, SimpleMessageResponse>($"api/User/{Uri.EscapeDataString(AuthState.UserId)}/password", new ChangePasswordRequest { CurrentPassword = currentBox.Password, NewPassword = newBox.Password });
-                if (response == null)
-                {
-                    feedback.Text = "Password could not be changed. Check your current password and try again.";
-                    return;
-                }
+                if (response == null) { feedback.Text = "Password could not be changed. Check your current password and try again."; return; }
                 feedback.Text = response.Message;
                 ShowFeedback(response.Message);
                 if (response.Message.Contains("success", StringComparison.OrdinalIgnoreCase)) dialog.Close();
