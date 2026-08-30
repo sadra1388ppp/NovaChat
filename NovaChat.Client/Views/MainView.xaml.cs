@@ -61,9 +61,7 @@ public partial class MainView : UserControl
     private async Task ConnectSignalRAsync()
     {
         if (!AuthState.IsAuthenticated || _hubConnection != null) return;
-        _hubConnection = new HubConnectionBuilder()
-            .WithUrl("http://localhost:5256/hubs/chat", o => o.AccessTokenProvider = () => Task.FromResult(AuthState.Token)!)
-            .WithAutomaticReconnect().Build();
+        _hubConnection = new HubConnectionBuilder().WithUrl("http://localhost:5256/hubs/chat", o => o.AccessTokenProvider = () => Task.FromResult(AuthState.Token)!).WithAutomaticReconnect().Build();
         _hubConnection.On<MessageModel>("ReceiveMessage", OnMessageReceived);
         _hubConnection.On<List<string>>("PresenceSnapshot", OnPresenceSnapshot);
         _hubConnection.On<string>("UserOnline", OnUserOnline);
@@ -137,40 +135,40 @@ public partial class MainView : UserControl
 
         foreach (var chat in chats ?? [])
         {
-            await EnsureConversationAvatarAsync(chat);
-            _chats.Add(new ChatListItem
+            var avatar = await LoadProfileAvatarForChatAsync(chat);
+            var item = new ChatListItem
             {
                 Chat = chat,
                 DisplayName = chat.OtherUserName(AuthState.UserId),
                 LastMessage = chat.LastMessage == null ? "No messages yet." : FormatLastMessage(chat.LastMessage),
-                IsOnline = IsUserOnline(chat.OtherUserId(AuthState.UserId))
-            });
+                IsOnline = IsUserOnline(chat.OtherUserId(AuthState.UserId)),
+                AvatarSource = avatar
+            };
+            _chats.Add(item);
         }
 
         RefreshChatsList();
         await Dispatcher.InvokeAsync(async () => await RefreshConversationAvatarsAsync(), System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
-    private async Task EnsureConversationAvatarAsync(ChatModel chat)
+    private async Task<BitmapImage?> LoadProfileAvatarForChatAsync(ChatModel chat)
     {
         var otherUserId = chat.OtherUserId(AuthState.UserId);
-        if (string.IsNullOrWhiteSpace(otherUserId)) return;
+        if (string.IsNullOrWhiteSpace(otherUserId)) return null;
 
         try
         {
-            var profile = await _apiService.GetAsync<ProfileModel>(
-                $"api/User/profile/{Uri.EscapeDataString(otherUserId)}");
+            var profile = await _apiService.GetAsync<ProfileModel>($"api/User/profile/{Uri.EscapeDataString(otherUserId)}");
+            if (profile == null || string.IsNullOrWhiteSpace(profile.AvatarUrl)) return null;
 
-            if (profile == null || string.IsNullOrWhiteSpace(profile.AvatarUrl)) return;
+            if (string.Equals(chat.User1Id, otherUserId, StringComparison.OrdinalIgnoreCase)) chat.User1AvatarUrl = profile.AvatarUrl;
+            else chat.User2AvatarUrl = profile.AvatarUrl;
 
-            if (string.Equals(chat.User1Id, otherUserId, StringComparison.OrdinalIgnoreCase))
-                chat.User1AvatarUrl = profile.AvatarUrl;
-            else
-                chat.User2AvatarUrl = profile.AvatarUrl;
+            return await LoadConversationAvatarAsync(_apiService.BuildAbsoluteUrl(profile.AvatarUrl));
         }
         catch
         {
-            // Keep the avatar returned by api/Chat as fallback.
+            return null;
         }
     }
 
@@ -216,6 +214,7 @@ public partial class MainView : UserControl
             MessagesPanel.Children.Clear(); _loadedMessageIds.Clear(); _oldestLoadedMessageId = null; _hasMoreMessages = false; UpdateLoadOlderButton();
             if (_hubConnection?.State == HubConnectionState.Connected) await _hubConnection.InvokeAsync("JoinChat", chat.Id);
             await LoadInitialMessagesAsync(chat.Id); await ScrollMessagesToBottomAsync();
+            await RefreshCurrentChatAvatarAsync();
         }
         catch (Exception ex) { MessageBox.Show($"Could not open chat.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error); }
         finally { _isOpeningChat = false; }
@@ -260,7 +259,7 @@ public partial class MainView : UserControl
             if (_currentChatId == item.Chat.Id)
             {
                 if (_hubConnection?.State == HubConnectionState.Connected) try { await _hubConnection.InvokeAsync("LeaveChat", item.Chat.Id); } catch { }
-                _currentChatId = null; _currentOtherUserId = string.Empty; _loadedMessageIds.Clear(); _oldestLoadedMessageId = null; _hasMoreMessages = false; ChatUserNameText.Text = "Select a chat"; ChatStatusText.Text = "Offline"; ChatStatusIndicator.Fill = Brushes.Gray; MessagesPanel.Children.Clear(); MessageTextBox.Clear(); UpdateLoadOlderButton();
+                _currentChatId = null; _currentOtherUserId = string.Empty; _loadedMessageIds.Clear(); _oldestLoadedMessageId = null; _hasMoreMessages = false; ChatUserNameText.Text = "Select a chat"; ChatStatusText.Text = "Offline"; ChatStatusIndicator.Fill = Brushes.Gray; ChatHeaderAvatarImage.Source = null; ChatHeaderAvatarImage.Visibility = Visibility.Collapsed; ChatAvatarInitialsText.Visibility = Visibility.Visible; MessagesPanel.Children.Clear(); MessageTextBox.Clear(); UpdateLoadOlderButton();
             }
             _chats.Remove(item); RefreshChatsList();
         }
