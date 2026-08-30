@@ -67,7 +67,8 @@ public static class MessageDtoMapper
                 "voice" => "🎙",
                 _ => "📎"
             };
-            dto.Content = $"{icon} {media.FileName} [NOVAMEDIA:{message.Id}]";
+            // The zero-width marker carries the message id for the WPF renderer without appearing in previews.
+            dto.Content = $"{icon} {media.FileName}\u200B{message.Id}";
         }
 
         return dto;
