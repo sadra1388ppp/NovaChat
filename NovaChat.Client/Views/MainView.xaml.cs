@@ -134,9 +134,44 @@ public partial class MainView : UserControl
     {
         var chats = await _apiService.GetAsync<List<ChatModel>>("api/Chat");
         _chats.Clear();
-        foreach (var chat in chats ?? []) _chats.Add(new ChatListItem { Chat = chat, DisplayName = chat.OtherUserName(AuthState.UserId), LastMessage = chat.LastMessage == null ? "No messages yet." : FormatLastMessage(chat.LastMessage), IsOnline = IsUserOnline(chat.OtherUserId(AuthState.UserId)) });
+
+        foreach (var chat in chats ?? [])
+        {
+            await EnsureConversationAvatarAsync(chat);
+            _chats.Add(new ChatListItem
+            {
+                Chat = chat,
+                DisplayName = chat.OtherUserName(AuthState.UserId),
+                LastMessage = chat.LastMessage == null ? "No messages yet." : FormatLastMessage(chat.LastMessage),
+                IsOnline = IsUserOnline(chat.OtherUserId(AuthState.UserId))
+            });
+        }
+
         RefreshChatsList();
         await Dispatcher.InvokeAsync(async () => await RefreshConversationAvatarsAsync(), System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private async Task EnsureConversationAvatarAsync(ChatModel chat)
+    {
+        var otherUserId = chat.OtherUserId(AuthState.UserId);
+        if (string.IsNullOrWhiteSpace(otherUserId)) return;
+
+        try
+        {
+            var profile = await _apiService.GetAsync<ProfileModel>(
+                $"api/User/profile/{Uri.EscapeDataString(otherUserId)}");
+
+            if (profile == null || string.IsNullOrWhiteSpace(profile.AvatarUrl)) return;
+
+            if (string.Equals(chat.User1Id, otherUserId, StringComparison.OrdinalIgnoreCase))
+                chat.User1AvatarUrl = profile.AvatarUrl;
+            else
+                chat.User2AvatarUrl = profile.AvatarUrl;
+        }
+        catch
+        {
+            // Keep the avatar returned by api/Chat as fallback.
+        }
     }
 
     private void RefreshChatsList() { ChatsList.ItemsSource = null; ChatsList.ItemsSource = _chats; NoChatsText.Visibility = _chats.Count == 0 ? Visibility.Visible : Visibility.Collapsed; }
