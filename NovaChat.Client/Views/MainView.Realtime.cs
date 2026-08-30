@@ -4,6 +4,7 @@ using NovaChat.Client.Services;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace NovaChat.Client.Views;
 
@@ -149,6 +150,30 @@ public partial class MainView
         var text = panel.Children.OfType<TextBlock>().FirstOrDefault();
         var time = panel.Children.OfType<TextBlock>().Skip(1).FirstOrDefault();
         return text != null && time != null && string.Equals(text.Text, content, StringComparison.Ordinal) && string.Equals(time.Text, sentAt.ToLocalTime().ToString("HH:mm"), StringComparison.Ordinal);
+    }
+
+    private async Task<BitmapImage?> LoadConversationAvatarAsync(string endpoint)
+    {
+        if (string.IsNullOrWhiteSpace(endpoint)) return null;
+        try
+        {
+            var api = new ApiService();
+            var absoluteUrl = api.BuildAbsoluteUrl(endpoint);
+            if (ConversationAvatarCache.TryGetValue(absoluteUrl, out var cached)) return cached;
+            var bytes = await api.GetBytesAsync(endpoint);
+            if (bytes == null || bytes.Length == 0) return null;
+            using var stream = new MemoryStream(bytes);
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+            bitmap.StreamSource = stream;
+            bitmap.EndInit();
+            bitmap.Freeze();
+            ConversationAvatarCache[absoluteUrl] = bitmap;
+            return bitmap;
+        }
+        catch { return null; }
     }
 
     private sealed class MessageDeletedPayload
