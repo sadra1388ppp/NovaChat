@@ -1,4 +1,5 @@
 using NAudio.Wave;
+using NovaChat.Client.Services;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
