@@ -15,12 +15,14 @@ public partial class ProfileView : UserControl
     public event Action? SessionExpired;
 
     private readonly ApiService _apiService = new();
+    private readonly AvatarImageService _avatarImageService;
     private ProfileModel? _profile;
     private bool _busy;
 
     public ProfileView()
     {
         InitializeComponent();
+        _avatarImageService = new AvatarImageService(_apiService);
         Loaded += ProfileView_Loaded;
     }
 
@@ -71,7 +73,7 @@ public partial class ProfileView : UserControl
 
         if (!string.IsNullOrWhiteSpace(_profile.AvatarUrl))
         {
-            var bitmap = await LoadAvatarAsync(_profile.AvatarUrl);
+            var bitmap = await _avatarImageService.LoadAsync(_profile.Id, _profile.AvatarUrl);
             if (bitmap != null)
             {
                 AvatarImage.Source = bitmap;
@@ -90,39 +92,6 @@ public partial class ProfileView : UserControl
             : (_profile.LastSeenAt.HasValue ? $"Last seen {FormatLastSeen(_profile.LastSeenAt.Value)}" : "Last seen not available");
         JoinedText.Text = $"Joined {_profile.CreatedAt.ToLocalTime():dd MMM yyyy}";
         CopyUserIdButton.ToolTip = $"Copy @{_profile.Id}";
-    }
-
-    private async Task<BitmapImage?> LoadAvatarAsync(string avatarUrl)
-    {
-        if (string.IsNullOrWhiteSpace(avatarUrl)) return null;
-
-        try
-        {
-            var absoluteUrl = _apiService.BuildAbsoluteUrl(avatarUrl);
-            var separator = absoluteUrl.Contains('?') ? '&' : '?';
-            var finalUrl = $"{absoluteUrl}{separator}v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
-
-            using var http = new HttpClient();
-            using var response = await http.GetAsync(finalUrl, HttpCompletionOption.ResponseHeadersRead);
-            if (!response.IsSuccessStatusCode) return null;
-
-            var bytes = await response.Content.ReadAsByteArrayAsync();
-            if (bytes.Length == 0) return null;
-
-            using var stream = new MemoryStream(bytes);
-            var bitmap = new BitmapImage();
-            bitmap.BeginInit();
-            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
-            bitmap.StreamSource = stream;
-            bitmap.EndInit();
-            bitmap.Freeze();
-            return bitmap;
-        }
-        catch
-        {
-            return null;
-        }
     }
 
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
@@ -152,7 +121,9 @@ public partial class ProfileView : UserControl
                 NewUserId = UserIdBox.Text.Trim()
             };
 
-            var result = await _apiService.PutAsync<UpdateProfileRequest, ProfileActionResponse>($"api/User/{Uri.EscapeDataString(oldId)}", request);
+            var result = await _apiService.PutAsync<UpdateProfileRequest, ProfileActionResponse>(
+                $"api/User/{Uri.EscapeDataString(oldId)}", request);
+
             if (result?.User == null)
             {
                 ShowFeedback("Profile could not be updated. Check your values and try again.");
@@ -202,7 +173,10 @@ public partial class ProfileView : UserControl
         SaveButton.IsEnabled = false;
         try
         {
-            var result = await _apiService.UploadFileAsync<ProfileActionResponse>($"api/User/{Uri.EscapeDataString(AuthState.UserId)}/avatar", dialog.FileName);
+            var result = await _apiService.UploadFileAsync<ProfileActionResponse>(
+                $"api/User/{Uri.EscapeDataString(AuthState.UserId)}/avatar",
+                dialog.FileName);
+
             if (result?.User == null)
             {
                 ShowFeedback("Profile picture upload failed.");
@@ -228,7 +202,8 @@ public partial class ProfileView : UserControl
     private async void RemovePictureButton_Click(object sender, RoutedEventArgs e)
     {
         if (_busy || _profile == null || string.IsNullOrWhiteSpace(_profile.AvatarUrl)) return;
-        if (MessageBox.Show("Remove your profile picture?", "NovaChat", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        if (MessageBox.Show("Remove your profile picture?", "NovaChat", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
 
         _busy = true;
         try
@@ -240,7 +215,10 @@ public partial class ProfileView : UserControl
                 await UpdateProfileUiAsync();
                 ShowFeedback("Profile picture removed.");
             }
-            else ShowFeedback("Profile picture could not be removed.");
+            else
+            {
+                ShowFeedback("Profile picture could not be removed.");
+            }
         }
         catch (Exception ex)
         {
@@ -277,15 +255,18 @@ public partial class ProfileView : UserControl
         var root = new StackPanel { Margin = new Thickness(24) };
         root.Children.Add(new TextBlock { Text = "Change your password", FontSize = 20, FontWeight = FontWeights.Bold, Foreground = (Brush)FindResource("TextBrush") });
         root.Children.Add(new TextBlock { Text = "Choose a new password you do not reuse elsewhere.", FontSize = 12, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 4, 0, 18) });
+
         var currentBox = CreatePasswordBox(root, "Current password");
         var newBox = CreatePasswordBox(root, "New password");
         var confirmBox = CreatePasswordBox(root, "Confirm new password");
         var feedback = new TextBlock { Foreground = (Brush)FindResource("PrimaryBrush"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 10) };
         root.Children.Add(feedback);
+
         var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         var cancel = new Button { Content = "Cancel", Width = 82, Height = 36, Margin = new Thickness(0, 0, 8, 0), Background = Brushes.Transparent, Foreground = (Brush)FindResource("PrimaryBrush"), BorderBrush = (Brush)FindResource("PrimaryBrush") };
         var save = new Button { Content = "Update", Width = 82, Height = 36, Background = (Brush)FindResource("PrimaryBrush"), Foreground = Brushes.White, BorderThickness = new Thickness(0) };
         actions.Children.Add(cancel); actions.Children.Add(save); root.Children.Add(actions);
+
         cancel.Click += (_, _) => dialog.Close();
         save.Click += async (_, _) =>
         {
@@ -293,6 +274,7 @@ public partial class ProfileView : UserControl
             if (!string.Equals(newBox.Password, confirmBox.Password, StringComparison.Ordinal)) { feedback.Text = "New passwords do not match."; return; }
             if (newBox.Password.Length < 6) { feedback.Text = "New password must be at least 6 characters."; return; }
             if (string.Equals(currentBox.Password, newBox.Password, StringComparison.Ordinal)) { feedback.Text = "New password must be different from the current password."; return; }
+
             save.IsEnabled = false; cancel.IsEnabled = false;
             try
             {
@@ -306,6 +288,7 @@ public partial class ProfileView : UserControl
             catch (Exception ex) { feedback.Text = $"Password update failed: {ex.Message}"; }
             finally { save.IsEnabled = true; cancel.IsEnabled = true; }
         };
+
         dialog.Content = root;
         dialog.Loaded += (_, _) => currentBox.Focus();
         dialog.ShowDialog();
