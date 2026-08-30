@@ -10,6 +10,7 @@ public partial class App : Application
         MainView.RegisterMediaFeatures();
         MainView.RegisterLiveRefresh();
         MainView.RegisterVoiceSendFix();
+        MainView.RegisterReliableVoiceFix();
         MainView.RegisterImageViewer();
         base.OnStartup(e);
     }
