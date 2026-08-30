@@ -5,12 +5,13 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
 
 namespace NovaChat.Client.Views;
 
 public partial class MainView
 {
+    private readonly AvatarImageService _avatarImageService = new(new ApiService());
+
     private async void ChatUserNameText_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrWhiteSpace(_currentOtherUserId)) return;
@@ -79,22 +80,15 @@ public partial class MainView
 
             if (string.IsNullOrWhiteSpace(profile.AvatarUrl)) return;
 
-            var avatarUrl = _apiService.BuildAbsoluteUrl(profile.AvatarUrl);
-            var separator = avatarUrl.Contains('?') ? '&' : '?';
-            var versionedUrl = $"{avatarUrl}{separator}v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+            var bitmap = await _avatarImageService.LoadAsync(profile.Id, profile.AvatarUrl);
+            if (bitmap == null || !string.Equals(_currentOtherUserId, profile.Id, StringComparison.OrdinalIgnoreCase)) return;
 
-            try
+            await Dispatcher.InvokeAsync(() =>
             {
-                var bitmap = await LoadStaticAvatarBitmapAsync(versionedUrl);
-                if (bitmap == null || !string.Equals(_currentOtherUserId, profile.Id, StringComparison.OrdinalIgnoreCase)) return;
-                await Dispatcher.InvokeAsync(() =>
-                {
-                    ChatHeaderAvatarImage.Source = bitmap;
-                    ChatHeaderAvatarImage.Visibility = Visibility.Visible;
-                    ChatAvatarInitialsText.Visibility = Visibility.Collapsed;
-                });
-            }
-            catch { }
+                ChatHeaderAvatarImage.Source = bitmap;
+                ChatHeaderAvatarImage.Visibility = Visibility.Visible;
+                ChatAvatarInitialsText.Visibility = Visibility.Collapsed;
+            });
         }
         catch { }
     }
@@ -141,57 +135,30 @@ public partial class MainView
 
         try
         {
-            var url = _apiService.BuildAbsoluteUrl(profile.AvatarUrl);
-            var separator = url.Contains('?') ? '&' : '?';
-            var versionedUrl = $"{url}{separator}v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
-            var bitmap = await LoadStaticAvatarBitmapAsync(versionedUrl);
+            var bitmap = await _avatarImageService.LoadAsync(profile.Id, profile.AvatarUrl);
             if (bitmap == null) return;
 
             await Dispatcher.InvokeAsync(() =>
             {
-                if (avatarGrid.Children.OfType<Image>().Any()) return;
-                var image = new Image
+                var image = avatarGrid.Children.OfType<Image>().FirstOrDefault();
+                if (image == null)
                 {
-                    Width = 112,
-                    Height = 112,
-                    Stretch = Stretch.UniformToFill,
-                    Clip = new EllipseGeometry(new Point(56, 56), 56, 56),
-                    Source = bitmap
-                };
-                avatarGrid.Children.Add(image);
+                    image = new Image
+                    {
+                        Width = 112,
+                        Height = 112,
+                        Stretch = Stretch.UniformToFill,
+                        Clip = new EllipseGeometry(new Point(56, 56), 56, 56)
+                    };
+                    avatarGrid.Children.Add(image);
+                }
+
+                image.Source = bitmap;
+                Panel.SetZIndex(image, 2);
                 initials.Visibility = Visibility.Collapsed;
             });
         }
         catch { }
-    }
-
-    private static async Task<BitmapImage?> LoadStaticAvatarBitmapAsync(string absoluteUrl)
-    {
-        if (string.IsNullOrWhiteSpace(absoluteUrl)) return null;
-
-        try
-        {
-            using var http = new HttpClient();
-            using var response = await http.GetAsync(absoluteUrl, HttpCompletionOption.ResponseHeadersRead);
-            if (!response.IsSuccessStatusCode) return null;
-
-            var bytes = await response.Content.ReadAsByteArrayAsync();
-            if (bytes.Length == 0) return null;
-
-            using var stream = new MemoryStream(bytes);
-            var bitmap = new BitmapImage();
-            bitmap.BeginInit();
-            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
-            bitmap.StreamSource = stream;
-            bitmap.EndInit();
-            bitmap.Freeze();
-            return bitmap;
-        }
-        catch
-        {
-            return null;
-        }
     }
 
     private static string GetPublicProfileInitials(string displayName, string id)
