@@ -10,5 +10,11 @@ public class User
 
     public string PasswordHash { get; set; } = string.Empty;
 
+    public string Bio { get; set; } = string.Empty;
+
+    public string? AvatarUrl { get; set; }
+
+    public DateTime? LastSeenAt { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
