@@ -7,30 +7,25 @@
                 <StackPanel>
                     <TextBlock Text="My Profile" FontSize="30" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Center"/>
                     <TextBlock Text="Manage your NovaChat identity and profile" FontSize="13" Foreground="{DynamicResource SecondaryTextBrush}" HorizontalAlignment="Center" Margin="0,6,0,22"/>
-
                     <Grid Width="150" Height="150" HorizontalAlignment="Center">
                         <Ellipse Fill="{DynamicResource PrimaryBrush}"/>
-                        <Image x:Name="AvatarImage" Stretch="UniformToFill" Clip="{Binding RelativeSource={RelativeSource Self}, Path=RenderSize}"/>
+                        <Ellipse Margin="3" Fill="Transparent" Stroke="{DynamicResource PanelBackgroundBrush}" StrokeThickness="3"/>
+                        <Image x:Name="AvatarImage" Stretch="UniformToFill" Margin="3"/>
                         <TextBlock x:Name="AvatarInitialsText" Text="?" FontSize="44" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Grid>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,14,0,24">
                         <Button Content="Change Picture" Click="ChangePictureButton_Click" Height="34" Padding="18,0" Background="{DynamicResource PrimaryBrush}" Foreground="White" BorderThickness="0"/>
                         <Button Content="Remove" Click="RemovePictureButton_Click" Height="34" Padding="18,0" Margin="8,0,0,0" Background="Transparent" Foreground="{DynamicResource PrimaryBrush}" BorderBrush="{DynamicResource PrimaryBrush}"/>
                     </StackPanel>
-
                     <TextBlock Text="Display Name" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/>
                     <TextBox x:Name="DisplayNameBox" Height="42" Margin="0,6,0,16" Padding="10" Background="{DynamicResource InputBackgroundBrush}" Foreground="{DynamicResource TextBrush}"/>
-
                     <TextBlock Text="User ID" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/>
                     <TextBox x:Name="UserIdBox" Height="42" Margin="0,6,0,16" Padding="10" Background="{DynamicResource InputBackgroundBrush}" Foreground="{DynamicResource TextBrush}"/>
-
                     <TextBlock Text="Email" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/>
                     <TextBox x:Name="EmailBox" Height="42" Margin="0,6,0,16" Padding="10" Background="{DynamicResource InputBackgroundBrush}" Foreground="{DynamicResource TextBrush}"/>
-
                     <TextBlock Text="About / Bio" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/>
                     <TextBox x:Name="BioBox" Height="90" Margin="0,6,0,8" Padding="10" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Background="{DynamicResource InputBackgroundBrush}" Foreground="{DynamicResource TextBrush}"/>
                     <TextBlock Text="Maximum 160 characters" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" HorizontalAlignment="Right"/>
-
                     <Border Margin="0,20,0,20" Padding="14" Background="{DynamicResource InputBackgroundBrush}" CornerRadius="12">
                         <StackPanel>
                             <TextBlock x:Name="StatusText" Text="Status" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/>
@@ -38,7 +33,6 @@
                             <TextBlock x:Name="JoinedText" Margin="0,4,0,0" Foreground="{DynamicResource SecondaryTextBrush}"/>
                         </StackPanel>
                     </Border>
-
                     <TextBlock x:Name="FeedbackText" Foreground="{DynamicResource PrimaryBrush}" TextWrapping="Wrap" Margin="0,0,0,10"/>
                     <Button x:Name="SaveButton" Content="Save Changes" Click="SaveButton_Click" Height="44" Background="{DynamicResource PrimaryBrush}" Foreground="White" BorderThickness="0"/>
                     <Button Content="Contacts" Click="ContactsButton_Click" Height="42" Margin="0,10,0,0" Background="Transparent" Foreground="{DynamicResource PrimaryBrush}" BorderThickness="0"/>
