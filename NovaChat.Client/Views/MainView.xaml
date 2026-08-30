@@ -57,9 +57,9 @@
                                             <Button.ToolTip>
                                                 <StackPanel>
                                                     <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
-                                                    <TextBlock Text="{Binding Chat.User1Id}" FontSize="11"/>
-                                                    <TextBlock Text="{Binding Chat.User2Id}" FontSize="11"/>
+                                                    <TextBlock Text="{Binding OtherUserId}" FontSize="11"/>
                                                     <TextBlock Text="{Binding ProfileStatusText}" FontSize="11" Margin="0,3,0,0"/>
+                                                    <TextBlock Text="Click the chat header to open the full profile" FontSize="10" Margin="0,4,0,0" TextWrapping="Wrap"/>
                                                 </StackPanel>
                                             </Button.ToolTip>
                                             <Grid>
@@ -69,7 +69,7 @@
                                                 </Grid.ColumnDefinitions>
                                                 <Grid Grid.Column="0" Width="42" Height="42">
                                                     <Ellipse Fill="{DynamicResource SelectedChatBrush}"/>
-                                                    <TextBlock Text="{Binding Initials}" Foreground="{DynamicResource PrimaryBrush}" FontSize="14" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding Initials}" Foreground="{DynamicResource PrimaryBrush}" FontSize="14" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                     <Image Source="{Binding AvatarSource}" Width="42" Height="42" Stretch="UniformToFill" IsHitTestVisible="False">
                                                         <Image.Clip>
                                                             <EllipseGeometry Center="21,21" RadiusX="21" RadiusY="21"/>
