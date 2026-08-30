@@ -58,9 +58,12 @@ public partial class MainView
 
             if (string.IsNullOrWhiteSpace(profile.AvatarUrl)) return;
 
-            // AvatarUrl is the canonical path returned by the server for this user.
-            // Load that exact file instead of reconstructing a second avatar URL.
-            var bitmap = await LoadConversationAvatarAsync(profile.AvatarUrl);
+            // Always load the avatar through the authenticated server endpoint.
+            // AvatarUrl is a stored file path and is not the public API contract.
+            // Include the stored path as a cache-busting query value so replacing
+            // a profile picture cannot leave an old bitmap in the client cache.
+            var avatarEndpoint = $"api/User/profile/{Uri.EscapeDataString(profile.Id)}/avatar?avatar={Uri.EscapeDataString(profile.AvatarUrl)}";
+            var bitmap = await LoadConversationAvatarAsync(avatarEndpoint);
             if (bitmap == null || !string.Equals(_currentOtherUserId, profile.Id, StringComparison.OrdinalIgnoreCase)) return;
 
             await Dispatcher.InvokeAsync(() =>
@@ -203,10 +206,11 @@ public partial class MainView
 
         try
         {
-            // Use the URL actually stored on the profile. The server exposes the
-            // uploads directory through UseStaticFiles, so this is the same file
-            // that the owner sees in ProfileView.
-            var bitmap = await LoadConversationAvatarAsync(profile.AvatarUrl);
+            // Use the authenticated avatar API endpoint instead of the raw stored
+            // /uploads path. This guarantees that public profiles and chat headers
+            // use exactly the same server-side avatar source.
+            var avatarEndpoint = $"api/User/profile/{Uri.EscapeDataString(profile.Id)}/avatar?avatar={Uri.EscapeDataString(profile.AvatarUrl)}";
+            var bitmap = await LoadConversationAvatarAsync(avatarEndpoint);
             if (bitmap == null) return;
 
             await Dispatcher.InvokeAsync(() =>
