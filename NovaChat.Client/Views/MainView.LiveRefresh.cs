@@ -55,22 +55,29 @@ public partial class MainView
 
     private async Task LiveRefreshOnceAsync()
     {
-        // New Chat has its own controlled load. Never let the 100ms safety sync race it.
-        if (_liveRefreshBusy || _isCreatingChatSafely || !AuthState.IsAuthenticated || _hubConnection == null)
+        if (_liveRefreshBusy || _isCreatingChatSafely || !AuthState.IsAuthenticated)
             return;
 
         _liveRefreshBusy = true;
         try
         {
-            var onlineTask = _hubConnection.State == HubConnectionState.Connected
-                ? _hubConnection.InvokeAsync<List<string>>("GetOnlineUsers")
-                : Task.FromResult<List<string>?>(null);
+            Task<List<string>?>? onlineTask = null;
+            if (_hubConnection?.State == HubConnectionState.Connected)
+                onlineTask = _hubConnection.InvokeAsync<List<string>>("GetOnlineUsers");
+
             var chatsTask = _apiService.GetAsync<List<ChatModel>>("api/Chat");
 
-            await Task.WhenAll(onlineTask, chatsTask);
+            if (onlineTask != null)
+                await Task.WhenAll(onlineTask, chatsTask);
+            else
+                await chatsTask;
 
-            var onlineUsers = onlineTask.Status == TaskStatus.RanToCompletion ? await onlineTask : null;
-            var serverChats = chatsTask.Status == TaskStatus.RanToCompletion ? await chatsTask : null;
+            var onlineUsers = onlineTask?.Status == TaskStatus.RanToCompletion
+                ? await onlineTask
+                : null;
+            var serverChats = chatsTask.Status == TaskStatus.RanToCompletion
+                ? await chatsTask
+                : null;
 
             if (_isCreatingChatSafely)
                 return;
@@ -99,7 +106,16 @@ public partial class MainView
         var next = ids.Where(x => !string.IsNullOrWhiteSpace(x))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        if (_onlineUserIds.SetEquals(next)) return;
+        if (_onlineUserIds.SetEquals(next))
+        {
+            foreach (var item in _chats)
+            {
+                var online = IsUserOnline(item.Chat.OtherUserId(AuthState.UserId));
+                if (item.IsOnline != online) item.IsOnline = online;
+            }
+            return;
+        }
+
         _onlineUserIds.Clear();
         foreach (var id in next) _onlineUserIds.Add(id);
 
@@ -114,7 +130,6 @@ public partial class MainView
     {
         if (serverChats == null || _isCreatingChatSafely) return;
 
-        // Collapse duplicate server/UI entries by the actual conversation pair, not by Chat.Id.
         var snapshot = serverChats
             .Where(x => x.Id > 0)
             .GroupBy(x => GetConversationKey(x, AuthState.UserId), StringComparer.OrdinalIgnoreCase)
@@ -141,10 +156,38 @@ public partial class MainView
                 _chats.Add(newItem);
                 _ = LoadAvatarForNewChatItemAsync(newItem);
                 changed = true;
+                continue;
             }
+
+            var serverLastId = serverChat.LastMessage?.Id;
+            var localLastId = existing.Chat.LastMessage?.Id;
+            if (serverLastId != localLastId)
+            {
+                existing.Chat.LastMessage = serverChat.LastMessage;
+                existing.LastMessage = serverChat.LastMessage == null ? "No messages yet." : FormatLastMessage(serverChat.LastMessage);
+                changed = true;
+            }
+
+            var serverName = serverChat.OtherUserName(AuthState.UserId);
+            if (!string.Equals(existing.DisplayName, serverName, StringComparison.Ordinal))
+            {
+                existing.DisplayName = serverName;
+                changed = true;
+            }
+
+            existing.Chat.User1AvatarUrl = serverChat.User1AvatarUrl;
+            existing.Chat.User2AvatarUrl = serverChat.User2AvatarUrl;
+
+            var online = IsUserOnline(serverChat.OtherUserId(AuthState.UserId));
+            if (existing.IsOnline != online)
+            {
+                existing.IsOnline = online;
+                changed = true;
+            }
+
+            _ = RefreshAvatarOnlyWhenChangedAsync(existing, serverChat);
         }
 
-        // Defensive cleanup for duplicate conversations created by an older version.
         foreach (var duplicate in _chats
             .GroupBy(x => GetConversationKey(x.Chat, AuthState.UserId), StringComparer.OrdinalIgnoreCase)
             .SelectMany(g => g.OrderBy(x => x.Chat.Id).Skip(1))
@@ -159,38 +202,13 @@ public partial class MainView
         foreach (var item in _chats.ToList())
         {
             var key = GetConversationKey(item.Chat, AuthState.UserId);
-            if (!snapshot.TryGetValue(key, out var serverChat))
+            if (!snapshot.ContainsKey(key))
             {
                 _chats.Remove(item);
                 if (_currentChatId == item.Chat.Id)
                     ClearCurrentChatUi();
                 changed = true;
-                continue;
             }
-
-            var serverLastId = serverChat.LastMessage?.Id;
-            var localLastId = item.Chat.LastMessage?.Id;
-            if (serverLastId != localLastId)
-            {
-                item.Chat.LastMessage = serverChat.LastMessage;
-                item.LastMessage = serverChat.LastMessage == null ? "No messages yet." : FormatLastMessage(serverChat.LastMessage);
-                changed = true;
-            }
-
-            var serverName = serverChat.OtherUserName(AuthState.UserId);
-            if (!string.Equals(item.DisplayName, serverName, StringComparison.Ordinal))
-            {
-                item.DisplayName = serverName;
-                changed = true;
-            }
-
-            item.Chat.User1AvatarUrl = serverChat.User1AvatarUrl;
-            item.Chat.User2AvatarUrl = serverChat.User2AvatarUrl;
-
-            var online = IsUserOnline(serverChat.OtherUserId(AuthState.UserId));
-            if (item.IsOnline != online) item.IsOnline = online;
-
-            _ = RefreshAvatarOnlyWhenChangedAsync(item, serverChat);
         }
 
         if (changed)
