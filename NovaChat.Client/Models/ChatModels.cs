@@ -1,3 +1,5 @@
+using NovaChat.Client.Services;
+
 namespace NovaChat.Client.Models;
 
 public class ChatModel
@@ -12,14 +14,9 @@ public class ChatModel
     public DateTime CreatedAt { get; set; }
     public MessageModel? LastMessage { get; set; }
 
-    public string OtherUserId(string currentUserId) =>
-        string.Equals(User1Id, currentUserId, StringComparison.OrdinalIgnoreCase) ? User2Id : User1Id;
-
-    public string OtherUserName(string currentUserId) =>
-        string.Equals(User1Id, currentUserId, StringComparison.OrdinalIgnoreCase) ? User2Name : User1Name;
-
-    public string? OtherUserAvatarUrl(string currentUserId) =>
-        string.Equals(User1Id, currentUserId, StringComparison.OrdinalIgnoreCase) ? User2AvatarUrl : User1AvatarUrl;
+    public string OtherUserId(string currentUserId) => string.Equals(User1Id, currentUserId, StringComparison.OrdinalIgnoreCase) ? User2Id : User1Id;
+    public string OtherUserName(string currentUserId) => string.Equals(User1Id, currentUserId, StringComparison.OrdinalIgnoreCase) ? User2Name : User1Name;
+    public string? OtherUserAvatarUrl => string.Equals(User1Id, AuthState.UserId, StringComparison.OrdinalIgnoreCase) ? User2AvatarUrl : User1AvatarUrl;
 }
 
 public class MessageModel
