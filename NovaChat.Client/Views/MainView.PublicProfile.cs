@@ -14,6 +14,7 @@ public partial class MainView
         base.OnInitialized(e);
         ChatUserNameText.MouseLeftButtonUp += ChatUserNameText_MouseLeftButtonUp;
         ChatUserNameText.Cursor = Cursors.Hand;
+        InitializeConversationAvatarFix();
     }
 
     private async void ChatUserNameText_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -54,7 +55,6 @@ public partial class MainView
         };
 
         var root = new StackPanel { Margin = new Thickness(28) };
-
         var avatarGrid = new Grid { Width = 112, Height = 112, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 18) };
         avatarGrid.Children.Add(new Ellipse { Fill = (Brush)FindResource("SelectedChatBrush") });
 
@@ -88,77 +88,21 @@ public partial class MainView
         }
 
         root.Children.Add(avatarGrid);
-        root.Children.Add(new TextBlock
-        {
-            Text = profile.DisplayName,
-            FontSize = 24,
-            FontWeight = FontWeights.Bold,
-            Foreground = (Brush)FindResource("TextBrush"),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            TextAlignment = TextAlignment.Center
-        });
-        root.Children.Add(new TextBlock
-        {
-            Text = $"@{profile.Id}",
-            FontSize = 13,
-            Foreground = (Brush)FindResource("SecondaryTextBrush"),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 5, 0, 14)
-        });
+        root.Children.Add(new TextBlock { Text = profile.DisplayName, FontSize = 24, FontWeight = FontWeights.Bold, Foreground = (Brush)FindResource("TextBrush"), HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center });
+        root.Children.Add(new TextBlock { Text = $"@{profile.Id}", FontSize = 13, Foreground = (Brush)FindResource("SecondaryTextBrush"), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 5, 0, 14) });
 
         var status = profile.IsOnline ? "● Online" : "● Offline";
-        root.Children.Add(new TextBlock
-        {
-            Text = status,
-            FontSize = 12,
-            Foreground = profile.IsOnline ? Brushes.LimeGreen : (Brush)FindResource("SecondaryTextBrush"),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 0, 0, 18)
-        });
+        root.Children.Add(new TextBlock { Text = status, FontSize = 12, Foreground = profile.IsOnline ? Brushes.LimeGreen : (Brush)FindResource("SecondaryTextBrush"), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 18) });
 
         if (!string.IsNullOrWhiteSpace(profile.Bio))
-        {
-            root.Children.Add(new TextBlock
-            {
-                Text = profile.Bio,
-                TextWrapping = TextWrapping.Wrap,
-                FontSize = 14,
-                Foreground = (Brush)FindResource("TextBrush"),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                TextAlignment = TextAlignment.Center,
-                Margin = new Thickness(10, 0, 10, 18)
-            });
-        }
+            root.Children.Add(new TextBlock { Text = profile.Bio, TextWrapping = TextWrapping.Wrap, FontSize = 14, Foreground = (Brush)FindResource("TextBrush"), HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, Margin = new Thickness(10, 0, 10, 18) });
 
-        root.Children.Add(new TextBlock
-        {
-            Text = profile.IsOnline ? "Active now" : (profile.LastSeenAt.HasValue ? $"Last seen {FormatPublicLastSeen(profile.LastSeenAt.Value)}" : "Last seen not available"),
-            FontSize = 12,
-            Foreground = (Brush)FindResource("SecondaryTextBrush"),
-            HorizontalAlignment = HorizontalAlignment.Center
-        });
-        root.Children.Add(new TextBlock
-        {
-            Text = $"Joined {profile.CreatedAt.ToLocalTime():dd MMM yyyy}",
-            FontSize = 12,
-            Foreground = (Brush)FindResource("SecondaryTextBrush"),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 5, 0, 20)
-        });
+        root.Children.Add(new TextBlock { Text = profile.IsOnline ? "Active now" : (profile.LastSeenAt.HasValue ? $"Last seen {FormatPublicLastSeen(profile.LastSeenAt.Value)}" : "Last seen not available"), FontSize = 12, Foreground = (Brush)FindResource("SecondaryTextBrush"), HorizontalAlignment = HorizontalAlignment.Center });
+        root.Children.Add(new TextBlock { Text = $"Joined {profile.CreatedAt.ToLocalTime():dd MMM yyyy}", FontSize = 12, Foreground = (Brush)FindResource("SecondaryTextBrush"), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 5, 0, 20) });
 
-        var closeButton = new Button
-        {
-            Content = "Close",
-            Width = 100,
-            Height = 36,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Background = (Brush)FindResource("PrimaryBrush"),
-            Foreground = Brushes.White,
-            BorderThickness = new Thickness(0)
-        };
+        var closeButton = new Button { Content = "Close", Width = 100, Height = 36, HorizontalAlignment = HorizontalAlignment.Center, Background = (Brush)FindResource("PrimaryBrush"), Foreground = Brushes.White, BorderThickness = new Thickness(0) };
         closeButton.Click += (_, _) => window.Close();
         root.Children.Add(closeButton);
-
         window.Content = root;
         window.ShowDialog();
     }
@@ -168,9 +112,7 @@ public partial class MainView
         var value = string.IsNullOrWhiteSpace(displayName) ? id : displayName.Trim();
         if (string.IsNullOrWhiteSpace(value)) return "?";
         var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length >= 2
-            ? $"{parts[0][0]}{parts[1][0]}".ToUpperInvariant()
-            : value[..Math.Min(2, value.Length)].ToUpperInvariant();
+        return parts.Length >= 2 ? $"{parts[0][0]}{parts[1][0]}".ToUpperInvariant() : value[..Math.Min(2, value.Length)].ToUpperInvariant();
     }
 
     private static string FormatPublicLastSeen(DateTime value)
