@@ -10,19 +10,16 @@ namespace NovaChat.Client.Views;
 public partial class MainView
 {
     private static bool _reliableVoiceFixRegistered;
-
     private WaveInEvent? _reliableVoiceCapture;
     private WaveFileWriter? _reliableVoiceWriter;
-    private TaskCompletionSource<bool>? _reliableVoiceStopped;
     private string? _reliableVoicePath;
     private DateTime _reliableVoiceStartedAt;
-    private bool _reliableVoiceFinishing;
+    private int _reliableVoiceFinishing;
 
     internal static void RegisterReliableVoiceFix()
     {
         if (_reliableVoiceFixRegistered) return;
         _reliableVoiceFixRegistered = true;
-
         EventManager.RegisterClassHandler(typeof(Button), Button.PreviewMouseLeftButtonDownEvent,
             new MouseButtonEventHandler(ReliableVoiceButtonPreview), true);
     }
@@ -35,14 +32,14 @@ public partial class MainView
         if (string.Equals(button.Tag?.ToString(), "NovaChat.Voice", StringComparison.Ordinal))
         {
             e.Handled = true;
-            await view.ToggleReliableVoiceAsync();
+            await view.StartReliableVoiceAsync();
             return;
         }
 
         if (string.Equals(button.Content?.ToString(), "➤", StringComparison.Ordinal) && view._reliableVoiceCapture != null)
         {
             e.Handled = true;
-            await view.FinishReliableVoiceAsync();
+            await view.StopAndUploadReliableVoiceAsync();
         }
     }
 
@@ -57,14 +54,9 @@ public partial class MainView
         return null;
     }
 
-    private async Task ToggleReliableVoiceAsync()
+    private async Task StartReliableVoiceAsync()
     {
-        if (!_currentChatId.HasValue || !AuthState.IsAuthenticated) return;
-        if (_reliableVoiceCapture != null)
-        {
-            await FinishReliableVoiceAsync();
-            return;
-        }
+        if (!_currentChatId.HasValue || !AuthState.IsAuthenticated || _reliableVoiceCapture != null) return;
 
         if (WaveInEvent.DeviceCount <= 0)
         {
@@ -83,25 +75,19 @@ public partial class MainView
                 WaveFormat = new WaveFormat(44100, 16, 1)
             };
             var writer = new WaveFileWriter(path, capture.WaveFormat);
-            var stopped = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            capture.DataAvailable += (_, args) =>
+            {
+                try { writer.Write(args.Buffer, 0, args.BytesRecorded); }
+                catch { }
+            };
 
             _reliableVoicePath = path;
             _reliableVoiceStartedAt = DateTime.UtcNow;
             _reliableVoiceCapture = capture;
             _reliableVoiceWriter = writer;
-            _reliableVoiceStopped = stopped;
-            _reliableVoiceFinishing = false;
+            _reliableVoiceFinishing = 0;
 
-            capture.DataAvailable += (_, args) =>
-            {
-                try
-                {
-                    writer.Write(args.Buffer, 0, args.BytesRecorded);
-                    writer.Flush();
-                }
-                catch { }
-            };
-            capture.RecordingStopped += (_, _) => stopped.TrySetResult(true);
             capture.StartRecording();
             await Dispatcher.InvokeAsync(() => UpdateReliableVoiceButton(true));
         }
@@ -112,37 +98,35 @@ public partial class MainView
         }
     }
 
-    private async Task FinishReliableVoiceAsync()
+    private async Task StopAndUploadReliableVoiceAsync()
     {
-        if (_reliableVoiceFinishing) return;
-        var capture = _reliableVoiceCapture;
-        if (capture == null) return;
-        _reliableVoiceFinishing = true;
+        if (Interlocked.Exchange(ref _reliableVoiceFinishing, 1) != 0) return;
 
-        var stopped = _reliableVoiceStopped;
+        var capture = _reliableVoiceCapture;
+        var writer = _reliableVoiceWriter;
         var path = _reliableVoicePath;
         var startedAt = _reliableVoiceStartedAt;
+
+        if (capture == null || writer == null || string.IsNullOrWhiteSpace(path))
+        {
+            Interlocked.Exchange(ref _reliableVoiceFinishing, 0);
+            return;
+        }
 
         try
         {
             try { capture.StopRecording(); } catch { }
-            if (stopped != null)
-            {
-                try { await stopped.Task.WaitAsync(TimeSpan.FromSeconds(5)); } catch { }
-            }
-            await Task.Delay(100);
+            await Task.Delay(200);
 
-            var writer = _reliableVoiceWriter;
-            _reliableVoiceWriter = null;
             _reliableVoiceCapture = null;
-            _reliableVoiceStopped = null;
+            _reliableVoiceWriter = null;
             _reliableVoicePath = null;
 
-            try { writer?.Flush(); } catch { }
-            try { writer?.Dispose(); } catch { }
+            try { writer.Flush(); } catch { }
+            try { writer.Dispose(); } catch { }
             try { capture.Dispose(); } catch { }
 
-            if (string.IsNullOrWhiteSpace(path) || !System.IO.File.Exists(path))
+            if (!System.IO.File.Exists(path))
             {
                 MessageBox.Show("The voice recording could not be created.", "Voice Message", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
@@ -152,7 +136,7 @@ public partial class MainView
             if (info.Length <= 1000)
             {
                 try { System.IO.File.Delete(path); } catch { }
-                MessageBox.Show("The recording is empty. Please check Windows microphone permissions and try again.", "Voice Message", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("The recording is empty. Please check Windows microphone permissions.", "Voice Message", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
@@ -166,13 +150,8 @@ public partial class MainView
         }
         finally
         {
-            _reliableVoiceFinishing = false;
             await Dispatcher.InvokeAsync(() => UpdateReliableVoiceButton(false));
-            if (!string.IsNullOrWhiteSpace(_reliableVoicePath))
-            {
-                try { System.IO.File.Delete(_reliableVoicePath); } catch { }
-                _reliableVoicePath = null;
-            }
+            Interlocked.Exchange(ref _reliableVoiceFinishing, 0);
         }
     }
 
@@ -192,7 +171,6 @@ public partial class MainView
         try { _reliableVoiceWriter?.Dispose(); } catch { }
         _reliableVoiceCapture = null;
         _reliableVoiceWriter = null;
-        _reliableVoiceStopped = null;
         if (deleteFile && !string.IsNullOrWhiteSpace(_reliableVoicePath))
         {
             try { System.IO.File.Delete(_reliableVoicePath); } catch { }
