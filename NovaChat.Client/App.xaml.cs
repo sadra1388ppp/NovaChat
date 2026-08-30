@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using NovaChat.Client.Views;
 
 namespace NovaChat.Client;
@@ -10,6 +10,7 @@ public partial class App : Application
         MainView.RegisterMediaFeatures();
         MainView.RegisterLiveRefresh();
         MainView.RegisterVoiceSendFix();
+        MainView.RegisterImageViewer();
         base.OnStartup(e);
     }
 }
