@@ -12,6 +12,10 @@ public class UpdateUserDto
     [EmailAddress]
     public string Email { get; set; } = string.Empty;
 
+    [Required]
+    [StringLength(32, MinimumLength = 7)]
+    public string PhoneNumber { get; set; } = string.Empty;
+
     [StringLength(160)]
     public string? Bio { get; set; }
 
