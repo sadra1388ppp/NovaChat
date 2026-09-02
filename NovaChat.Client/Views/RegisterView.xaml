@@ -58,6 +58,16 @@
                          FontSize="14"
                          Margin="0,0,0,15"/>
 
+                <TextBlock Text="Phone Number"
+                           FontWeight="SemiBold"
+                           Margin="0,0,0,6"/>
+
+                <TextBox x:Name="PhoneNumberTextBox"
+                         Height="42"
+                         Padding="12"
+                         FontSize="14"
+                         Margin="0,0,0,15"/>
+
                 <TextBlock Text="Password"
                            FontWeight="SemiBold"
                            Margin="0,0,0,6"/>
