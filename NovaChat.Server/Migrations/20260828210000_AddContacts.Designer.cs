@@ -1,12 +1,2 @@
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
-
-#nullable disable
-
-namespace NovaChat.Server.Migrations;
-
-[DbContext(typeof(Data.AppDbContext))]
-[Migration("20260828210000_AddContacts")]
-partial class AddContacts
-{
-}
+// Legacy PostgreSQL migration metadata removed for the MariaDB migration reset.
+// Generate a new migration with EF Core 9 + Pomelo after pulling the MariaDB version.
