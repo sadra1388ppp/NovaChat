@@ -27,7 +27,7 @@ public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
         var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
         optionsBuilder.UseMySql(
             connectionString,
-            ServerVersion.AutoDetect(connectionString));
+            new MariaDbServerVersion(new Version(12, 3, 3)));
 
         return new AppDbContext(optionsBuilder.Options);
     }
