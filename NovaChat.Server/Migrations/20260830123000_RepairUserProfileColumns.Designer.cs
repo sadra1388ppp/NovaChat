@@ -1,12 +1,2 @@
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
-
-#nullable disable
-
-namespace NovaChat.Server.Migrations;
-
-[DbContext(typeof(Data.AppDbContext))]
-[Migration("20260830123000_RepairUserProfileColumns")]
-partial class RepairUserProfileColumns
-{
-}
+// Legacy PostgreSQL migration metadata removed for the MariaDB migration reset.
+// Generate a new migration with EF Core 9 + Pomelo after pulling the MariaDB version.
