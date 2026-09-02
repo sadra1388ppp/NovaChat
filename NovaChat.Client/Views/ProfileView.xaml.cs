@@ -47,6 +47,7 @@ public partial class ProfileView : UserControl
             DisplayNameBox.Text = _profile.DisplayName;
             UserIdBox.Text = _profile.Id;
             EmailBox.Text = _profile.Email;
+            PhoneBox.Text = _profile.PhoneNumber ?? string.Empty;
             BioBox.Text = _profile.Bio;
             UpdateProfileTextUi();
         }
@@ -73,8 +74,6 @@ public partial class ProfileView : UserControl
             ? "Add a short bio to tell people about yourself."
             : _profile.Bio;
 
-        // This is the signed-in user's own profile, so an authenticated,
-        // active NovaChat session should be represented as online here.
         var online = AuthState.IsAuthenticated;
         StatusText.Text = online ? "● Online" : "● Offline";
         StatusText.Foreground = online ? Brushes.LimeGreen : (Brush)FindResource("SecondaryTextBrush");
@@ -92,9 +91,12 @@ public partial class ProfileView : UserControl
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
     {
         if (_busy || _profile == null) return;
-        if (string.IsNullOrWhiteSpace(DisplayNameBox.Text) || string.IsNullOrWhiteSpace(UserIdBox.Text) || string.IsNullOrWhiteSpace(EmailBox.Text))
+        if (string.IsNullOrWhiteSpace(DisplayNameBox.Text) ||
+            string.IsNullOrWhiteSpace(UserIdBox.Text) ||
+            string.IsNullOrWhiteSpace(EmailBox.Text) ||
+            string.IsNullOrWhiteSpace(PhoneBox.Text))
         {
-            ShowFeedback("Display name, User ID and Email are required.");
+            ShowFeedback("Display name, User ID, Email and Phone Number are required.");
             return;
         }
         if (BioBox.Text.Length > 160)
@@ -112,6 +114,7 @@ public partial class ProfileView : UserControl
             {
                 DisplayName = DisplayNameBox.Text.Trim(),
                 Email = EmailBox.Text.Trim(),
+                PhoneNumber = PhoneBox.Text.Trim(),
                 Bio = BioBox.Text.Trim(),
                 NewUserId = UserIdBox.Text.Trim()
             };
@@ -128,6 +131,11 @@ public partial class ProfileView : UserControl
             _profile = result.User;
             NormalizeAvatarUrl();
             DataContext = _profile;
+            DisplayNameBox.Text = _profile.DisplayName;
+            UserIdBox.Text = _profile.Id;
+            EmailBox.Text = _profile.Email;
+            PhoneBox.Text = _profile.PhoneNumber ?? string.Empty;
+            BioBox.Text = _profile.Bio;
             UpdateProfileTextUi();
             ShowFeedback(result.Message);
 
