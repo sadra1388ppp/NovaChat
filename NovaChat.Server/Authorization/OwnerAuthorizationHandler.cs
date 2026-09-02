@@ -20,7 +20,7 @@ public class OwnerAuthorizationHandler : AuthorizationHandler<OwnerRequirement>
             context.User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         var ownerId =
-            _configuration["Owner:Id"];
+            _configuration["Owner:UserId"];
 
         if (!string.IsNullOrWhiteSpace(currentUserId) &&
             !string.IsNullOrWhiteSpace(ownerId) &&
