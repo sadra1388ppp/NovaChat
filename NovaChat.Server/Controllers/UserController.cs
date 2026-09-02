@@ -54,7 +54,7 @@ public class UserController : ControllerBase
     {
         var currentUserId = CurrentUserId();
         if (currentUserId == null) return Unauthorized();
-        var user = await _userService.GetUserByIdAsync(currentUserId);
+        var user = await _userService.GetUserByIdAsync(currentUserId, includePhoneNumber: true);
         return user == null ? NotFound(new { message = "User not found." }) : Ok(user);
     }
 
@@ -102,7 +102,7 @@ public class UserController : ControllerBase
     public async Task<IActionResult> GetUser(string id)
     {
         if (!IsOwner() && !IsCurrentUser(id)) return Forbid();
-        var user = await _userService.GetUserByIdAsync(id);
+        var user = await _userService.GetUserByIdAsync(id, includePhoneNumber: IsCurrentUser(id) || IsOwner());
         return user == null ? NotFound(new { message = "User not found." }) : Ok(user);
     }
 
@@ -157,7 +157,7 @@ public class UserController : ControllerBase
             if (!result.Success) return NotFound(new { message = result.Message });
             DeleteStoredAvatar(oldProfile?.AvatarUrl);
 
-            var refreshedUser = await _userService.GetUserByIdAsync(id);
+            var refreshedUser = await _userService.GetUserByIdAsync(id, includePhoneNumber: true);
             await _hub.Clients.All.SendAsync("ProfileUpdated", new { userId = id, displayName = refreshedUser?.DisplayName ?? string.Empty, bio = refreshedUser?.Bio ?? string.Empty, avatarUrl = refreshedUser?.AvatarUrl });
             return Ok(new { message = result.Message, user = refreshedUser });
         }
@@ -175,9 +175,9 @@ public class UserController : ControllerBase
         var result = await _userService.ClearAvatarAsync(id);
         if (!result.Success) return NotFound(new { message = result.Message });
         DeleteStoredAvatar(result.OldAvatarUrl);
-        var user = await _userService.GetUserByIdAsync(id);
+        var user = await _userService.GetUserByIdAsync(id, includePhoneNumber: true);
         await _hub.Clients.All.SendAsync("ProfileUpdated", new { userId = id, displayName = user?.DisplayName ?? string.Empty, bio = user?.Bio ?? string.Empty, avatarUrl = (string?)null });
-        return Ok(new { message = result.Message });
+        return Ok(new { message = result.Message, user });
     }
 
     [Authorize]
