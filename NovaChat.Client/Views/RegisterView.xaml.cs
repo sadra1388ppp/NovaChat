@@ -28,6 +28,7 @@ namespace NovaChat.Client.Views
             string userId = UserIdTextBox.Text.Trim();
             string displayName = DisplayNameTextBox.Text.Trim();
             string email = EmailTextBox.Text.Trim();
+            string phoneNumber = PhoneNumberTextBox.Text.Trim();
             string password = PasswordBox.Password;
 
             try
@@ -35,6 +36,7 @@ namespace NovaChat.Client.Views
                 if (string.IsNullOrWhiteSpace(userId) ||
                     string.IsNullOrWhiteSpace(displayName) ||
                     string.IsNullOrWhiteSpace(email) ||
+                    string.IsNullOrWhiteSpace(phoneNumber) ||
                     string.IsNullOrWhiteSpace(password))
                 {
                     MessageBox.Show(
@@ -52,6 +54,7 @@ namespace NovaChat.Client.Views
                     Id = userId,
                     DisplayName = displayName,
                     Email = email,
+                    PhoneNumber = phoneNumber,
                     Password = password
                 };
 
