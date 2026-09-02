@@ -22,6 +22,14 @@ public class AppDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
+        modelBuilder.Entity<User>()
+            .Property(u => u.PhoneNumber)
+            .HasMaxLength(32);
+
+        modelBuilder.Entity<User>()
+            .HasIndex(u => u.PhoneNumber)
+            .IsUnique();
+
         modelBuilder.Entity<Chat>()
             .HasOne(c => c.User1)
             .WithMany()
