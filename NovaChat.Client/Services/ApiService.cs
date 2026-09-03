@@ -1,6 +1,7 @@
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace NovaChat.Client.Services;
 
@@ -16,7 +17,9 @@ public class ApiService
     public string BuildAbsoluteUrl(string? relativeUrl)
     {
         if (string.IsNullOrWhiteSpace(relativeUrl)) return string.Empty;
-        return Uri.TryCreate(relativeUrl, UriKind.Absolute, out var absolute) ? absolute.ToString() : new Uri(_httpClient.BaseAddress!, relativeUrl).ToString();
+        return Uri.TryCreate(relativeUrl, UriKind.Absolute, out var absolute)
+            ? absolute.ToString()
+            : new Uri(_httpClient.BaseAddress!, relativeUrl).ToString();
     }
 
     private void AddAuthorization()
@@ -29,32 +32,32 @@ public class ApiService
     public async Task<TResponse?> PostAsync<TRequest, TResponse>(string endpoint, TRequest data)
     {
         AddAuthorization();
-        var response = await _httpClient.PostAsJsonAsync(endpoint, data);
-        if (!response.IsSuccessStatusCode) return default;
+        using var response = await _httpClient.PostAsJsonAsync(endpoint, data);
+        await EnsureSuccessAsync(response, endpoint);
         return await response.Content.ReadFromJsonAsync<TResponse>();
     }
 
     public async Task<TResponse?> PutAsync<TRequest, TResponse>(string endpoint, TRequest data)
     {
         AddAuthorization();
-        var response = await _httpClient.PutAsJsonAsync(endpoint, data);
-        if (!response.IsSuccessStatusCode) return default;
+        using var response = await _httpClient.PutAsJsonAsync(endpoint, data);
+        await EnsureSuccessAsync(response, endpoint);
         return await response.Content.ReadFromJsonAsync<TResponse>();
     }
 
     public async Task<TResponse?> GetAsync<TResponse>(string endpoint)
     {
         AddAuthorization();
-        var response = await _httpClient.GetAsync(endpoint);
-        if (!response.IsSuccessStatusCode) return default;
+        using var response = await _httpClient.GetAsync(endpoint);
+        await EnsureSuccessAsync(response, endpoint);
         return await response.Content.ReadFromJsonAsync<TResponse>();
     }
 
     public async Task<byte[]?> GetBytesAsync(string endpoint)
     {
         AddAuthorization();
-        var response = await _httpClient.GetAsync(endpoint, HttpCompletionOption.ResponseHeadersRead);
-        if (!response.IsSuccessStatusCode) return null;
+        using var response = await _httpClient.GetAsync(endpoint, HttpCompletionOption.ResponseHeadersRead);
+        await EnsureSuccessAsync(response, endpoint);
         return await response.Content.ReadAsByteArrayAsync();
     }
 
@@ -84,15 +87,47 @@ public class ApiService
         fileContent.Headers.ContentType = new MediaTypeHeaderValue(mediaType);
         form.Add(fileContent, fieldName, System.IO.Path.GetFileName(filePath));
 
-        var response = await _httpClient.PostAsync(endpoint, form);
-        if (!response.IsSuccessStatusCode) return default;
+        using var response = await _httpClient.PostAsync(endpoint, form);
+        await EnsureSuccessAsync(response, endpoint);
         return await response.Content.ReadFromJsonAsync<TResponse>();
     }
 
     public async Task<bool> DeleteAsync(string endpoint)
     {
         AddAuthorization();
-        var response = await _httpClient.DeleteAsync(endpoint);
-        return response.IsSuccessStatusCode;
+        using var response = await _httpClient.DeleteAsync(endpoint);
+        await EnsureSuccessAsync(response, endpoint);
+        return true;
+    }
+
+    private static async Task EnsureSuccessAsync(HttpResponseMessage response, string endpoint)
+    {
+        if (response.IsSuccessStatusCode) return;
+
+        var body = await response.Content.ReadAsStringAsync();
+        var message = ExtractErrorMessage(body);
+        throw new HttpRequestException(
+            $"API {endpoint} failed ({(int)response.StatusCode} {response.ReasonPhrase}): {message}");
+    }
+
+    private static string ExtractErrorMessage(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+            return "The server returned no error details.";
+
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            if (document.RootElement.TryGetProperty("message", out var message))
+                return message.GetString() ?? body;
+            if (document.RootElement.TryGetProperty("title", out var title))
+                return title.GetString() ?? body;
+        }
+        catch (JsonException)
+        {
+            // Fall back to plain-text response bodies.
+        }
+
+        return body.Length > 1000 ? body[..1000] : body;
     }
 }
