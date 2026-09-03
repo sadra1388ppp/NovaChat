@@ -4,6 +4,62 @@
              HorizontalAlignment="Stretch"
              VerticalAlignment="Stretch"
              Background="#121417">
+    <UserControl.Resources>
+        <Style x:Key="GlassSignInButton" TargetType="Button">
+            <Setter Property="Foreground" Value="#121417" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="#00FFFFFF" />
+            <Setter Property="Background" Value="#D4A373" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Border x:Name="GlassBorder" CornerRadius="16" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1">
+                                <Border.Effect>
+                                    <DropShadowEffect x:Name="GlassShadow" BlurRadius="0" ShadowDepth="0" Opacity="0" />
+                                </Border.Effect>
+                                <Grid Clip="{Binding RelativeSource={RelativeSource Self}, Path=Clip}">
+                                    <Border x:Name="GlassReflection" CornerRadius="16" Opacity="0" IsHitTestVisible="False">
+                                        <Border.Background>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                <GradientStop Color="#66FFFFFF" Offset="0" />
+                                                <GradientStop Color="#18FFFFFF" Offset="0.32" />
+                                                <GradientStop Color="#00FFFFFF" Offset="0.65" />
+                                                <GradientStop Color="#42FFFFFF" Offset="1" />
+                                            </LinearGradientBrush>
+                                        </Border.Background>
+                                    </Border>
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="GlassBorder" Property="Background" Value="#BFD4A373" />
+                                <Setter TargetName="GlassBorder" Property="BorderBrush" Value="#80FFFFFF" />
+                                <Setter TargetName="GlassShadow" Property="BlurRadius" Value="24" />
+                                <Setter TargetName="GlassShadow" Property="Color" Value="#FFD6A96E" />
+                                <Setter TargetName="GlassShadow" Property="Opacity" Value="0.42" />
+                                <Setter TargetName="GlassReflection" Property="Opacity" Value="1" />
+                                <Setter Property="Foreground" Value="#FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="GlassBorder" Property="Background" Value="#99FFFFFF" />
+                                <Setter TargetName="GlassBorder" Property="BorderBrush" Value="#BFFFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="GlassBorder" Property="Opacity" Value="0.55" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
     <Grid x:Name="LoginRoot" Background="#121417">
         <Grid.Resources>
             <DropShadowEffect x:Key="LampShadow" BlurRadius="18" ShadowDepth="4" Opacity="0.35" />
@@ -50,8 +106,7 @@
                         <Path x:Name="LampReflector" Data="M 0,0 L 0,0" Fill="#282A31" Opacity="0" IsHitTestVisible="False" />
                     </Canvas>
                     <Path x:Name="PullCord" Stroke="#555555" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" IsHitTestVisible="False" />
-                    <!-- Bead center is exactly the same point as the cord endpoint (300,350). -->
-                    <Ellipse x:Name="LampPull" Width="15" Height="15" Canvas.Left="292.5" Canvas.Top="342.5" Fill="#D4A373" Stroke="#E8C79C" StrokeThickness="1" Cursor="Hand" MouseLeftButtonDown="LampPull_MouseLeftButtonDown" RenderTransformOrigin="0.5,0.5">
+                    <Ellipse x:Name="LampPull" Width="15" Height="15" Canvas.Left="322.5" Canvas.Top="342.5" Fill="#D4A373" Stroke="#E8C79C" StrokeThickness="1" Cursor="Hand" MouseLeftButtonDown="LampPull_MouseLeftButtonDown" RenderTransformOrigin="0.5,0.5">
                         <Ellipse.RenderTransform>
                             <TranslateTransform x:Name="LampPullTransform" X="0" Y="0" />
                         </Ellipse.RenderTransform>
@@ -66,12 +121,12 @@
                 <Border x:Name="LoginCard" Background="#0D0F13" BorderBrush="#FFFFFF1A" BorderThickness="1" CornerRadius="30" Padding="32" Opacity="0" IsHitTestVisible="False">
                     <Border.Effect><DropShadowEffect x:Name="LoginCardShadow" BlurRadius="40" ShadowDepth="18" Opacity="0.3" /></Border.Effect>
                     <StackPanel>
-                        <TextBlock x:Name="SignInTitle" Text="Welcome" FontSize="25" FontWeight="Medium" Foreground="#FFFFFF" HorizontalAlignment="Center" Margin="0,0,0,25" />
+                        <TextBlock x:Name="SignInTitle" Text="Welcome to NovaChat" FontSize="25" FontWeight="Medium" Foreground="#FFFFFF" HorizontalAlignment="Center" Margin="0,0,0,25" />
                         <TextBlock Text="User ID" FontSize="12" Foreground="#999999" Margin="5,0,0,7" />
                         <TextBox x:Name="UserIdTextBox" Height="48" Margin="0,0,0,18" Background="#12FFFFFF" Foreground="#FFFFFF" BorderBrush="#12FFFFFF" Padding="14,0" VerticalContentAlignment="Center" />
                         <TextBlock Text="Password" FontSize="12" Foreground="#999999" Margin="5,0,0,7" />
                         <PasswordBox x:Name="PasswordBox" Height="48" Margin="0,0,0,20" Background="#12FFFFFF" Foreground="#FFFFFF" BorderBrush="#12FFFFFF" Padding="14,0" VerticalContentAlignment="Center" />
-                        <Button x:Name="LoginButton" Content="Sign In" Height="50" FontSize="15" Background="#D4A373" Foreground="#121417" BorderThickness="0" Click="LoginButton_Click" />
+                        <Button x:Name="LoginButton" Content="Sign In" Height="50" Click="LoginButton_Click" Style="{StaticResource GlassSignInButton}" />
                         <TextBlock x:Name="SignInSubtitle" Text="Continue to your NovaChat account" FontSize="11" Foreground="#777777" HorizontalAlignment="Center" Margin="0,18,0,0" />
                         <Button Content="Create a new account" Height="36" Margin="0,8,0,0" Background="Transparent" BorderThickness="0" Foreground="#D4A373" Click="CreateAccountButton_Click" />
                     </StackPanel>
