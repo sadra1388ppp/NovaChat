@@ -11,7 +11,7 @@
         </Grid.ColumnDefinitions>
 
         <Grid.Resources>
-            <DropShadowEffect x:Key="LampShadow" BlurRadius="20" ShadowDepth="7" Opacity="0.58" />
+            <DropShadowEffect x:Key="LampShadow" BlurRadius="18" ShadowDepth="6" Opacity="0.5" />
         </Grid.Resources>
 
         <Border x:Name="WarmLightOverlay" Grid.ColumnSpan="2" IsHitTestVisible="False" Opacity="0">
@@ -27,7 +27,7 @@
 
         <Grid Grid.Column="0" MinWidth="420">
             <Canvas x:Name="LampCanvas" Width="500" Height="650" HorizontalAlignment="Center" VerticalAlignment="Center" Background="Transparent" MouseMove="LampCanvas_MouseMove" MouseLeftButtonUp="LampCanvas_MouseLeftButtonUp">
-                <Ellipse x:Name="LampGlow" Width="450" Height="450" Canvas.Left="25" Canvas.Top="0" IsHitTestVisible="False" Opacity="0">
+                <Ellipse x:Name="LampGlow" Width="430" Height="430" Canvas.Left="35" Canvas.Top="15" IsHitTestVisible="False" Opacity="0">
                     <Ellipse.Fill>
                         <RadialGradientBrush>
                             <GradientStop Color="#FFFFF8D6" Offset="0" />
@@ -38,65 +38,48 @@
                     </Ellipse.Fill>
                 </Ellipse>
 
-                <Path x:Name="SuspensionWire" Stroke="#41434B" StrokeThickness="2.5" Data="M 250,0 L 250,105" IsHitTestVisible="False" />
+                <!-- Simple single pendant lamp. No chandelier parts. -->
+                <Path x:Name="SuspensionWire" Stroke="#4A4B51" StrokeThickness="2.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M 250,0 L 250,94" IsHitTestVisible="False" />
 
-                <!-- Simple premium hanging lamp: canopy + cable + dome shade + single bulb -->
-                <Canvas x:Name="LampAssembly" Width="250" Height="205" Canvas.Left="125" Canvas.Top="78" RenderTransformOrigin="0.5,0" Effect="{StaticResource LampShadow}">
+                <Canvas x:Name="LampAssembly" Width="190" Height="165" Canvas.Left="155" Canvas.Top="82" RenderTransformOrigin="0.5,0" Effect="{StaticResource LampShadow}">
                     <Canvas.RenderTransform>
                         <RotateTransform x:Name="LampRotateTransform" Angle="0" />
                     </Canvas.RenderTransform>
 
-                    <!-- Ceiling canopy -->
-                    <Ellipse Width="54" Height="17" Canvas.Left="98" Canvas.Top="0" Fill="#191B21" Stroke="#74767D" StrokeThickness="1.8" />
-                    <Ellipse Width="38" Height="10" Canvas.Left="106" Canvas.Top="3.5" Fill="#2D3037" Stroke="#9B9DA3" StrokeThickness="1" />
+                    <!-- Small ceiling mount -->
+                    <Ellipse Width="40" Height="11" Canvas.Left="75" Canvas.Top="0" Fill="#24262C" Stroke="#777981" StrokeThickness="1.4" />
+                    <Rectangle Width="5" Height="22" Canvas.Left="92.5" Canvas.Top="7" RadiusX="2.5" RadiusY="2.5" Fill="#65676E" />
 
-                    <!-- Short metal stem -->
-                    <Rectangle Width="7" Height="34" Canvas.Left="121.5" Canvas.Top="12" RadiusX="3" RadiusY="3" Fill="#676971" />
-                    <Ellipse Width="13" Height="7" Canvas.Left="118.5" Canvas.Top="43" Fill="#272930" Stroke="#8B8D94" StrokeThickness="1" />
-
-                    <!-- Classic dome shade -->
-                    <Path Data="M 31,52 Q 125,24 219,52 L 207,94 Q 196,126 165,143 Q 125,164 85,143 Q 54,126 43,94 Z" Stroke="#74767E" StrokeThickness="2.2">
+                    <!-- Very simple downward-facing lamp shade -->
+                    <Path Data="M 28,29 Q 95,12 162,29 L 150,70 Q 143,91 124,106 Q 95,126 66,106 Q 47,91 40,70 Z" Stroke="#70727A" StrokeThickness="1.8">
                         <Path.Fill>
-                            <LinearGradientBrush StartPoint="0,0" EndPoint="0.85,1">
-                                <GradientStop Color="#3B3D46" Offset="0" />
-                                <GradientStop Color="#22242C" Offset="0.46" />
-                                <GradientStop Color="#111217" Offset="1" />
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0.8,1">
+                                <GradientStop Color="#44464F" Offset="0" />
+                                <GradientStop Color="#292B33" Offset="0.48" />
+                                <GradientStop Color="#15161C" Offset="1" />
                             </LinearGradientBrush>
                         </Path.Fill>
                     </Path>
 
-                    <Path Data="M 43,53 Q 125,30 207,53" Stroke="#B9BBC0" StrokeThickness="2.5" Opacity="0.38" IsHitTestVisible="False" />
-                    <Path Data="M 57,61 Q 125,42 193,61" Stroke="#8B8D94" StrokeThickness="1.5" Opacity="0.32" IsHitTestVisible="False" />
+                    <!-- Subtle highlight, kept minimal -->
+                    <Path Data="M 42,31 Q 95,18 148,31" Stroke="#C3C4C8" StrokeThickness="1.6" Opacity="0.28" IsHitTestVisible="False" />
 
-                    <!-- Warm inner reflector -->
-                    <Path x:Name="LampReflector" Data="M 48,91 Q 125,72 202,91 Q 191,124 160,139 Q 125,153 90,139 Q 59,124 48,91 Z" Stroke="#777981" StrokeThickness="1.7">
-                        <Path.Fill>
-                            <SolidColorBrush Color="#282A31" />
-                        </Path.Fill>
-                    </Path>
-
-                    <!-- Bulb socket -->
-                    <Rectangle Width="26" Height="22" Canvas.Left="112" Canvas.Top="66" RadiusX="4" RadiusY="4" Fill="#3E4048" Stroke="#888A91" StrokeThickness="1.4" />
-                    <Rectangle Width="18" Height="4" Canvas.Left="116" Canvas.Top="70" RadiusX="2" RadiusY="2" Fill="#696B73" />
-                    <Rectangle Width="18" Height="4" Canvas.Left="116" Canvas.Top="77" RadiusX="2" RadiusY="2" Fill="#696B73" />
-
-                    <!-- One real bulb, not a chandelier -->
-                    <Ellipse x:Name="LampBulbGlow" Width="82" Height="82" Canvas.Left="84" Canvas.Top="82" Fill="#FFF3A6" Opacity="0.04" IsHitTestVisible="False" />
-                    <Ellipse x:Name="LampBulb" Width="43" Height="56" Canvas.Left="103.5" Canvas.Top="83" Stroke="#A4A6AC" StrokeThickness="1.8">
+                    <!-- Single warm bulb visible from underneath -->
+                    <Ellipse x:Name="LampBulbGlow" Width="74" Height="74" Canvas.Left="58" Canvas.Top="73" Fill="#FFF3A6" Opacity="0.04" IsHitTestVisible="False" />
+                    <Ellipse x:Name="LampBulb" Width="34" Height="42" Canvas.Left="78" Canvas.Top="73" Stroke="#9EA0A6" StrokeThickness="1.5">
                         <Ellipse.Fill>
                             <SolidColorBrush Color="#454751" />
                         </Ellipse.Fill>
                     </Ellipse>
-                    <Ellipse Width="30" Height="40" Canvas.Left="110" Canvas.Top="91" Fill="#777A83" Opacity="0.34" IsHitTestVisible="False" />
-                    <Path Data="M 116,101 L 125,94 L 134,101 M 116,109 L 125,102 L 134,109 M 116,117 L 125,110 L 134,117 M 116,125 L 125,118 L 134,125" Stroke="#D7D8DA" StrokeThickness="1.1" Opacity="0.3" IsHitTestVisible="False" />
 
-                    <!-- Shade rim -->
-                    <Ellipse x:Name="LampShadeGlow" Width="132" Height="24" Canvas.Left="59" Canvas.Top="126" Fill="#202229" Stroke="#898B92" StrokeThickness="2.2" />
-                    <Ellipse Width="108" Height="15" Canvas.Left="71" Canvas.Top="130.5" Fill="#090A0E" Opacity="0.75" IsHitTestVisible="False" />
+                    <!-- Open lower rim makes the downward direction obvious -->
+                    <Ellipse x:Name="LampShadeGlow" Width="104" Height="16" Canvas.Left="43" Canvas.Top="106" Fill="#24262D" Stroke="#85878E" StrokeThickness="1.8" />
+                    <Ellipse Width="84" Height="10" Canvas.Left="53" Canvas.Top="109" Fill="#090A0E" Opacity="0.82" IsHitTestVisible="False" />
                 </Canvas>
 
-                <Path x:Name="PullCord" Stroke="#AFA17D" StrokeThickness="3.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" IsHitTestVisible="False" />
-                <Ellipse x:Name="LampPull" Width="23" Height="23" Canvas.Left="238.5" Canvas.Top="350" Fill="#AFA16F" Stroke="#E8D99C" StrokeThickness="2" Cursor="Hand" MouseLeftButtonDown="LampPull_MouseLeftButtonDown">
+                <!-- Loose pull cord: its top is attached naturally under one side of the shade. -->
+                <Path x:Name="PullCord" Stroke="#AFA17D" StrokeThickness="3.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" IsHitTestVisible="False" />
+                <Ellipse x:Name="LampPull" Width="22" Height="22" Canvas.Left="245" Canvas.Top="350" Fill="#AFA16F" Stroke="#E8D99C" StrokeThickness="1.8" Cursor="Hand" MouseLeftButtonDown="LampPull_MouseLeftButtonDown">
                     <Ellipse.RenderTransform>
                         <TranslateTransform x:Name="LampPullTransform" />
                     </Ellipse.RenderTransform>
