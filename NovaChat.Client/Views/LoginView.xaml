@@ -280,7 +280,7 @@
                         <PasswordBox x:Name="PasswordBox" Height="48" Margin="0,0,0,20" Style="{StaticResource GlassPasswordBox}" />
                         <Button x:Name="LoginButton" Content="Sign In" Height="50" Click="LoginButton_Click" Style="{StaticResource GlassSignInButton}" />
                         <TextBlock x:Name="SignInSubtitle" Text="Continue to your NovaChat account" FontSize="11" Foreground="#8E939B" HorizontalAlignment="Center" Margin="0,18,0,0" />
-                        <Button Content="Create a new account" Height="36" Margin="0,8,0,0" Click="CreateAccountButton_Click" Style="{StaticResource CreateAccountButton}" />
+                        <Button x:Name="CreateAccountButton" Content="Create a new account" Height="36" Margin="0,8,0,0" Click="CreateAccountButton_Click" Style="{StaticResource CreateAccountButton}" />
                     </StackPanel>
                 </Border>
             </Grid>
