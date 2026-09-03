@@ -17,39 +17,70 @@ public class ChatController : ControllerBase
     private readonly ChatService _chatService;
     private readonly IConfiguration _configuration;
     private readonly IHubContext<ChatHub> _hub;
+    private readonly ILogger<ChatController> _logger;
 
-    public ChatController(ChatService chatService, IConfiguration configuration, IHubContext<ChatHub> hub)
+    public ChatController(
+        ChatService chatService,
+        IConfiguration configuration,
+        IHubContext<ChatHub> hub,
+        ILogger<ChatController> logger)
     {
         _chatService = chatService;
         _configuration = configuration;
         _hub = hub;
+        _logger = logger;
     }
 
     [HttpPost]
     public async Task<IActionResult> CreateChat(CreateChatDto dto)
     {
         var currentUserId = GetCurrentUserId();
-        if (currentUserId == null) return Unauthorized();
+        if (currentUserId == null)
+            return Unauthorized(new { message = "Authentication is required." });
+
         if (dto == null || string.IsNullOrWhiteSpace(dto.UserId))
             return BadRequest(new { message = "User ID is required." });
 
-        var chat = await _chatService.CreatePrivateChatAsync(currentUserId, dto.UserId.Trim());
-        if (chat == null) return BadRequest(new { message = "Unable to create private chat." });
+        var otherUserId = dto.UserId.Trim();
 
-        await _hub.Clients.Users(chat.User1Id, chat.User2Id).SendAsync("ChatCreated", new
-        {
-            id = chat.Id,
-            user1Id = chat.User1Id,
-            user2Id = chat.User2Id,
-            createdAt = chat.CreatedAt,
-            createdBy = currentUserId
-        });
+        if (string.Equals(currentUserId, otherUserId, StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new { message = "You cannot create a private chat with yourself." });
 
-        return Ok(new
+        if (!await _chatService.UserExistsAsync(currentUserId))
+            return Unauthorized(new { message = "The signed-in user no longer exists." });
+
+        if (!await _chatService.UserExistsAsync(otherUserId))
+            return NotFound(new { message = $"User '{otherUserId}' was not found." });
+
+        try
         {
-            message = "Private chat created successfully.",
-            chat = new { chat.Id, chat.User1Id, chat.User2Id, chat.CreatedAt }
-        });
+            var chat = await _chatService.CreatePrivateChatAsync(currentUserId, otherUserId);
+            if (chat == null)
+                return BadRequest(new { message = "The private chat could not be created." });
+
+            await _hub.Clients.Users(chat.User1Id, chat.User2Id).SendAsync("ChatCreated", new
+            {
+                id = chat.Id,
+                user1Id = chat.User1Id,
+                user2Id = chat.User2Id,
+                createdAt = chat.CreatedAt,
+                createdBy = currentUserId
+            });
+
+            return Ok(new
+            {
+                message = "Private chat created successfully.",
+                chat = new { chat.Id, chat.User1Id, chat.User2Id, chat.CreatedAt }
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create private chat between {CurrentUserId} and {OtherUserId}.", currentUserId, otherUserId);
+            return Problem(
+                statusCode: StatusCodes.Status500InternalServerError,
+                title: "Private chat creation failed",
+                detail: "The server could not create the private chat. Check the server log for the underlying database error.");
+        }
     }
 
     [HttpGet]
