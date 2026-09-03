@@ -81,9 +81,9 @@
                           StrokeEndLineCap="Round"
                           IsHitTestVisible="False" />
 
-                    <!-- Bead center is exactly the same point as the cord endpoint (258,350). -->
+                    <!-- Bead center is exactly the same point as the cord endpoint (330,350). -->
                     <Ellipse x:Name="LampPull" Width="15" Height="15"
-                             Canvas.Left="250.5" Canvas.Top="342.5"
+                             Canvas.Left="322.5" Canvas.Top="342.5"
                              Fill="#D4A373" Stroke="#E8C79C" StrokeThickness="1"
                              Cursor="Hand"
                              MouseLeftButtonDown="LampPull_MouseLeftButtonDown"
