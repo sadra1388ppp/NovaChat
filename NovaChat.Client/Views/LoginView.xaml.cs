@@ -39,7 +39,6 @@ namespace NovaChat.Client.Views
         private const double MaxPullDistance = 175;
         private const double ToggleThreshold = 72;
 
-        // Softer spring + damping gives the cord a more believable weighted motion.
         private const double SpringStrength = 20.5;
         private const double Damping = 6.8;
         private const double MaxSpeed = 850.0;
@@ -147,14 +146,12 @@ namespace NovaChat.Client.Views
                 nextY *= scale;
             }
 
-            // Input velocity is smoothed instead of directly multiplying mouse deltas.
             _pullVelocityX = Math.Clamp(_pullVelocityX * 0.55 + deltaX * 12.0, -MaxSpeed, MaxSpeed);
             _pullVelocityY = Math.Clamp(_pullVelocityY * 0.55 + deltaY * 12.0, -MaxSpeed, MaxSpeed);
 
             _pullX = nextX;
             _pullY = nextY;
 
-            // Horizontal movement gives the lamp a small, delayed swing.
             _lampAngularVelocity += deltaX * 0.010 - deltaY * 0.002;
             _lampAngularVelocity = Math.Clamp(_lampAngularVelocity, -2.2, 2.2);
 
@@ -205,8 +202,6 @@ namespace NovaChat.Client.Views
 
         private void PhysicsRendering(object? sender, EventArgs e)
         {
-            // Rendering is synchronized with WPF's actual render cadence instead of
-            // using a fixed 16 ms DispatcherTimer that can drift and pile up work.
             double dt = _physicsClock.Elapsed.TotalSeconds;
             _physicsClock.Restart();
             dt = Math.Clamp(dt, 0.001, 0.032);
@@ -233,7 +228,6 @@ namespace NovaChat.Client.Views
                 _pullX += _pullVelocityX * dt;
                 _pullY += _pullVelocityY * dt;
 
-                // Prevent numerical overshoot from creating an artificial snap.
                 double distance = Math.Sqrt(_pullX * _pullX + _pullY * _pullY);
                 if (distance > MaxPullDistance)
                 {
@@ -280,8 +274,6 @@ namespace NovaChat.Client.Views
             double length = Math.Max(1, endY - CordTopY);
             double horizontal = endX - CordTopX;
 
-            // The lower half follows the pull more strongly, while the upper half
-            // stays anchored, producing a natural hanging curve.
             double sway = Math.Clamp(horizontal * 0.30 + _pullVelocityX * 0.025, -62, 62);
 
             _cordSegment!.Point1 = new Point(
@@ -294,7 +286,6 @@ namespace NovaChat.Client.Views
 
             _cordSegment.Point3 = new Point(endX, endY);
 
-            // Updating a transform avoids changing Canvas layout on every frame.
             _pullTranslate!.X = _pullX;
             _pullTranslate.Y = _pullY;
         }
@@ -307,38 +298,40 @@ namespace NovaChat.Client.Views
 
         private void ApplyLampVisuals(bool on, bool animate)
         {
-            Color bulbColor = on ? Color.FromRgb(255, 241, 154) : Color.FromRgb(69, 71, 81);
-            Color shadeColor = on ? Color.FromRgb(78, 69, 41) : Color.FromRgb(36, 38, 48);
-            Color reflectorColor = on ? Color.FromRgb(105, 91, 50) : Color.FromRgb(40, 42, 49);
-            Color cordColor = on ? Color.FromRgb(238, 220, 153) : Color.FromRgb(174, 160, 124);
-            Color pullColor = on ? Color.FromRgb(255, 226, 122) : Color.FromRgb(177, 160, 102);
+            Color bulbColor = on ? Color.FromRgb(255, 255, 255) : Color.FromRgb(245, 240, 230);
+            Color shadeColor = on ? Color.FromRgb(255, 255, 255) : Color.FromRgb(245, 240, 230);
+            Color reflectorColor = on ? Color.FromRgb(255, 219, 138) : Color.FromRgb(45, 47, 53);
+            Color cordColor = on ? Color.FromRgb(85, 85, 85) : Color.FromRgb(85, 85, 85);
+            Color pullColor = on ? Color.FromRgb(212, 163, 115) : Color.FromRgb(212, 163, 115);
 
             SetAnimatedColor(LampBulb, Shape.FillProperty, bulbColor, animate);
-            SetAnimatedColor(LampShadeGlow, Shape.FillProperty, shadeColor, animate);
+            SetAnimatedColor(LampShadeGlow, Shape.StrokeProperty, shadeColor, animate);
             SetAnimatedColor(LampReflector, Shape.FillProperty, reflectorColor, animate);
             SetAnimatedColor(PullCord, Shape.StrokeProperty, cordColor, animate);
             SetAnimatedColor(LampPull, Shape.FillProperty, pullColor, animate);
 
             AnimateOpacity(LampGlow, on ? 1.0 : 0.0, 480, animate);
-            AnimateOpacity(LampBulbGlow, on ? 0.92 : 0.04, 320, animate);
+            AnimateOpacity(LampBulbGlow, on ? 0.65 : 0.02, 320, animate);
+            AnimateOpacity(LampReflector, on ? 0.55 : 0.0, 320, animate);
             AnimateOpacity(WarmLightOverlay, on ? 0.78 : 0.0, 720, animate);
 
+            AnimateOpacity(LoginCard, on ? 1.0 : 0.0, 700, animate);
+            LoginCard.IsHitTestVisible = on;
+
             AnimateCardColor(LoginCard, Border.BackgroundProperty,
-                on ? Color.FromRgb(31, 28, 20) : Color.FromRgb(18, 20, 27), 420, animate);
+                on ? Color.FromRgb(28, 31, 36) : Color.FromRgb(13, 15, 19), 420, animate);
             AnimateCardColor(LoginCard, Border.BorderBrushProperty,
-                on ? Color.FromRgb(113, 91, 35) : Color.FromRgb(41, 44, 54), 420, animate);
+                on ? Color.FromArgb(35, 255, 255, 255) : Color.FromArgb(26, 255, 255, 255), 420, animate);
 
-            LoginCardShadow.Color = on ? Color.FromRgb(218, 170, 54) : Color.FromRgb(0, 0, 0);
-            LoginCardShadow.Opacity = on ? 0.48 : 0.35;
+            LoginCardShadow.Color = on ? Color.FromRgb(255, 214, 110) : Color.FromRgb(0, 0, 0);
+            LoginCardShadow.Opacity = on ? 0.35 : 0.30;
 
-            SignInTitle.Foreground = new SolidColorBrush(
-                on ? Color.FromRgb(255, 248, 220) : Color.FromRgb(233, 233, 237));
-            SignInSubtitle.Foreground = new SolidColorBrush(
-                on ? Color.FromRgb(188, 168, 111) : Color.FromRgb(119, 121, 131));
-            WelcomeText.Foreground = new SolidColorBrush(
-                on ? Color.FromRgb(255, 248, 218) : Color.FromRgb(233, 233, 237));
-            WelcomeSubText.Foreground = new SolidColorBrush(
-                on ? Color.FromRgb(214, 196, 133) : Color.FromRgb(110, 112, 122));
+            SignInTitle.Foreground = new SolidColorBrush(Color.FromRgb(255, 255, 255));
+            SignInSubtitle.Foreground = new SolidColorBrush(on
+                ? Color.FromRgb(153, 153, 153)
+                : Color.FromRgb(119, 119, 119));
+            WelcomeText.Foreground = new SolidColorBrush(Color.FromRgb(255, 255, 255));
+            WelcomeSubText.Foreground = new SolidColorBrush(Color.FromRgb(141, 146, 153));
         }
 
         private static void SetAnimatedColor(Shape shape, DependencyProperty property, Color color, bool animate)
