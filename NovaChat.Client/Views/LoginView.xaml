@@ -256,7 +256,7 @@
                     </StackPanel>
 
                     <StackPanel Canvas.Left="55" Canvas.Top="455" Width="310" HorizontalAlignment="Center">
-                        <TextBlock x:Name="WelcomeSubText" Text="Pull the cord to turn on the light" FontSize="12" Foreground="#9EA3AB" HorizontalAlignment="Center" TextAlignment="Center" />
+                        <TextBlock x:Name="WelcomeSubText" Text="Pull the cord to turn on the light" FontSize="20" Foreground="#9EA3AB" HorizontalAlignment="Center" TextAlignment="Center" />
                     </StackPanel>
                 </Canvas>
             </Grid>
