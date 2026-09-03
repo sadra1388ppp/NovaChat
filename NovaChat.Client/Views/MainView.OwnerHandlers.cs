@@ -5,7 +5,10 @@ namespace NovaChat.Client.Views;
 public partial class MainView
 {
     private void ManageUsersButton_Click(object sender, RoutedEventArgs e)
-        => MessageBox.Show("User management panel is coming next.", "NovaChat Owner", MessageBoxButton.OK, MessageBoxImage.Information);
+    {
+        if (!_isOwner) return;
+        (Window.GetWindow(this) as MainWindow)?.ShowManageUsers();
+    }
 
     private void AllChatsButton_Click(object sender, RoutedEventArgs e)
         => MessageBox.Show("All chats panel is coming next.", "NovaChat Owner", MessageBoxButton.OK, MessageBoxImage.Information);
