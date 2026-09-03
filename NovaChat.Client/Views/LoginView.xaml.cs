@@ -9,6 +9,7 @@ namespace NovaChat.Client.Views
     public partial class LoginView : UserControl
     {
         private readonly ApiService _apiService;
+        private bool _lampOn;
 
         public event Action? CreateAccountRequested;
         public event Action? LoginSuccessful;
@@ -20,15 +21,27 @@ namespace NovaChat.Client.Views
             _apiService = new ApiService();
         }
 
+        private void LampButton_Click(object sender, RoutedEventArgs e)
+        {
+            _lampOn = !_lampOn;
+
+            LampGlowOverlay.Opacity = _lampOn ? 0.72 : 0;
+            WarmLightOverlay.Opacity = _lampOn ? 0.10 : 0;
+            LampPull.Fill = _lampOn ? System.Windows.Media.Brushes.White :
+                new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(244, 201, 93));
+            LampCord.Fill = _lampOn ? System.Windows.Media.Brushes.White :
+                new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(247, 231, 181));
+            LampButton.ToolTip = _lampOn
+                ? "Pull the cord to turn the light off"
+                : "Pull the cord to turn the light on";
+        }
+
         private async void LoginButton_Click(
             object sender,
             RoutedEventArgs e)
         {
-            string userId =
-                UserIdTextBox.Text.Trim();
-
-            string password =
-                PasswordBox.Password;
+            string userId = UserIdTextBox.Text.Trim();
+            string password = PasswordBox.Password;
 
             if (string.IsNullOrWhiteSpace(userId) ||
                 string.IsNullOrWhiteSpace(password))
@@ -52,16 +65,11 @@ namespace NovaChat.Client.Views
                     Password = password
                 };
 
-                var result =
-                    await _apiService.PostAsync<
-                        LoginRequest,
-                        LoginResponse>(
-                            "api/User/login",
-                            request);
+                var result = await _apiService.PostAsync<LoginRequest, LoginResponse>(
+                    "api/User/login",
+                    request);
 
-                if (result == null ||
-                    string.IsNullOrWhiteSpace(
-                        result.Token))
+                if (result == null || string.IsNullOrWhiteSpace(result.Token))
                 {
                     MessageBox.Show(
                         "Invalid User ID or Password.",
