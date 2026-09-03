@@ -1,0 +1,58 @@
+name: Fix login subtitle positioning
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Move subtitle to bottom-center of root
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          path = Path("NovaChat.Client/Views/LoginView.xaml.cs")
+          text = path.read_text(encoding="utf-8")
+
+          pattern = r'        private void PositionLampSubtitle\(\)\n        \{.*?\n        \}\n\n        private void EnsureCordGeometry'
+          replacement = '''        private void PositionLampSubtitle()
+        {
+            // The subtitle must be centered relative to the entire login window,
+            // not relative to the lamp canvas.
+            if (WelcomeSubText.Parent is Panel oldParent)
+                oldParent.Children.Remove(WelcomeSubText);
+
+            if (!LoginRoot.Children.Contains(WelcomeSubText))
+                LoginRoot.Children.Add(WelcomeSubText);
+
+            WelcomeSubText.HorizontalAlignment = HorizontalAlignment.Center;
+            WelcomeSubText.VerticalAlignment = VerticalAlignment.Bottom;
+            WelcomeSubText.Margin = new Thickness(0, 0, 0, 18);
+        }
+
+        private void EnsureCordGeometry'''
+
+          updated, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+          if count != 1:
+              raise SystemExit("PositionLampSubtitle method was not found")
+
+          path.write_text(updated, encoding="utf-8")
+
+      - name: Commit fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add NovaChat.Client/Views/LoginView.xaml.cs
+          git diff --cached --quiet && exit 0
+          git commit -m "Center login subtitle at bottom of window"
+          git push
