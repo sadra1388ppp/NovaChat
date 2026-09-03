@@ -10,6 +10,10 @@
             <ColumnDefinition Width="0.85*" />
         </Grid.ColumnDefinitions>
 
+        <Grid.Resources>
+            <DropShadowEffect x:Key="LampShadow" BlurRadius="18" ShadowDepth="5" Opacity="0.55" />
+        </Grid.Resources>
+
         <Border x:Name="WarmLightOverlay"
                 Grid.ColumnSpan="2"
                 IsHitTestVisible="False"
@@ -38,17 +42,17 @@
                     MouseLeftButtonUp="LampCanvas_MouseLeftButtonUp">
 
                 <Ellipse x:Name="LampGlow"
-                         Width="390"
-                         Height="390"
-                         Canvas.Left="55"
-                         Canvas.Top="45"
+                         Width="430"
+                         Height="430"
+                         Canvas.Left="35"
+                         Canvas.Top="18"
                          IsHitTestVisible="False"
                          Opacity="0">
                     <Ellipse.Fill>
                         <RadialGradientBrush>
-                            <GradientStop Color="#FFFFF5C4" Offset="0" />
-                            <GradientStop Color="#FFF5CF62" Offset="0.25" />
-                            <GradientStop Color="#45E4B94D" Offset="0.58" />
+                            <GradientStop Color="#FFFFF8D6" Offset="0" />
+                            <GradientStop Color="#FFF5D36A" Offset="0.22" />
+                            <GradientStop Color="#55E4B94D" Offset="0.52" />
                             <GradientStop Color="#00E4B94D" Offset="1" />
                         </RadialGradientBrush>
                     </Ellipse.Fill>
@@ -61,62 +65,118 @@
                       IsHitTestVisible="False" />
 
                 <Canvas x:Name="LampAssembly"
-                        Width="190"
-                        Height="170"
-                        Canvas.Left="155"
-                        Canvas.Top="88"
-                        RenderTransformOrigin="0.5,0">
+                        Width="210"
+                        Height="180"
+                        Canvas.Left="145"
+                        Canvas.Top="86"
+                        RenderTransformOrigin="0.5,0"
+                        Effect="{StaticResource LampShadow}">
                     <Canvas.RenderTransform>
                         <RotateTransform x:Name="LampRotateTransform" Angle="0" />
                     </Canvas.RenderTransform>
 
-                    <Ellipse Width="22"
-                             Height="22"
-                             Canvas.Left="84"
+                    <!-- ceiling hook -->
+                    <Ellipse Width="24"
+                             Height="24"
+                             Canvas.Left="93"
                              Canvas.Top="0"
-                             Fill="#383A42"
-                             Stroke="#555761"
-                             StrokeThickness="1.5" />
-
+                             Fill="#292B33"
+                             Stroke="#696B73"
+                             StrokeThickness="2" />
+                    <Ellipse Width="9"
+                             Height="9"
+                             Canvas.Left="100.5"
+                             Canvas.Top="7"
+                             Fill="#111218" />
                     <Rectangle Width="8"
-                               Height="18"
-                               Canvas.Left="91"
-                               Canvas.Top="16"
+                               Height="20"
+                               Canvas.Left="101"
+                               Canvas.Top="19"
                                RadiusX="3"
                                RadiusY="3"
-                               Fill="#44464F" />
+                               Fill="#464850" />
 
-                    <Path Data="M 30,32 Q 95,4 160,32 L 139,116 Q 95,151 51,116 Z"
-                          Fill="#22242C"
-                          Stroke="#5A5C66"
+                    <!-- realistic metal shade -->
+                    <Path Data="M 23,34 Q 105,2 187,34 L 162,119 Q 151,145 105,153 Q 59,145 48,119 Z"
+                          Fill="#1D1F26"
+                          Stroke="#696B74"
                           StrokeThickness="3" />
-
-                    <Path Data="M 45,40 Q 95,17 145,40"
-                          Stroke="#72747D"
+                    <Path Data="M 30,34 Q 105,10 180,34"
+                          Stroke="#999BA1"
+                          StrokeThickness="3"
+                          Opacity="0.48"
+                          IsHitTestVisible="False" />
+                    <Path Data="M 45,52 Q 105,29 165,52"
+                          Stroke="#44464E"
                           StrokeThickness="2"
-                          Opacity="0.55"
+                          Opacity="0.8"
+                          IsHitTestVisible="False" />
+                    <Path Data="M 52,60 L 69,118 Q 105,141 141,118 L 158,60"
+                          Stroke="#30323A"
+                          StrokeThickness="2"
+                          Fill="Transparent"
                           IsHitTestVisible="False" />
 
-                    <Ellipse x:Name="LampShadeGlow"
-                             Width="94"
-                             Height="27"
-                             Canvas.Left="48"
-                             Canvas.Top="103"
-                             Fill="#1B1C22"
-                             Stroke="#676974"
-                             StrokeThickness="2" />
+                    <!-- warm inner reflector -->
+                    <Path x:Name="LampReflector"
+                          Data="M 51,111 Q 105,94 159,111 Q 151,145 105,154 Q 59,145 51,111 Z"
+                          Fill="#282A31"
+                          Stroke="#70727B"
+                          StrokeThickness="2" />
 
+                    <!-- bulb and socket -->
+                    <Rectangle Width="30"
+                               Height="22"
+                               Canvas.Left="90"
+                               Canvas.Top="76"
+                               RadiusX="4"
+                               RadiusY="4"
+                               Fill="#464850"
+                               Stroke="#74767D"
+                               StrokeThickness="1.5" />
+                    <Ellipse x:Name="LampBulbGlow"
+                             Width="66"
+                             Height="66"
+                             Canvas.Left="72"
+                             Canvas.Top="83"
+                             Fill="#FFF3A6"
+                             Opacity="0.05"
+                             IsHitTestVisible="False" />
                     <Ellipse x:Name="LampBulb"
                              Width="42"
                              Height="42"
-                             Canvas.Left="74"
-                             Canvas.Top="91"
+                             Canvas.Left="84"
+                             Canvas.Top="88"
                              Fill="#41434D"
-                             Stroke="#777985"
+                             Stroke="#898B92"
                              StrokeThickness="2" />
+                    <Ellipse Width="24"
+                             Height="24"
+                             Canvas.Left="93"
+                             Canvas.Top="97"
+                             Fill="#555761"
+                             Opacity="0.65"
+                             IsHitTestVisible="False" />
+
+                    <!-- lower rim -->
+                    <Ellipse x:Name="LampShadeGlow"
+                             Width="112"
+                             Height="30"
+                             Canvas.Left="49"
+                             Canvas.Top="105"
+                             Fill="#1A1B21"
+                             Stroke="#777983"
+                             StrokeThickness="2.5" />
+                    <Ellipse Width="91"
+                             Height="16"
+                             Canvas.Left="59.5"
+                             Canvas.Top="112"
+                             Fill="#0E0F14"
+                             Opacity="0.65"
+                             IsHitTestVisible="False" />
                 </Canvas>
 
-                <!-- The pull cord is attached directly to the bottom of the lamp. -->
+                <!-- cord remains directly attached to the lamp -->
                 <Path x:Name="PullCord"
                       Stroke="#AFA17D"
                       StrokeThickness="4"
@@ -135,38 +195,26 @@
                          Cursor="Hand"
                          MouseLeftButtonDown="LampPull_MouseLeftButtonDown" />
 
-                <TextBlock x:Name="PullHint"
-                           Text="pull the cord"
-                           Canvas.Left="145"
-                           Canvas.Top="614"
-                           Width="210"
-                           TextAlignment="Center"
-                           FontSize="13"
-                           Foreground="#777983"
-                           IsHitTestVisible="False" />
-
-                <TextBlock x:Name="WelcomeText"
-                           Text="Welcome to NovaChat"
-                           Canvas.Left="65"
-                           Canvas.Top="465"
-                           Width="370"
-                           FontSize="36"
-                           FontWeight="Bold"
-                           Foreground="#E9E9ED"
-                           TextAlignment="Center"
-                           TextWrapping="Wrap"
-                           IsHitTestVisible="False" />
-
-                <TextBlock x:Name="WelcomeSubText"
-                           Text="Pull the light. Sign in. Get back to your conversations."
-                           Canvas.Left="70"
-                           Canvas.Top="523"
-                           Width="360"
-                           FontSize="14"
-                           Foreground="#6E707A"
-                           TextAlignment="Center"
-                           TextWrapping="Wrap"
-                           IsHitTestVisible="False" />
+                <!-- welcome copy is intentionally at the bottom; no pull hint -->
+                <StackPanel Canvas.Left="50"
+                            Canvas.Top="485"
+                            Width="400"
+                            IsHitTestVisible="False">
+                    <TextBlock x:Name="WelcomeText"
+                               Text="Welcome to NovaChat"
+                               FontSize="32"
+                               FontWeight="Bold"
+                               Foreground="#E9E9ED"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap" />
+                    <TextBlock x:Name="WelcomeSubText"
+                               Text="Pull the light. Sign in. Get back to your conversations."
+                               FontSize="14"
+                               Foreground="#6E707A"
+                               Margin="0,9,0,0"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap" />
+                </StackPanel>
             </Canvas>
         </Grid>
 
@@ -181,6 +229,12 @@
                     BorderThickness="1"
                     CornerRadius="24"
                     Padding="34">
+                <Border.Effect>
+                    <DropShadowEffect x:Name="LoginCardShadow"
+                                      BlurRadius="28"
+                                      ShadowDepth="8"
+                                      Opacity="0.35" />
+                </Border.Effect>
                 <StackPanel>
                     <TextBlock x:Name="SignInTitle"
                                Text="Sign in"
