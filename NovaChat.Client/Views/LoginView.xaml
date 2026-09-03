@@ -21,7 +21,7 @@
                     <ControlTemplate TargetType="Button">
                         <Grid RenderTransformOrigin="0.5,0.5" SnapsToDevicePixels="True">
                             <Grid.RenderTransform>
-                                <ScaleTransform x:Name="ButtonScale" ScaleX="1" ScaleY="1" />
+                                <ScaleTransform ScaleX="1" ScaleY="1" />
                             </Grid.RenderTransform>
                             <Border x:Name="ButtonGlow" CornerRadius="16" Background="#00D4A373" BorderBrush="#00D4A373" BorderThickness="0" Margin="-5">
                                 <Border.Effect>
@@ -71,19 +71,10 @@
                                     </Setter.Value>
                                 </Setter>
                                 <Setter TargetName="ButtonShine" Property="Opacity" Value="0.9" />
-                                <BeginStoryboard>
-                                    <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleX" To="1.035" Duration="0:0:0.14" />
-                                        <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleY" To="1.035" Duration="0:0:0.14" />
-                                        <DoubleAnimation Storyboard.TargetName="ButtonShine" Storyboard.TargetProperty="Margin" From="-130,0,0,0" To="390,0,-520,0" Duration="0:0:0.60" />
-                                    </Storyboard>
-                                </BeginStoryboard>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="ButtonSurface" Property="Background" Value="#B98253" />
                                 <Setter TargetName="ButtonSurface" Property="BorderBrush" Value="#F2D1AE" />
-                                <Setter TargetName="ButtonScale" Property="ScaleX" Value="0.985" />
-                                <Setter TargetName="ButtonScale" Property="ScaleY" Value="0.985" />
                                 <Setter TargetName="ButtonTopGlass" Property="Opacity" Value="0.5" />
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
@@ -260,9 +251,12 @@
                         </Ellipse.RenderTransform>
                     </Ellipse>
 
-                    <StackPanel Canvas.Left="55" Canvas.Top="365" Width="310" HorizontalAlignment="Center">
+                    <StackPanel Canvas.Left="55" Canvas.Top="24" Width="310" HorizontalAlignment="Center">
                         <TextBlock x:Name="WelcomeText" Text="Welcome to NovaChat" FontSize="27" FontWeight="SemiBold" Foreground="#FFFFFF" HorizontalAlignment="Center" TextAlignment="Center" />
-                        <TextBlock x:Name="WelcomeSubText" Text="Pull the cord to turn on the light" FontSize="12" Foreground="#9EA3AB" HorizontalAlignment="Center" TextAlignment="Center" Margin="0,8,0,0" />
+                    </StackPanel>
+
+                    <StackPanel Canvas.Left="55" Canvas.Top="455" Width="310" HorizontalAlignment="Center">
+                        <TextBlock x:Name="WelcomeSubText" Text="Pull the cord to turn on the light" FontSize="12" Foreground="#9EA3AB" HorizontalAlignment="Center" TextAlignment="Center" />
                     </StackPanel>
                 </Canvas>
             </Grid>
