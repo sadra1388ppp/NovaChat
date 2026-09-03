@@ -230,27 +230,34 @@ namespace NovaChat.Client.Views
             Color bulbColor = on ? Color.FromRgb(255, 255, 255) : Color.FromRgb(245, 240, 230);
             Color shadeColor = on ? Color.FromRgb(255, 255, 255) : Color.FromRgb(245, 240, 230);
             Color reflectorColor = on ? Color.FromRgb(255, 219, 138) : Color.FromRgb(45, 47, 53);
-            Color cordColor = on ? Color.FromRgb(85, 85, 85) : Color.FromRgb(85, 85, 85);
-            Color pullColor = on ? Color.FromRgb(212, 163, 115) : Color.FromRgb(212, 163, 115);
+            Color cordColor = Color.FromRgb(85, 85, 85);
+            Color pullColor = Color.FromRgb(212, 163, 115);
+
             SetAnimatedColor(LampBulb, Shape.FillProperty, bulbColor, animate);
             SetAnimatedColor(LampShadeGlow, Shape.StrokeProperty, shadeColor, animate);
             SetAnimatedColor(LampReflector, Shape.FillProperty, reflectorColor, animate);
             SetAnimatedColor(PullCord, Shape.StrokeProperty, cordColor, animate);
             SetAnimatedColor(LampPull, Shape.FillProperty, pullColor, animate);
+
             AnimateOpacity(LampGlow, on ? 1.0 : 0.0, 480, animate);
             AnimateOpacity(LampBulbGlow, on ? 0.65 : 0.02, 320, animate);
             AnimateOpacity(LampReflector, on ? 0.55 : 0.0, 320, animate);
             AnimateOpacity(WarmLightOverlay, on ? 0.78 : 0.0, 720, animate);
             AnimateOpacity(LoginCard, on ? 1.0 : 0.0, 700, animate);
             LoginCard.IsHitTestVisible = on;
-            AnimateCardColor(LoginCard, Border.BackgroundProperty, on ? Color.FromRgb(28, 31, 36) : Color.FromRgb(13, 15, 19), 420, animate);
-            AnimateCardColor(LoginCard, Border.BorderBrushProperty, on ? Color.FromArgb(35, 255, 255, 255) : Color.FromArgb(26, 255, 255, 255), 420, animate);
+
+            AnimateCardColor(LoginCard, Border.BackgroundProperty,
+                on ? Color.FromArgb(185, 26, 29, 34) : Color.FromArgb(0, 15, 17, 21), 420, animate);
+            AnimateCardColor(LoginCard, Border.BorderBrushProperty,
+                on ? Color.FromArgb(95, 255, 255, 255) : Color.FromArgb(0, 255, 255, 255), 420, animate);
+
             LoginCardShadow.Color = on ? Color.FromRgb(255, 214, 110) : Color.FromRgb(0, 0, 0);
-            LoginCardShadow.Opacity = on ? 0.35 : 0.30;
+            LoginCardShadow.Opacity = on ? 0.35 : 0.0;
+
             SignInTitle.Foreground = new SolidColorBrush(Color.FromRgb(255, 255, 255));
             SignInSubtitle.Foreground = new SolidColorBrush(on ? Color.FromRgb(153, 153, 153) : Color.FromRgb(119, 119, 119));
             WelcomeText.Foreground = new SolidColorBrush(Color.FromRgb(255, 255, 255));
-            WelcomeSubText.Foreground = new SolidColorBrush(Color.FromRgb(141, 146, 153));
+            WelcomeSubText.Foreground = new SolidColorBrush(on ? Color.FromRgb(180, 184, 192) : Color.FromRgb(141, 146, 153));
         }
 
         private static void SetAnimatedColor(Shape shape, DependencyProperty property, Color color, bool animate)
@@ -259,7 +266,12 @@ namespace NovaChat.Client.Views
             {
                 if (animate)
                 {
-                    var animation = new ColorAnimation { To = color, Duration = TimeSpan.FromMilliseconds(280), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+                    var animation = new ColorAnimation
+                    {
+                        To = color,
+                        Duration = TimeSpan.FromMilliseconds(280),
+                        EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                    };
                     current.BeginAnimation(SolidColorBrush.ColorProperty, animation);
                 }
                 else
@@ -268,7 +280,10 @@ namespace NovaChat.Client.Views
                     current.Color = color;
                 }
             }
-            else shape.SetValue(property, new SolidColorBrush(color));
+            else
+            {
+                shape.SetValue(property, new SolidColorBrush(color));
+            }
         }
 
         private static void AnimateCardColor(Border border, DependencyProperty property, Color color, int milliseconds, bool animate)
@@ -277,7 +292,12 @@ namespace NovaChat.Client.Views
             {
                 if (animate)
                 {
-                    var animation = new ColorAnimation { To = color, Duration = TimeSpan.FromMilliseconds(milliseconds), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut } };
+                    var animation = new ColorAnimation
+                    {
+                        To = color,
+                        Duration = TimeSpan.FromMilliseconds(milliseconds),
+                        EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+                    };
                     current.BeginAnimation(SolidColorBrush.ColorProperty, animation);
                 }
                 else
@@ -286,7 +306,10 @@ namespace NovaChat.Client.Views
                     current.Color = color;
                 }
             }
-            else border.SetValue(property, new SolidColorBrush(color));
+            else
+            {
+                border.SetValue(property, new SolidColorBrush(color));
+            }
         }
 
         private static void AnimateOpacity(UIElement element, double target, int milliseconds, bool animate)
@@ -297,7 +320,13 @@ namespace NovaChat.Client.Views
                 element.Opacity = target;
                 return;
             }
-            var animation = new DoubleAnimation { To = target, Duration = TimeSpan.FromMilliseconds(milliseconds), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut } };
+
+            var animation = new DoubleAnimation
+            {
+                To = target,
+                Duration = TimeSpan.FromMilliseconds(milliseconds),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+            };
             element.BeginAnimation(UIElement.OpacityProperty, animation);
         }
 
@@ -312,6 +341,7 @@ namespace NovaChat.Client.Views
                 MessageBox.Show("Please enter your User ID and Password.", "Login", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
+
             try
             {
                 LoginButton.IsEnabled = false;
@@ -322,16 +352,22 @@ namespace NovaChat.Client.Views
                     MessageBox.Show("Invalid User ID or Password.", "Login Failed", MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
                 }
+
                 AuthState.Set(result.Token, result.User.Id, result.User.DisplayName, result.User.Email);
                 const string ownerId = "BlackRoom";
-                if (string.Equals(result.User.Id, ownerId, StringComparison.OrdinalIgnoreCase)) OwnerLoginSuccessful?.Invoke();
-                else LoginSuccessful?.Invoke();
+                if (string.Equals(result.User.Id, ownerId, StringComparison.OrdinalIgnoreCase))
+                    OwnerLoginSuccessful?.Invoke();
+                else
+                    LoginSuccessful?.Invoke();
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Could not connect to the server.\n\n{ex.Message}", "Connection Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
-            finally { LoginButton.IsEnabled = true; }
+            finally
+            {
+                LoginButton.IsEnabled = true;
+            }
         }
 
         private void CreateAccountButton_Click(object sender, RoutedEventArgs e) => CreateAccountRequested?.Invoke();
