@@ -265,8 +265,10 @@ public partial class ManageUsersView : UserControl
         UpdateActionState();
         try
         {
+            // Manage Users is an Owner-only screen, so edits must use the
+            // Owner admin endpoint rather than the normal self-edit endpoint.
             var response = await _apiService.PutAsync<UpdateUserRequest, UpdateUserResponse>(
-                $"api/User/{Uri.EscapeDataString(oldId)}", request);
+                $"api/Admin/users/{Uri.EscapeDataString(oldId)}", request);
 
             if (response?.User == null)
                 throw new InvalidOperationException("The server did not return the updated user.");
