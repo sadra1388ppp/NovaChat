@@ -9,26 +9,36 @@
             <Setter Property="Foreground" Value="#121417" />
             <Setter Property="FontSize" Value="15" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="BorderBrush" Value="#00FFFFFF" />
             <Setter Property="Background" Value="#D4A373" />
+            <Setter Property="BorderBrush" Value="#00FFFFFF" />
+            <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Grid>
-                            <Border x:Name="GlassBorder" CornerRadius="16" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1">
+                            <Border x:Name="OuterGlass" CornerRadius="16" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1">
                                 <Border.Effect>
-                                    <DropShadowEffect x:Name="GlassShadow" BlurRadius="0" ShadowDepth="0" Opacity="0" />
+                                    <DropShadowEffect x:Name="ButtonGlow" BlurRadius="0" ShadowDepth="0" Opacity="0" />
                                 </Border.Effect>
-                                <Grid Clip="{Binding RelativeSource={RelativeSource Self}, Path=Clip}">
-                                    <Border x:Name="GlassReflection" CornerRadius="16" Opacity="0" IsHitTestVisible="False">
+                                <Grid>
+                                    <Border x:Name="GlassTint" CornerRadius="15" Background="#00FFFFFF" BorderThickness="1" BorderBrush="#00FFFFFF" />
+                                    <Border x:Name="TopReflection" CornerRadius="15" Margin="1" IsHitTestVisible="False" Opacity="0">
                                         <Border.Background>
-                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                <GradientStop Color="#66FFFFFF" Offset="0" />
-                                                <GradientStop Color="#18FFFFFF" Offset="0.32" />
-                                                <GradientStop Color="#00FFFFFF" Offset="0.65" />
-                                                <GradientStop Color="#42FFFFFF" Offset="1" />
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                <GradientStop Color="#B8FFFFFF" Offset="0" />
+                                                <GradientStop Color="#38FFFFFF" Offset="0.20" />
+                                                <GradientStop Color="#08FFFFFF" Offset="0.52" />
+                                                <GradientStop Color="#00FFFFFF" Offset="1" />
+                                            </LinearGradientBrush>
+                                        </Border.Background>
+                                    </Border>
+                                    <Border x:Name="GlassHighlight" Width="130" HorizontalAlignment="Left" CornerRadius="15" Margin="-45,0,0,0" IsHitTestVisible="False" Opacity="0">
+                                        <Border.Background>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                <GradientStop Color="#00FFFFFF" Offset="0" />
+                                                <GradientStop Color="#70FFFFFF" Offset="0.5" />
+                                                <GradientStop Color="#00FFFFFF" Offset="1" />
                                             </LinearGradientBrush>
                                         </Border.Background>
                                     </Border>
@@ -38,20 +48,24 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="GlassBorder" Property="Background" Value="#BFD4A373" />
-                                <Setter TargetName="GlassBorder" Property="BorderBrush" Value="#80FFFFFF" />
-                                <Setter TargetName="GlassShadow" Property="BlurRadius" Value="24" />
-                                <Setter TargetName="GlassShadow" Property="Color" Value="#FFD6A96E" />
-                                <Setter TargetName="GlassShadow" Property="Opacity" Value="0.42" />
-                                <Setter TargetName="GlassReflection" Property="Opacity" Value="1" />
+                                <Setter TargetName="OuterGlass" Property="Background" Value="#55FFFFFF" />
+                                <Setter TargetName="OuterGlass" Property="BorderBrush" Value="#CCFFFFFF" />
+                                <Setter TargetName="GlassTint" Property="Background" Value="#25FFFFFF" />
+                                <Setter TargetName="GlassTint" Property="BorderBrush" Value="#55FFFFFF" />
+                                <Setter TargetName="TopReflection" Property="Opacity" Value="1" />
+                                <Setter TargetName="GlassHighlight" Property="Opacity" Value="0.85" />
+                                <Setter TargetName="ButtonGlow" Property="BlurRadius" Value="28" />
+                                <Setter TargetName="ButtonGlow" Property="Color" Value="#FFE2B77F" />
+                                <Setter TargetName="ButtonGlow" Property="Opacity" Value="0.75" />
                                 <Setter Property="Foreground" Value="#FFFFFF" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="GlassBorder" Property="Background" Value="#99FFFFFF" />
-                                <Setter TargetName="GlassBorder" Property="BorderBrush" Value="#BFFFFFFF" />
+                                <Setter TargetName="OuterGlass" Property="Background" Value="#75FFFFFF" />
+                                <Setter TargetName="OuterGlass" Property="BorderBrush" Value="#FFFFFFFF" />
+                                <Setter TargetName="GlassTint" Property="Background" Value="#35FFFFFF" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="GlassBorder" Property="Opacity" Value="0.55" />
+                                <Setter TargetName="OuterGlass" Property="Opacity" Value="0.5" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
