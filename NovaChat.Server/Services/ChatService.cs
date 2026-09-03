@@ -85,43 +85,51 @@ public class ChatService
 
     public async Task<List<Chat>> GetUserChatsAsync(string userId)
     {
-        return await _context.Chats
+        var chats = await _context.Chats
             .AsNoTracking()
             .Include(c => c.User1)
             .Include(c => c.User2)
-            .Include(c => c.Messages
-                .OrderByDescending(m => m.SentAt)
-                .ThenByDescending(m => m.Id)
-                .Take(1))
-            .ThenInclude(m => m.Sender)
             .Where(c => c.User1Id == userId || c.User2Id == userId)
-            .OrderByDescending(c =>
-                c.Messages
-                    .OrderByDescending(m => m.SentAt)
-                    .ThenByDescending(m => m.Id)
-                    .Select(m => (DateTime?)m.SentAt)
-                    .FirstOrDefault() ?? c.CreatedAt)
+            .OrderByDescending(c => c.CreatedAt)
+            .ThenByDescending(c => c.Id)
             .ToListAsync();
+
+        foreach (var chat in chats)
+        {
+            var lastMessage = await GetLastMessageAsync(chat.Id);
+            chat.Messages = lastMessage == null
+                ? new List<Message>()
+                : new List<Message> { lastMessage };
+        }
+
+        return chats
+            .OrderByDescending(c => c.Messages.FirstOrDefault()?.SentAt ?? c.CreatedAt)
+            .ThenByDescending(c => c.Id)
+            .ToList();
     }
 
     public async Task<List<Chat>> GetAllChatsAsync()
     {
-        return await _context.Chats
+        var chats = await _context.Chats
             .AsNoTracking()
             .Include(c => c.User1)
             .Include(c => c.User2)
-            .Include(c => c.Messages
-                .OrderByDescending(m => m.SentAt)
-                .ThenByDescending(m => m.Id)
-                .Take(1))
-            .ThenInclude(m => m.Sender)
-            .OrderByDescending(c =>
-                c.Messages
-                    .OrderByDescending(m => m.SentAt)
-                    .ThenByDescending(m => m.Id)
-                    .Select(m => (DateTime?)m.SentAt)
-                    .FirstOrDefault() ?? c.CreatedAt)
+            .OrderByDescending(c => c.CreatedAt)
+            .ThenByDescending(c => c.Id)
             .ToListAsync();
+
+        foreach (var chat in chats)
+        {
+            var lastMessage = await GetLastMessageAsync(chat.Id);
+            chat.Messages = lastMessage == null
+                ? new List<Message>()
+                : new List<Message> { lastMessage };
+        }
+
+        return chats
+            .OrderByDescending(c => c.Messages.FirstOrDefault()?.SentAt ?? c.CreatedAt)
+            .ThenByDescending(c => c.Id)
+            .ToList();
     }
 
     public async Task<Chat?> GetChatByIdAsync(int chatId)
