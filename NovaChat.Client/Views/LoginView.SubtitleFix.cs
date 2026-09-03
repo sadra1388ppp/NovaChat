@@ -7,29 +7,31 @@ namespace NovaChat.Client.Views
 {
     public partial class LoginView
     {
-        // Runs after the existing Loaded handler so the subtitle is finally
-        // re-parented to the full login root instead of the lamp canvas.
-        private readonly bool _subtitleFixRegistered = RegisterSubtitleFix();
-
-        private bool RegisterSubtitleFix()
+        static LoginView()
         {
-            Loaded += (_, _) =>
+            EventManager.RegisterClassHandler(
+                typeof(LoginView),
+                FrameworkElement.LoadedEvent,
+                new RoutedEventHandler(OnLoginViewLoadedForSubtitleFix));
+        }
+
+        private static void OnLoginViewLoadedForSubtitleFix(object sender, RoutedEventArgs e)
+        {
+            if (sender is not LoginView view)
+                return;
+
+            view.Dispatcher.BeginInvoke(new Action(() =>
             {
-                Dispatcher.BeginInvoke(new Action(() =>
-                {
-                    if (WelcomeSubText.Parent is Panel oldParent)
-                        oldParent.Children.Remove(WelcomeSubText);
+                if (view.WelcomeSubText.Parent is Panel oldParent)
+                    oldParent.Children.Remove(view.WelcomeSubText);
 
-                    if (!LoginRoot.Children.Contains(WelcomeSubText))
-                        LoginRoot.Children.Add(WelcomeSubText);
+                if (!view.LoginRoot.Children.Contains(view.WelcomeSubText))
+                    view.LoginRoot.Children.Add(view.WelcomeSubText);
 
-                    WelcomeSubText.HorizontalAlignment = HorizontalAlignment.Center;
-                    WelcomeSubText.VerticalAlignment = VerticalAlignment.Bottom;
-                    WelcomeSubText.Margin = new Thickness(0, 0, 0, 18);
-                }), DispatcherPriority.Loaded);
-            };
-
-            return true;
+                view.WelcomeSubText.HorizontalAlignment = HorizontalAlignment.Center;
+                view.WelcomeSubText.VerticalAlignment = VerticalAlignment.Bottom;
+                view.WelcomeSubText.Margin = new Thickness(0, 0, 0, 18);
+            }), DispatcherPriority.Loaded);
         }
     }
 }
