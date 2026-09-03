@@ -64,6 +64,8 @@ namespace NovaChat.Client.Views
         private const int GlassPressMs = 90;
         private const int GlassReleaseMs = 150;
 
+        private const double LampSubtitleGap = 10;
+
         public event Action? CreateAccountRequested;
         public event Action? LoginSuccessful;
         public event Action? OwnerLoginSuccessful;
@@ -99,6 +101,7 @@ namespace NovaChat.Client.Views
             ApplyLampTransform();
 
             ApplyWelcomeText();
+            PositionLampSubtitle();
 
             LampPull.LostMouseCapture += LampPull_LostMouseCapture;
 
@@ -122,8 +125,8 @@ namespace NovaChat.Client.Views
             WelcomeText.Text = "Welcome to NovaChat";
             WelcomeSubText.Text = "Turn on the lamp to get started.";
 
-            // Keep the title directly above the Sign In card.
-            // The subtitle remains inside LampCanvas so it stays directly under the lamp.
+            // The title belongs to the login column and is kept directly above the Sign In card.
+            // The subtitle stays inside LampCanvas and is positioned directly below the lamp.
             if (_loginContentPanel == null && LoginCard.Parent is Grid loginColumn)
             {
                 loginColumn.Children.Remove(LoginCard);
@@ -150,14 +153,38 @@ namespace NovaChat.Client.Views
             WelcomeText.HorizontalAlignment = HorizontalAlignment.Center;
             WelcomeText.Margin = new Thickness(0, 0, 0, 18);
 
-            // Do not move WelcomeSubText out of LampCanvas.
-            // Its XAML Canvas position is intentionally used to keep it below the lamp.
-            WelcomeSubText.HorizontalAlignment = HorizontalAlignment.Center;
-            WelcomeSubText.Margin = new Thickness(0);
-
             _loginContentPanel.Children.Clear();
             _loginContentPanel.Children.Add(WelcomeText);
             _loginContentPanel.Children.Add(LoginCard);
+
+            WelcomeSubText.HorizontalAlignment = HorizontalAlignment.Center;
+            WelcomeSubText.Margin = new Thickness(0);
+        }
+
+        private void PositionLampSubtitle()
+        {
+            if (WelcomeSubText.Parent is not Canvas)
+                return;
+
+            LampCanvas.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (WelcomeSubText.Parent is not Canvas)
+                    return;
+
+                LampAssembly.UpdateLayout();
+                WelcomeSubText.UpdateLayout();
+
+                Rect lampBounds = LampAssembly.TransformToAncestor(LampCanvas)
+                    .TransformBounds(new Rect(LampAssembly.RenderSize));
+
+                double lampCenterX = lampBounds.Left + lampBounds.Width / 2.0;
+                double subtitleWidth = WelcomeSubText.ActualWidth > 0
+                    ? WelcomeSubText.ActualWidth
+                    : WelcomeSubText.DesiredSize.Width;
+
+                Canvas.SetLeft(WelcomeSubText, lampCenterX - subtitleWidth / 2.0);
+                Canvas.SetTop(WelcomeSubText, lampBounds.Bottom + LampSubtitleGap);
+            }), System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
         private void EnsureCordGeometry()
@@ -173,9 +200,7 @@ namespace NovaChat.Client.Views
             };
 
             for (int i = 0; i < CordPointCount - 1; i++)
-            {
                 _cordFigure.Segments.Add(new BezierSegment { IsStroked = true });
-            }
 
             _cordGeometry = new PathGeometry();
             _cordGeometry.Figures.Add(_cordFigure);
@@ -550,7 +575,11 @@ namespace NovaChat.Client.Views
         private static void AnimateWelcomeReveal(FrameworkElement element, bool visible, int delayMs)
         {
             if (element.RenderTransform is not ScaleTransform scale)
-                return;
+            {
+                scale = new ScaleTransform(visible ? 0.85 : 1.0, visible ? 0.85 : 1.0);
+                element.RenderTransform = scale;
+                element.RenderTransformOrigin = new Point(0.5, 0.5);
+            }
 
             element.IsHitTestVisible = visible;
 
