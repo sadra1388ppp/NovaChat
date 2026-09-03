@@ -9,7 +9,6 @@
             <DropShadowEffect x:Key="LampShadow" BlurRadius="18" ShadowDepth="4" Opacity="0.35" />
         </Grid.Resources>
 
-        <!-- Ambient light, matching the warm radial illumination of the reference. -->
         <Border x:Name="WarmLightOverlay" IsHitTestVisible="False" Opacity="0">
             <Border.Background>
                 <RadialGradientBrush Center="0.37,0.42" GradientOrigin="0.37,0.42" RadiusX="0.68" RadiusY="0.68">
@@ -27,7 +26,6 @@
                 <ColumnDefinition Width="340" />
             </Grid.ColumnDefinitions>
 
-            <!-- Coding Stella-style lamp -->
             <Grid Grid.Column="0" Width="300" Height="420" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <Canvas x:Name="LampCanvas" Width="300" Height="420"
                         Background="Transparent"
@@ -46,7 +44,6 @@
                         </Ellipse.Fill>
                     </Ellipse>
 
-                    <!-- The vertical lamp stem -->
                     <Rectangle x:Name="SuspensionWire" Width="7" Height="162" Canvas.Left="146.5" Canvas.Top="92"
                                RadiusX="3.5" RadiusY="3.5" Fill="#D1CCC2" IsHitTestVisible="False" />
 
@@ -56,23 +53,18 @@
                             <RotateTransform x:Name="LampRotateTransform" Angle="0" />
                         </Canvas.RenderTransform>
 
-                        <!-- Inner warm glow -->
                         <Ellipse x:Name="LampReflector" Width="120" Height="58" Canvas.Left="40" Canvas.Top="76"
                                  Fill="#FFDB8A" Opacity="0" IsHitTestVisible="False" />
 
-                        <!-- Lamp shade: intentionally broad and simple, like the reference SVG -->
-                        <Path Data="M 15,105 C 15,45 185,45 185,105 C 185,120 15,120 15,105 Z"
+                        <Path x:Name="LampBulb"
+                              Data="M 15,105 C 15,45 185,45 185,105 C 185,120 15,120 15,105 Z"
                               Fill="#F5F0E6" Stroke="#D1CCC2" StrokeThickness="1.4" />
 
-                        <!-- Soft inner highlight -->
                         <Ellipse x:Name="LampBulbGlow" Width="118" Height="48" Canvas.Left="41" Canvas.Top="81"
                                  Fill="#FFDB8A" Opacity="0.02" IsHitTestVisible="False" />
 
-                        <!-- Small underside line for the shade -->
-                        <Path Data="M 18,105 C 50,114 150,114 182,105"
+                        <Path x:Name="LampShadeGlow" Data="M 18,105 C 50,114 150,114 182,105"
                               Stroke="#C9C3B8" StrokeThickness="1.4" Opacity="0.75" IsHitTestVisible="False" />
-
-                        <!-- Pull cord starts beside the shade -->
                     </Canvas>
 
                     <Path x:Name="PullCord"
@@ -82,7 +74,6 @@
                           StrokeEndLineCap="Round"
                           IsHitTestVisible="False" />
 
-                    <!-- Circular pull bead: kept exactly as requested -->
                     <Ellipse x:Name="LampPull" Width="20" Height="20" Canvas.Left="140" Canvas.Top="278"
                              Fill="#D4A373" Stroke="#F0D0A5" StrokeThickness="1.2"
                              Cursor="Hand"
@@ -105,7 +96,6 @@
                 </Canvas>
             </Grid>
 
-            <!-- Glass login form, initially hidden just like the reference. -->
             <Grid Grid.Column="1" Width="340" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <Border x:Name="LoginCard"
                         Background="#0D0F13"
