@@ -149,7 +149,8 @@ public class UserService
             .Take(30)
             .ToListAsync();
 
-        return users.Select(ToUserResponse).ToList();
+        // Use an explicit lambda because ToUserResponse has an optional second parameter.
+        return users.Select(user => ToUserResponse(user)).ToList();
     }
 
     public async Task<RegisterResult> UpdateUserAsync(string id, UpdateUserDto dto)
