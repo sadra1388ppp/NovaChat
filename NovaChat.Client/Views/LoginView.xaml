@@ -8,7 +8,6 @@
         <Grid.Resources>
             <DropShadowEffect x:Key="LampShadow" BlurRadius="18" ShadowDepth="4" Opacity="0.35" />
         </Grid.Resources>
-
         <Border x:Name="WarmLightOverlay" IsHitTestVisible="False" Opacity="0">
             <Border.Background>
                 <RadialGradientBrush Center="0.30,0.40" GradientOrigin="0.30,0.40" RadiusX="0.58" RadiusY="0.68">
@@ -19,24 +18,17 @@
                 </RadialGradientBrush>
             </Border.Background>
         </Border>
-
         <Grid Margin="35,0,35,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="470" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-
             <Grid Grid.Column="0" Width="420" Height="500" HorizontalAlignment="Center" VerticalAlignment="Center">
-                <Canvas x:Name="LampCanvas" Width="420" Height="500"
-                        Background="Transparent"
-                        MouseMove="LampCanvas_MouseMove"
-                        MouseLeftButtonUp="LampCanvas_MouseLeftButtonUp">
+                <Canvas x:Name="LampCanvas" Width="420" Height="500" Background="Transparent" MouseMove="LampCanvas_MouseMove" MouseLeftButtonUp="LampCanvas_MouseLeftButtonUp">
                     <Canvas.RenderTransform>
                         <TranslateTransform Y="-42.8" />
                     </Canvas.RenderTransform>
-
-                    <Ellipse x:Name="LampGlow" Width="370" Height="370" Canvas.Left="30" Canvas.Top="35"
-                             IsHitTestVisible="False" Opacity="0">
+                    <Ellipse x:Name="LampGlow" Width="370" Height="370" Canvas.Left="30" Canvas.Top="35" IsHitTestVisible="False" Opacity="0">
                         <Ellipse.Fill>
                             <RadialGradientBrush>
                                 <GradientStop Color="#FFFFF8D6" Offset="0" />
@@ -46,100 +38,42 @@
                             </RadialGradientBrush>
                         </Ellipse.Fill>
                     </Ellipse>
-
-                    <Canvas x:Name="LampAssembly" Width="244" Height="366"
-                            Canvas.Left="128" Canvas.Top="104.8"
-                            RenderTransformOrigin="0.5,0.36" Effect="{StaticResource LampShadow}">
+                    <Canvas x:Name="LampAssembly" Width="244" Height="366" Canvas.Left="128" Canvas.Top="104.8" RenderTransformOrigin="0.5,0.36" Effect="{StaticResource LampShadow}">
                         <Canvas.RenderTransform>
                             <RotateTransform x:Name="LampRotateTransform" Angle="0" />
                         </Canvas.RenderTransform>
-
-                        <Rectangle Width="19.5" Height="195.2" Canvas.Left="112.2" Canvas.Top="122"
-                                   RadiusX="9.75" RadiusY="9.75" Fill="#D1CCC2" />
-
-                        <Rectangle Width="97.6" Height="14.6" Canvas.Left="73.2" Canvas.Top="305"
-                                   RadiusX="7.3" RadiusY="7.3" Fill="#D1CCC2" />
-
-                        <Path x:Name="LampBulb"
-                              Data="M 36.6,134.2 C 36.6,61 207.4,61 207.4,134.2 C 207.4,152.5 36.6,152.5 36.6,134.2 Z"
-                              Fill="#F5F0E6" />
-
-                        <Path x:Name="LampShadeGlow"
-                              Data="M 36.6,134.2 C 36.6,61 207.4,61 207.4,134.2 C 207.4,152.5 36.6,152.5 36.6,134.2 Z"
-                              Fill="#FFFFFF" Opacity="0.04" IsHitTestVisible="False" />
-
-                        <Ellipse x:Name="LampBulbGlow" Width="146.4" Height="73.2" Canvas.Left="48.8" Canvas.Top="92.7"
-                                 Fill="#FFDB8A" Opacity="0" IsHitTestVisible="False" />
-
+                        <Rectangle Width="19.5" Height="195.2" Canvas.Left="112.2" Canvas.Top="122" RadiusX="9.75" RadiusY="9.75" Fill="#D1CCC2" />
+                        <Rectangle Width="97.6" Height="14.6" Canvas.Left="73.2" Canvas.Top="305" RadiusX="7.3" RadiusY="7.3" Fill="#D1CCC2" />
+                        <Path x:Name="LampBulb" Data="M 36.6,134.2 C 36.6,61 207.4,61 207.4,134.2 C 207.4,152.5 36.6,152.5 36.6,134.2 Z" Fill="#F5F0E6" />
+                        <Path x:Name="LampShadeGlow" Data="M 36.6,134.2 C 36.6,61 207.4,61 207.4,134.2 C 207.4,152.5 36.6,152.5 36.6,134.2 Z" Fill="#FFFFFF" Opacity="0.04" IsHitTestVisible="False" />
+                        <Ellipse x:Name="LampBulbGlow" Width="146.4" Height="73.2" Canvas.Left="48.8" Canvas.Top="92.7" Fill="#FFDB8A" Opacity="0" IsHitTestVisible="False" />
                         <Path x:Name="LampReflector" Data="M 0,0 L 0,0" Fill="#282A31" Opacity="0" IsHitTestVisible="False" />
                     </Canvas>
-
-                    <Path x:Name="PullCord"
-                          Stroke="#555555"
-                          StrokeThickness="2.2"
-                          StrokeStartLineCap="Round"
-                          StrokeEndLineCap="Round"
-                          IsHitTestVisible="False" />
-
-                    <!-- Bead center is exactly the same point as the cord endpoint (330,350). -->
-                    <Ellipse x:Name="LampPull" Width="15" Height="15"
-                             Canvas.Left="322.5" Canvas.Top="342.5"
-                             Fill="#D4A373" Stroke="#E8C79C" StrokeThickness="1"
-                             Cursor="Hand"
-                             MouseLeftButtonDown="LampPull_MouseLeftButtonDown"
-                             RenderTransformOrigin="0.5,0.5">
+                    <Path x:Name="PullCord" Stroke="#555555" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" IsHitTestVisible="False" />
+                    <!-- Bead center is exactly the same point as the cord endpoint (300,350). -->
+                    <Ellipse x:Name="LampPull" Width="15" Height="15" Canvas.Left="292.5" Canvas.Top="342.5" Fill="#D4A373" Stroke="#E8C79C" StrokeThickness="1" Cursor="Hand" MouseLeftButtonDown="LampPull_MouseLeftButtonDown" RenderTransformOrigin="0.5,0.5">
                         <Ellipse.RenderTransform>
                             <TranslateTransform x:Name="LampPullTransform" X="0" Y="0" />
                         </Ellipse.RenderTransform>
                     </Ellipse>
-
                     <StackPanel Canvas.Left="15" Canvas.Top="20" Width="350" IsHitTestVisible="False" Visibility="Collapsed">
-                        <TextBlock x:Name="WelcomeText" Text="Welcome to NovaChat" FontSize="25" FontWeight="SemiBold"
-                                   Foreground="#FFFFFF" TextAlignment="Center" />
-                        <TextBlock x:Name="WelcomeSubText" Text="Pull the light to continue" FontSize="12"
-                                   Foreground="#8D9299" Margin="0,7,0,0" TextAlignment="Center" TextWrapping="Wrap" />
+                        <TextBlock x:Name="WelcomeText" Text="Welcome to NovaChat" FontSize="25" FontWeight="SemiBold" Foreground="#FFFFFF" TextAlignment="Center" />
+                        <TextBlock x:Name="WelcomeSubText" Text="Pull the light to continue" FontSize="12" Foreground="#8D9299" Margin="0,7,0,0" TextAlignment="Center" TextWrapping="Wrap" />
                     </StackPanel>
                 </Canvas>
             </Grid>
-
-            <Grid Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center"
-                  Width="390" Margin="0,0,25,0">
-                <Border x:Name="LoginCard"
-                        Background="#0D0F13"
-                        BorderBrush="#FFFFFF1A"
-                        BorderThickness="1"
-                        CornerRadius="30"
-                        Padding="32"
-                        Opacity="0"
-                        IsHitTestVisible="False">
-                    <Border.Effect>
-                        <DropShadowEffect x:Name="LoginCardShadow" BlurRadius="40" ShadowDepth="18" Opacity="0.3" />
-                    </Border.Effect>
+            <Grid Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" Width="390" Margin="0,0,25,0">
+                <Border x:Name="LoginCard" Background="#0D0F13" BorderBrush="#FFFFFF1A" BorderThickness="1" CornerRadius="30" Padding="32" Opacity="0" IsHitTestVisible="False">
+                    <Border.Effect><DropShadowEffect x:Name="LoginCardShadow" BlurRadius="40" ShadowDepth="18" Opacity="0.3" /></Border.Effect>
                     <StackPanel>
-                        <TextBlock x:Name="SignInTitle" Text="Welcome" FontSize="25" FontWeight="Medium"
-                                   Foreground="#FFFFFF" HorizontalAlignment="Center" Margin="0,0,0,25" />
-
+                        <TextBlock x:Name="SignInTitle" Text="Welcome" FontSize="25" FontWeight="Medium" Foreground="#FFFFFF" HorizontalAlignment="Center" Margin="0,0,0,25" />
                         <TextBlock Text="User ID" FontSize="12" Foreground="#999999" Margin="5,0,0,7" />
-                        <TextBox x:Name="UserIdTextBox" Height="48" Margin="0,0,0,18"
-                                 Background="#12FFFFFF" Foreground="#FFFFFF"
-                                 BorderBrush="#12FFFFFF" Padding="14,0" VerticalContentAlignment="Center" />
-
+                        <TextBox x:Name="UserIdTextBox" Height="48" Margin="0,0,0,18" Background="#12FFFFFF" Foreground="#FFFFFF" BorderBrush="#12FFFFFF" Padding="14,0" VerticalContentAlignment="Center" />
                         <TextBlock Text="Password" FontSize="12" Foreground="#999999" Margin="5,0,0,7" />
-                        <PasswordBox x:Name="PasswordBox" Height="48" Margin="0,0,0,20"
-                                     Background="#12FFFFFF" Foreground="#FFFFFF"
-                                     BorderBrush="#12FFFFFF" Padding="14,0" VerticalContentAlignment="Center" />
-
-                        <Button x:Name="LoginButton" Content="Sign In" Height="50" FontSize="15"
-                                Background="#D4A373" Foreground="#121417" BorderThickness="0"
-                                Click="LoginButton_Click" />
-
-                        <TextBlock x:Name="SignInSubtitle" Text="Continue to your NovaChat account"
-                                   FontSize="11" Foreground="#777777" HorizontalAlignment="Center"
-                                   Margin="0,18,0,0" />
-
-                        <Button Content="Create a new account" Height="36" Margin="0,8,0,0"
-                                Background="Transparent" BorderThickness="0" Foreground="#D4A373"
-                                Click="CreateAccountButton_Click" />
+                        <PasswordBox x:Name="PasswordBox" Height="48" Margin="0,0,0,20" Background="#12FFFFFF" Foreground="#FFFFFF" BorderBrush="#12FFFFFF" Padding="14,0" VerticalContentAlignment="Center" />
+                        <Button x:Name="LoginButton" Content="Sign In" Height="50" FontSize="15" Background="#D4A373" Foreground="#121417" BorderThickness="0" Click="LoginButton_Click" />
+                        <TextBlock x:Name="SignInSubtitle" Text="Continue to your NovaChat account" FontSize="11" Foreground="#777777" HorizontalAlignment="Center" Margin="0,18,0,0" />
+                        <Button Content="Create a new account" Height="36" Margin="0,8,0,0" Background="Transparent" BorderThickness="0" Foreground="#D4A373" Click="CreateAccountButton_Click" />
                     </StackPanel>
                 </Border>
             </Grid>
