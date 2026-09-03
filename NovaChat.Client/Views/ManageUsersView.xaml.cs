@@ -49,11 +49,7 @@ public partial class ManageUsersView : UserControl
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                $"Could not load users.\n\n{ex.Message}",
-                "Manage Users",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            MessageBox.Show($"Could not load users.\n\n{ex.Message}", "Manage Users", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -83,12 +79,18 @@ public partial class ManageUsersView : UserControl
     }
 
     private static bool Contains(string? value, string query) =>
-        !string.IsNullOrWhiteSpace(value) &&
-        value.Contains(query, StringComparison.OrdinalIgnoreCase);
+        !string.IsNullOrWhiteSpace(value) && value.Contains(query, StringComparison.OrdinalIgnoreCase);
 
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e) => ApplyFilter();
 
     private async void RefreshButton_Click(object sender, RoutedEventArgs e) => await LoadUsersAsync();
+
+    private void UserRowButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: AdminUserModel user }) return;
+        UsersList.SelectedItem = user;
+        UsersList.ScrollIntoView(user);
+    }
 
     private void UsersList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -107,9 +109,7 @@ public partial class ManageUsersView : UserControl
         DetailInitialsText.Text = _selectedUser.Initials;
         DetailNameText.Text = _selectedUser.DisplayName;
         DetailIdText.Text = $"User ID  •  {_selectedUser.Id}";
-        DetailEmailText.Text = string.IsNullOrWhiteSpace(_selectedUser.Email)
-            ? "No email address"
-            : _selectedUser.Email;
+        DetailEmailText.Text = string.IsNullOrWhiteSpace(_selectedUser.Email) ? "No email address" : _selectedUser.Email;
         DetailCreatedText.Text = FormatDate(_selectedUser.CreatedAt);
         DeleteButton.IsEnabled = !IsOwner(_selectedUser.Id);
     }
@@ -148,19 +148,11 @@ public partial class ManageUsersView : UserControl
             ApplyFilter();
             ClearSelection();
 
-            MessageBox.Show(
-                "The user account was deleted successfully.",
-                "Manage Users",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            MessageBox.Show("The user account was deleted successfully.", "Manage Users", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                $"Could not delete the user.\n\n{ex.Message}",
-                "Delete User",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            MessageBox.Show($"Could not delete the user.\n\n{ex.Message}", "Delete User", MessageBoxButton.OK, MessageBoxImage.Error);
             UpdateDetails();
         }
     }
