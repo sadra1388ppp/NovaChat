@@ -27,7 +27,23 @@
                 </Setter.Value>
             </Setter>
         </Style>
-
+        <Style x:Key="PrimaryActionStyle" TargetType="Button">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="18,10"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="10">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="DangerButtonStyle" TargetType="Button">
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
@@ -41,17 +57,18 @@
                         <Border Background="{TemplateBinding Background}" CornerRadius="10">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
                         </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Opacity" Value="0.86"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Opacity" Value="0.4"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+        <Style x:Key="FieldStyle" TargetType="TextBox">
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Padding" Value="11,0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Background" Value="{DynamicResource AppBackgroundBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
         </Style>
     </UserControl.Resources>
 
@@ -69,7 +86,7 @@
             </Grid.ColumnDefinitions>
             <StackPanel>
                 <TextBlock Text="Manage Users" FontSize="30" FontWeight="Bold" Foreground="{DynamicResource TextBrush}"/>
-                <TextBlock Text="View, search and safely manage NovaChat accounts." Margin="0,7,0,0" FontSize="14" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                <TextBlock Text="View, search, edit and safely manage NovaChat accounts." Margin="0,7,0,0" FontSize="14" Foreground="{DynamicResource SecondaryTextBrush}"/>
             </StackPanel>
             <Button Grid.Column="1" Content="←  Back to Chat" Style="{DynamicResource SecondaryButtonStyle}" Height="42" Click="BackButton_Click"/>
         </Grid>
@@ -82,7 +99,7 @@
             <Border Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="14" Height="48">
                 <Grid>
                     <TextBlock Text="⌕" Margin="15,0,0,0" VerticalAlignment="Center" FontSize="20" Foreground="{DynamicResource SecondaryTextBrush}"/>
-                    <TextBox x:Name="SearchBox" Margin="44,0,12,0" BorderThickness="0" Background="Transparent" TextChanged="SearchBox_TextChanged" ToolTip="Search by name, email or user ID"/>
+                    <TextBox x:Name="SearchBox" Margin="44,0,12,0" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource TextBrush}" VerticalContentAlignment="Center" TextChanged="SearchBox_TextChanged" ToolTip="Search by name, email or user ID"/>
                 </Grid>
             </Border>
             <Button Grid.Column="1" Content="↻  Refresh" Style="{DynamicResource SecondaryButtonStyle}" Height="48" Margin="12,0,0,0" Click="RefreshButton_Click"/>
@@ -90,7 +107,7 @@
 
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="2.1*"/>
+                <ColumnDefinition Width="2.05*"/>
                 <ColumnDefinition Width="1*"/>
             </Grid.ColumnDefinitions>
 
@@ -104,7 +121,7 @@
                         <TextBlock Text="Accounts" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/>
                         <TextBlock x:Name="CountText" HorizontalAlignment="Right" Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center"/>
                     </Grid>
-                    <ListBox x:Name="UsersList" Grid.Row="1" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox x:Name="UsersList" Grid.Row="1" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionChanged="UsersList_SelectionChanged">
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem">
                                 <Setter Property="Padding" Value="0"/>
@@ -112,9 +129,7 @@
                                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                                 <Setter Property="Template">
                                     <Setter.Value>
-                                        <ControlTemplate TargetType="ListBoxItem">
-                                            <ContentPresenter/>
-                                        </ControlTemplate>
+                                        <ControlTemplate TargetType="ListBoxItem"><ContentPresenter/></ControlTemplate>
                                     </Setter.Value>
                                 </Setter>
                             </Style>
@@ -128,10 +143,13 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <Border Width="46" Height="46" CornerRadius="23" Background="{DynamicResource PrimarySoftBrush}">
-                                            <TextBlock Text="{Binding Initials}" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource PrimaryBrush}"/>
-                                        </Border>
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <Grid Width="46" Height="46">
+                                            <Border CornerRadius="23" Background="{DynamicResource PrimarySoftBrush}">
+                                                <TextBlock Text="{Binding Initials}" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource PrimaryBrush}"/>
+                                            </Border>
+                                            <Ellipse Width="11" Height="11" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,0,1" Fill="{Binding StatusBrush}" Stroke="{DynamicResource PanelBackgroundBrush}" StrokeThickness="2"/>
+                                        </Grid>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0">
                                             <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="14" Foreground="{DynamicResource TextBrush}"/>
                                             <TextBlock Text="{Binding Email}" Margin="0,3,0,0" FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}"/>
                                         </StackPanel>
@@ -146,31 +164,65 @@
             </Border>
 
             <Border Grid.Column="1" Margin="18,0,0,0" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="18" Padding="24">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-                    <TextBlock Text="User Details" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource TextBrush}"/>
-                    <StackPanel Grid.Row="1" Margin="0,24,0,0">
-                        <Border Width="82" Height="82" CornerRadius="41" HorizontalAlignment="Left" Background="{DynamicResource PrimarySoftBrush}">
-                            <TextBlock x:Name="DetailInitialsText" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="25" FontWeight="Bold" Foreground="{DynamicResource PrimaryBrush}"/>
-                        </Border>
-                        <TextBlock x:Name="DetailNameText" Margin="0,14,0,0" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" Text="Select a user"/>
-                        <TextBlock x:Name="DetailIdText" Margin="0,5,0,0" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}"/>
-                    </StackPanel>
-                    <StackPanel Grid.Row="2" Margin="0,24,0,0">
-                        <TextBlock Text="EMAIL" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource SecondaryTextBrush}"/>
-                        <TextBlock x:Name="DetailEmailText" Margin="0,5,0,14" TextWrapping="Wrap" FontSize="14" Foreground="{DynamicResource TextBrush}"/>
-                        <TextBlock Text="JOINED" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource SecondaryTextBrush}"/>
-                        <TextBlock x:Name="DetailCreatedText" Margin="0,5,0,0" FontSize="14" Foreground="{DynamicResource TextBrush}"/>
-                    </StackPanel>
-                    <TextBlock Grid.Row="3" Text="Deleting an account is permanent. The Owner account is protected and cannot be deleted from this panel." VerticalAlignment="Bottom" TextWrapping="Wrap" FontSize="12" LineHeight="19" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,18"/>
-                    <Button x:Name="DeleteButton" Grid.Row="4" Content="Delete User" Style="{StaticResource DangerButtonStyle}" HorizontalAlignment="Stretch" Height="44" IsEnabled="False" Click="DeleteButton_Click"/>
-                </Grid>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Grid>
+                            <TextBlock Text="User Details" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource TextBrush}"/>
+                            <TextBlock x:Name="StatusText" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                        </Grid>
+
+                        <StackPanel Grid.Row="1" Margin="0,20,0,0">
+                            <Border Width="76" Height="76" CornerRadius="38" HorizontalAlignment="Left" Background="{DynamicResource PrimarySoftBrush}">
+                                <TextBlock x:Name="DetailInitialsText" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="23" FontWeight="Bold" Foreground="{DynamicResource PrimaryBrush}"/>
+                            </Border>
+                            <TextBlock x:Name="DetailNameText" Margin="0,12,0,0" FontSize="19" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" Text="Select a user"/>
+                            <TextBlock x:Name="DetailIdText" Margin="0,4,0,0" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="2" Margin="0,18,0,0">
+                            <TextBlock Text="DISPLAY NAME" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                            <TextBox x:Name="DisplayNameBox" Style="{StaticResource FieldStyle}" Margin="0,5,0,10"/>
+                            <TextBlock Text="EMAIL" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                            <TextBox x:Name="EmailBox" Style="{StaticResource FieldStyle}" Margin="0,5,0,10"/>
+                            <TextBlock Text="PHONE" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                            <TextBox x:Name="PhoneBox" Style="{StaticResource FieldStyle}" Margin="0,5,0,10"/>
+                            <TextBlock Text="USER ID" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                            <TextBox x:Name="UserIdBox" Style="{StaticResource FieldStyle}" Margin="0,5,0,10"/>
+                            <TextBlock Text="BIO" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                            <TextBox x:Name="BioBox" Height="70" Padding="11,8" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Background="{DynamicResource AppBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Margin="0,5,0,0"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="3" Margin="0,16,0,0">
+                            <TextBlock Text="ACCOUNT INFO" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                            <TextBlock x:Name="DetailCreatedText" Margin="0,6,0,0" FontSize="13" Foreground="{DynamicResource TextBrush}"/>
+                            <TextBlock x:Name="DetailLastSeenText" Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                        </StackPanel>
+
+                        <Grid Grid.Row="4" Margin="0,18,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="SaveButton" Grid.Column="0" Content="Save Changes" Style="{StaticResource PrimaryActionStyle}" Height="42" Margin="0,0,5,0" IsEnabled="False" Click="SaveButton_Click"/>
+                            <Button x:Name="CancelButton" Grid.Column="1" Content="Cancel" Style="{DynamicResource SecondaryButtonStyle}" Height="42" Margin="5,0,0,0" IsEnabled="False" Click="CancelButton_Click"/>
+                        </Grid>
+
+                        <Button x:Name="DeleteButton" Grid.Row="5" Content="Delete User" Style="{StaticResource DangerButtonStyle}" HorizontalAlignment="Stretch" Height="42" Margin="0,10,0,0" IsEnabled="False" Click="DeleteButton_Click"/>
+                        <TextBlock Grid.Row="6" Text="Deleting an account is permanent. User ID changes are also propagated to existing chats and contacts." Margin="0,14,0,0" TextWrapping="Wrap" FontSize="11" LineHeight="17" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                        <TextBlock Grid.Row="7" x:Name="ValidationText" Margin="0,8,0,0" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource DangerBrush}" Visibility="Collapsed"/>
+                    </Grid>
+                </ScrollViewer>
             </Border>
         </Grid>
     </Grid>
