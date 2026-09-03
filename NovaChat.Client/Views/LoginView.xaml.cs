@@ -18,18 +18,24 @@ namespace NovaChat.Client.Views
 
         private bool _lampOn;
         private bool _draggingCord;
-        private double _pullOffset;
-        private double _pullVelocity;
-        private double _lastMouseY;
+
+        private double _pullX;
+        private double _pullY;
+        private double _pullVelocityX;
+        private double _pullVelocityY;
+        private Point _lastMousePosition;
+
         private double _lampAngle;
         private double _lampAngularVelocity;
         private DateTime _lastPhysicsTime;
 
+        private const double CordTopX = 250;
+        private const double CordTopY = 239;
         private const double RestPullY = 350;
-        private const double MaxPullOffset = 145;
+        private const double MaxPullDistance = 175;
         private const double ToggleThreshold = 72;
-        private const double SpringStrength = 22.0;
-        private const double Damping = 7.5;
+        private const double SpringStrength = 23.0;
+        private const double Damping = 7.2;
 
         public event Action? CreateAccountRequested;
         public event Action? LoginSuccessful;
@@ -51,23 +57,28 @@ namespace NovaChat.Client.Views
 
         private void LoginView_Loaded(object sender, RoutedEventArgs e)
         {
-            // Always begin in the dark/off state.
             _lampOn = false;
-            _pullOffset = 0;
-            _pullVelocity = 0;
+            _draggingCord = false;
+            _pullX = 0;
+            _pullY = 0;
+            _pullVelocityX = 0;
+            _pullVelocityY = 0;
             _lampAngle = 0;
             _lampAngularVelocity = 0;
 
             ApplyLampVisuals(false, false);
             UpdateCordVisual();
+            ApplyLampTransform();
         }
 
         private void LampPull_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             _draggingCord = true;
-            _lastMouseY = e.GetPosition(LampCanvas).Y;
-            _pullVelocity = 0;
+            _lastMousePosition = e.GetPosition(LampCanvas);
+            _pullVelocityX = 0;
+            _pullVelocityY = 0;
             _physicsTimer.Stop();
+
             LampPull.CaptureMouse();
             e.Handled = true;
         }
@@ -78,16 +89,30 @@ namespace NovaChat.Client.Views
                 return;
 
             Point position = e.GetPosition(LampCanvas);
-            double delta = position.Y - _lastMouseY;
-            _lastMouseY = position.Y;
+            double deltaX = position.X - _lastMousePosition.X;
+            double deltaY = position.Y - _lastMousePosition.Y;
+            _lastMousePosition = position;
 
-            // Only downward movement stretches the pull cord.
-            _pullOffset = Math.Clamp(_pullOffset + delta, 0, MaxPullOffset);
-            _pullVelocity = delta * 8.0;
+            double nextX = _pullX + deltaX;
+            double nextY = _pullY + deltaY;
 
-            // A real pull also gives the hanging lamp a small reactive sway.
-            _lampAngularVelocity += delta * 0.018;
-            _lampAngularVelocity = Math.Clamp(_lampAngularVelocity, -2.8, 2.8);
+            // The cord can be pulled in any direction, while staying physically attached to the lamp.
+            double distance = Math.Sqrt(nextX * nextX + nextY * nextY);
+            if (distance > MaxPullDistance)
+            {
+                double scale = MaxPullDistance / distance;
+                nextX *= scale;
+                nextY *= scale;
+            }
+
+            _pullVelocityX = deltaX * 8.0;
+            _pullVelocityY = deltaY * 8.0;
+            _pullX = nextX;
+            _pullY = nextY;
+
+            // Horizontal pulling makes the hanging lamp sway naturally.
+            _lampAngularVelocity += (deltaX * 0.018) - (deltaY * 0.004);
+            _lampAngularVelocity = Math.Clamp(_lampAngularVelocity, -3.0, 3.0);
 
             UpdateCordVisual();
             ApplyLampTransform();
@@ -95,19 +120,24 @@ namespace NovaChat.Client.Views
 
         private void LampCanvas_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
+            ReleaseCord();
+            e.Handled = true;
+        }
+
+        private void ReleaseCord()
+        {
             if (!_draggingCord)
                 return;
 
             _draggingCord = false;
             LampPull.ReleaseMouseCapture();
 
-            if (_pullOffset >= ToggleThreshold)
+            double distance = Math.Sqrt(_pullX * _pullX + _pullY * _pullY);
+            if (distance >= ToggleThreshold)
                 ToggleLamp();
 
-            // Let the cord return naturally instead of snapping back.
             _lastPhysicsTime = DateTime.UtcNow;
             _physicsTimer.Start();
-            e.Handled = true;
         }
 
         private void PhysicsTimer_Tick(object? sender, EventArgs e)
@@ -116,31 +146,36 @@ namespace NovaChat.Client.Views
             _lastPhysicsTime = DateTime.UtcNow;
             dt = Math.Clamp(dt, 0.008, 0.035);
 
-            // Damped spring: x'' = -kx - cv.
-            double acceleration = (-SpringStrength * _pullOffset) - (Damping * _pullVelocity);
-            _pullVelocity += acceleration * dt;
-            _pullOffset += _pullVelocity * dt;
+            // 2D damped spring: the cord returns toward its natural hanging position.
+            double accelerationX = (-SpringStrength * _pullX) - (Damping * _pullVelocityX);
+            double accelerationY = (-SpringStrength * _pullY) - (Damping * _pullVelocityY);
 
-            if (_pullOffset < 0)
-            {
-                _pullOffset = 0;
-                _pullVelocity *= -0.22;
-            }
+            _pullVelocityX += accelerationX * dt;
+            _pullVelocityY += accelerationY * dt;
+            _pullX += _pullVelocityX * dt;
+            _pullY += _pullVelocityY * dt;
 
-            // The lamp keeps a subtle sway while the cord settles.
-            _lampAngularVelocity += (-14.0 * _lampAngle - 5.5 * _lampAngularVelocity) * dt;
+            // Subtle rotational spring for the lamp itself.
+            _lampAngularVelocity += (-13.5 * _lampAngle - 5.0 * _lampAngularVelocity) * dt;
             _lampAngle += _lampAngularVelocity * dt;
 
             UpdateCordVisual();
             ApplyLampTransform();
 
-            if (Math.Abs(_pullOffset) < 0.15 && Math.Abs(_pullVelocity) < 0.15 &&
-                Math.Abs(_lampAngle) < 0.08 && Math.Abs(_lampAngularVelocity) < 0.08)
+            if (Math.Abs(_pullX) < 0.15 &&
+                Math.Abs(_pullY) < 0.15 &&
+                Math.Abs(_pullVelocityX) < 0.15 &&
+                Math.Abs(_pullVelocityY) < 0.15 &&
+                Math.Abs(_lampAngle) < 0.08 &&
+                Math.Abs(_lampAngularVelocity) < 0.08)
             {
-                _pullOffset = 0;
-                _pullVelocity = 0;
+                _pullX = 0;
+                _pullY = 0;
+                _pullVelocityX = 0;
+                _pullVelocityY = 0;
                 _lampAngle = 0;
                 _lampAngularVelocity = 0;
+
                 UpdateCordVisual();
                 ApplyLampTransform();
                 _physicsTimer.Stop();
@@ -149,17 +184,18 @@ namespace NovaChat.Client.Views
 
         private void UpdateCordVisual()
         {
-            const double topX = 250;
-            const double topY = 220;
-            double handleY = RestPullY + _pullOffset;
+            double endX = CordTopX + _pullX;
+            double endY = RestPullY + _pullY;
 
-            // A curved Bezier keeps the cord visibly soft while it stretches.
-            double sag = Math.Min(28, Math.Abs(_pullVelocity) * 0.9 + _pullOffset * 0.055);
-            double direction = _pullVelocity >= 0 ? 1 : -1;
-            double control1X = topX + direction * sag;
-            double control2X = topX - direction * sag * 0.65;
-            double control1Y = topY + (handleY - topY) * 0.28;
-            double control2Y = topY + (handleY - topY) * 0.74;
+            double length = Math.Max(1, endY - CordTopY);
+            double horizontal = endX - CordTopX;
+            double sway = Math.Clamp(horizontal * 0.34 + _pullVelocityX * 0.5, -55, 55);
+
+            // The curve is shaped from the lamp downward, giving the cord natural slack.
+            double control1X = CordTopX + sway * 0.18;
+            double control2X = CordTopX + sway;
+            double control1Y = CordTopY + length * 0.27;
+            double control2Y = CordTopY + length * 0.72;
 
             PullCord.Data = new PathGeometry
             {
@@ -167,25 +203,25 @@ namespace NovaChat.Client.Views
                 {
                     new PathFigure
                     {
-                        StartPoint = new Point(topX, topY),
+                        StartPoint = new Point(CordTopX, CordTopY),
                         IsClosed = false,
                         Segments = new PathSegmentCollection
                         {
                             new BezierSegment(
                                 new Point(control1X, control1Y),
                                 new Point(control2X, control2Y),
-                                new Point(topX, handleY),
+                                new Point(endX, endY),
                                 true)
                         }
                     }
                 }
             };
 
-            Canvas.SetTop(LampPull, handleY - LampPull.Height / 2);
-            Canvas.SetLeft(LampPull, topX - LampPull.Width / 2);
+            Canvas.SetLeft(LampPull, endX - LampPull.Width / 2);
+            Canvas.SetTop(LampPull, endY - LampPull.Height / 2);
 
-            PullHint.Text = _lampOn ? "pull to turn off" : "pull to turn on";
-            PullHint.Opacity = _pullOffset > 18 ? 0.35 : 0.75;
+            PullHint.Text = _lampOn ? "pull the cord to turn off" : "pull the cord to turn on";
+            PullHint.Opacity = Math.Sqrt(_pullX * _pullX + _pullY * _pullY) > 18 ? 0.35 : 0.78;
         }
 
         private void ToggleLamp()
@@ -197,20 +233,17 @@ namespace NovaChat.Client.Views
         private void ApplyLampVisuals(bool on, bool animate)
         {
             Color bulbColor = on ? Color.FromRgb(255, 241, 154) : Color.FromRgb(69, 71, 81);
-            Color shadeColor = on ? Color.FromRgb(76, 67, 39) : Color.FromRgb(36, 38, 48);
-            Color cordColor = on ? Color.FromRgb(238, 220, 153) : Color.FromRgb(183, 169, 133);
-            Color pullColor = on ? Color.FromRgb(255, 226, 122) : Color.FromRgb(185, 169, 111);
+            Color shadeColor = on ? Color.FromRgb(78, 69, 41) : Color.FromRgb(36, 38, 48);
+            Color cordColor = on ? Color.FromRgb(238, 220, 153) : Color.FromRgb(174, 160, 124);
+            Color pullColor = on ? Color.FromRgb(255, 226, 122) : Color.FromRgb(177, 160, 102);
 
             SetAnimatedColor(LampBulb, Shape.FillProperty, bulbColor, animate);
             SetAnimatedColor(LampShadeGlow, Shape.FillProperty, shadeColor, animate);
             SetAnimatedColor(PullCord, Shape.StrokeProperty, cordColor, animate);
             SetAnimatedColor(LampPull, Shape.FillProperty, pullColor, animate);
 
-            double targetGlow = on ? 1.0 : 0.0;
-            double targetWarm = on ? 0.82 : 0.0;
-
-            AnimateOpacity(LampGlow, targetGlow, 420, animate);
-            AnimateOpacity(WarmLightOverlay, targetWarm, 650, animate);
+            AnimateOpacity(LampGlow, on ? 1.0 : 0.0, 480, animate);
+            AnimateOpacity(WarmLightOverlay, on ? 0.78 : 0.0, 720, animate);
 
             WelcomeText.Foreground = new SolidColorBrush(
                 on ? Color.FromRgb(255, 248, 218) : Color.FromRgb(233, 233, 237));
