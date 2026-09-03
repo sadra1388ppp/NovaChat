@@ -30,17 +30,13 @@ public class UserService
         dto.DisplayName = dto.DisplayName.Trim();
 
         if (!TryNormalizePhoneNumber(dto.PhoneNumber, out var phoneNumber))
-        {
             return new RegisterResult { Success = false, Message = "Enter a valid phone number using 7 to 15 digits." };
-        }
 
         dto.PhoneNumber = phoneNumber;
 
         if (string.IsNullOrWhiteSpace(dto.Id) || string.IsNullOrWhiteSpace(dto.Email) ||
             string.IsNullOrWhiteSpace(dto.DisplayName) || string.IsNullOrWhiteSpace(dto.Password))
-        {
             return new RegisterResult { Success = false, Message = "All registration fields are required." };
-        }
 
         await RegisterLock.WaitAsync();
         try
@@ -145,78 +141,76 @@ public class UserService
 
             try
             {
-                // PostgreSQL uses double quotes for identifiers. The previous implementation
-                // used MySQL backticks and DATABASE(), which prevented User ID changes from
-                // completing against the NovaChat PostgreSQL database.
+                // NovaChat uses MariaDB/MySQL. Keep MySQL identifier quoting here.
                 await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                    INSERT INTO "Users"
-                    ("Id", "DisplayName", "Email", "PhoneNumber", "PasswordHash", "Bio", "AvatarUrl", "LastSeenAt", "CreatedAt")
+                    INSERT INTO `Users`
+                    (`Id`, `DisplayName`, `Email`, `PhoneNumber`, `PasswordHash`, `Bio`, `AvatarUrl`, `LastSeenAt`, `CreatedAt`)
                     SELECT
-                        {newId}, "DisplayName", "Email", {phoneNumber}, "PasswordHash", "Bio", "AvatarUrl", "LastSeenAt", "CreatedAt"
-                    FROM "Users"
-                    WHERE "Id" = {id}
+                        {newId}, `DisplayName`, `Email`, {phoneNumber}, `PasswordHash`, `Bio`, `AvatarUrl`, `LastSeenAt`, `CreatedAt`
+                    FROM `Users`
+                    WHERE `Id` = {id}
                     """);
 
                 await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                    UPDATE "Users"
-                    SET "DisplayName" = {dto.DisplayName},
-                        "Email" = {dto.Email},
-                        "PhoneNumber" = {phoneNumber},
-                        "Bio" = {dto.Bio}
-                    WHERE "Id" = {newId}
+                    UPDATE `Users`
+                    SET `DisplayName` = {dto.DisplayName},
+                        `Email` = {dto.Email},
+                        `PhoneNumber` = {phoneNumber},
+                        `Bio` = {dto.Bio}
+                    WHERE `Id` = {newId}
                     """);
 
                 await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                    UPDATE "Messages"
-                    SET "SenderId" = {newId}
-                    WHERE "SenderId" = {id}
+                    UPDATE `Messages`
+                    SET `SenderId` = {newId}
+                    WHERE `SenderId` = {id}
                     """);
 
                 await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                    UPDATE "Chats"
-                    SET "User1Id" = {newId}
-                    WHERE "User1Id" = {id}
+                    UPDATE `Chats`
+                    SET `User1Id` = {newId}
+                    WHERE `User1Id` = {id}
                     """);
 
                 await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                    UPDATE "Chats"
-                    SET "User2Id" = {newId}
-                    WHERE "User2Id" = {id}
+                    UPDATE `Chats`
+                    SET `User2Id` = {newId}
+                    WHERE `User2Id` = {id}
                     """);
 
                 await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                    UPDATE "Contacts"
-                    SET "OwnerUserId" = {newId}
-                    WHERE "OwnerUserId" = {id}
+                    UPDATE `Contacts`
+                    SET `OwnerUserId` = {newId}
+                    WHERE `OwnerUserId` = {id}
                     """);
 
                 await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                    UPDATE "Contacts"
-                    SET "ContactUserId" = {newId}
-                    WHERE "ContactUserId" = {id}
+                    UPDATE `Contacts`
+                    SET `ContactUserId` = {newId}
+                    WHERE `ContactUserId` = {id}
                     """);
 
                 if (await TableExistsAsync("GroupMembers"))
                 {
                     await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                        UPDATE "GroupMembers"
-                        SET "UserId" = {newId}
-                        WHERE "UserId" = {id}
+                        UPDATE `GroupMembers`
+                        SET `UserId` = {newId}
+                        WHERE `UserId` = {id}
                         """);
                 }
 
                 if (await TableExistsAsync("Groups"))
                 {
                     await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                        UPDATE "Groups"
-                        SET "CreatorId" = {newId}
-                        WHERE "CreatorId" = {id}
+                        UPDATE `Groups`
+                        SET `CreatorId` = {newId}
+                        WHERE `CreatorId` = {id}
                         """);
                 }
 
                 await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                    DELETE FROM "Users"
-                    WHERE "Id" = {id}
+                    DELETE FROM `Users`
+                    WHERE `Id` = {id}
                     """);
 
                 await transaction.CommitAsync();
@@ -290,18 +284,18 @@ public class UserService
         try
         {
             await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                DELETE FROM "Messages"
-                WHERE "SenderId" = {id}
+                DELETE FROM `Messages`
+                WHERE `SenderId` = {id}
                 """);
 
             await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                DELETE FROM "Chats"
-                WHERE "User1Id" = {id} OR "User2Id" = {id}
+                DELETE FROM `Chats`
+                WHERE `User1Id` = {id} OR `User2Id` = {id}
                 """);
 
             await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                DELETE FROM "Contacts"
-                WHERE "OwnerUserId" = {id} OR "ContactUserId" = {id}
+                DELETE FROM `Contacts`
+                WHERE `OwnerUserId` = {id} OR `ContactUserId` = {id}
                 """);
 
             var groupsExist = await TableExistsAsync("Groups");
@@ -310,37 +304,37 @@ public class UserService
             if (groupsExist && groupMembersExist)
             {
                 await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                    DELETE FROM "GroupMembers"
-                    WHERE "GroupId" IN
+                    DELETE FROM `GroupMembers`
+                    WHERE `GroupId` IN
                     (
-                        SELECT "Id" FROM "Groups" WHERE "CreatorId" = {id}
+                        SELECT `Id` FROM `Groups` WHERE `CreatorId` = {id}
                     )
-                    OR "UserId" = {id}
+                    OR `UserId` = {id}
                     """);
 
                 await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                    DELETE FROM "Groups"
-                    WHERE "CreatorId" = {id}
+                    DELETE FROM `Groups`
+                    WHERE `CreatorId` = {id}
                     """);
             }
             else if (groupMembersExist)
             {
                 await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                    DELETE FROM "GroupMembers"
-                    WHERE "UserId" = {id}
+                    DELETE FROM `GroupMembers`
+                    WHERE `UserId` = {id}
                     """);
             }
             else if (groupsExist)
             {
                 await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                    DELETE FROM "Groups"
-                    WHERE "CreatorId" = {id}
+                    DELETE FROM `Groups`
+                    WHERE `CreatorId` = {id}
                     """);
             }
 
             await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                DELETE FROM "Users"
-                WHERE "Id" = {id}
+                DELETE FROM `Users`
+                WHERE `Id` = {id}
                 """);
 
             await transaction.CommitAsync();
@@ -377,9 +371,9 @@ public class UserService
                 (
                     SELECT 1
                     FROM information_schema.tables
-                    WHERE table_schema = current_schema()
+                    WHERE table_schema = DATABASE()
                       AND table_name = {0}
-                ) AS "Value"
+                ) AS `Value`
                 """,
                 tableName)
             .FirstAsync();
