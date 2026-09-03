@@ -29,8 +29,8 @@ namespace NovaChat.Client.Views
         private double _lampAngle;
         private double _lampAngularVelocity;
 
-        private const double CordTopX = 300;
-        private const double CordTopY = 239;
+        private const double CordTopX = 330;
+        private const double CordTopY = 245;
         private const double RestPullY = 350;
         private const double MaxPullDistance = 175;
         private const double ToggleThreshold = 72;
