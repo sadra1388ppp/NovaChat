@@ -39,9 +39,7 @@ public partial class AllChatsView : UserControl
             _allChats.Clear();
 
             foreach (var chat in chats)
-            {
                 _allChats.Add(new AdminChatItem(chat));
-            }
 
             ApplyFilter();
             TotalChatsText.Text = _allChats.Count.ToString();
@@ -66,9 +64,12 @@ public partial class AllChatsView : UserControl
     private void ApplyFilter()
     {
         var query = SearchBox.Text.Trim();
-        var filtered = string.IsNullOrWhiteSpace(query)
-            ? _allChats
-            : _allChats.Where(c => c.SearchText.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        IEnumerable<AdminChatItem> filtered = _allChats;
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            filtered = _allChats.Where(c => c.SearchText.Contains(query, StringComparison.OrdinalIgnoreCase));
+        }
 
         _filteredChats.Clear();
         foreach (var item in filtered)
