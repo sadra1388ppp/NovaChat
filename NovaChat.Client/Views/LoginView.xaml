@@ -51,7 +51,7 @@
                     <Rectangle Width="5" Height="22" Canvas.Left="92.5" Canvas.Top="7" RadiusX="2.5" RadiusY="2.5" Fill="#65676E" />
 
                     <!-- Very simple downward-facing lamp shade -->
-                    <Path Data="M 28,29 Q 95,12 162,29 L 150,70 Q 143,91 124,106 Q 95,126 66,106 Q 47,91 40,70 Z" Stroke="#70727A" StrokeThickness="1.8">
+                    <Path x:Name="LampReflector" Data="M 28,29 Q 95,12 162,29 L 150,70 Q 143,91 124,106 Q 95,126 66,106 Q 47,91 40,70 Z" Stroke="#70727A" StrokeThickness="1.8">
                         <Path.Fill>
                             <LinearGradientBrush StartPoint="0,0" EndPoint="0.8,1">
                                 <GradientStop Color="#44464F" Offset="0" />
