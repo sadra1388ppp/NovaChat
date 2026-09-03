@@ -2,6 +2,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using NovaChat.Server.Data;
+using NovaChat.Server.DTOs;
+using NovaChat.Server.Services;
+using System.Security.Claims;
 
 namespace NovaChat.Server.Controllers;
 
@@ -11,10 +14,12 @@ namespace NovaChat.Server.Controllers;
 public class AdminController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly UserService _userService;
 
-    public AdminController(AppDbContext db)
+    public AdminController(AppDbContext db, UserService userService)
     {
         _db = db;
+        _userService = userService;
     }
 
     // =========================
@@ -76,6 +81,39 @@ public class AdminController : ControllerBase
         }
 
         return Ok(user);
+    }
+
+    [HttpPut("users/{id}")]
+    public async Task<IActionResult> UpdateUser(string id, UpdateUserDto dto)
+    {
+        var ownerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // The Owner account itself is protected from ID changes here.
+        if (string.Equals(ownerId, id, StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(dto.NewUserId) &&
+            !string.Equals(dto.NewUserId, id, StringComparison.Ordinal))
+        {
+            return BadRequest(new
+            {
+                message = "The Owner User ID is managed by Owner:UserId and cannot be changed here."
+            });
+        }
+
+        var result = await _userService.UpdateUserAsync(id, dto);
+
+        if (!result.Success)
+        {
+            if (result.Message == "User not found.")
+                return NotFound(new { message = result.Message });
+
+            return Conflict(new { message = result.Message });
+        }
+
+        return Ok(new
+        {
+            message = result.Message,
+            user = result.User
+        });
     }
 
     [HttpDelete("users/{id}")]
