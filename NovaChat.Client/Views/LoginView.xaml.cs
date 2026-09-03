@@ -1,11 +1,11 @@
 using System;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Shapes;
-using System.Windows.Threading;
 using NovaChat.Client.Models;
 using NovaChat.Client.Services;
 
@@ -14,10 +14,15 @@ namespace NovaChat.Client.Views
     public partial class LoginView : UserControl
     {
         private readonly ApiService _apiService;
-        private readonly DispatcherTimer _physicsTimer;
+        private readonly Stopwatch _physicsClock = new();
+
+        private PathGeometry? _cordGeometry;
+        private BezierSegment? _cordSegment;
+        private TranslateTransform? _pullTranslate;
 
         private bool _lampOn;
         private bool _draggingCord;
+        private bool _physicsRunning;
 
         private double _pullX;
         private double _pullY;
@@ -27,15 +32,17 @@ namespace NovaChat.Client.Views
 
         private double _lampAngle;
         private double _lampAngularVelocity;
-        private DateTime _lastPhysicsTime;
 
         private const double CordTopX = 250;
         private const double CordTopY = 239;
         private const double RestPullY = 350;
         private const double MaxPullDistance = 175;
         private const double ToggleThreshold = 72;
-        private const double SpringStrength = 23.0;
-        private const double Damping = 7.2;
+
+        // Softer spring + damping gives the cord a more believable weighted motion.
+        private const double SpringStrength = 20.5;
+        private const double Damping = 6.8;
+        private const double MaxSpeed = 850.0;
 
         public event Action? CreateAccountRequested;
         public event Action? LoginSuccessful;
@@ -46,13 +53,8 @@ namespace NovaChat.Client.Views
             InitializeComponent();
             _apiService = new ApiService();
 
-            _physicsTimer = new DispatcherTimer
-            {
-                Interval = TimeSpan.FromMilliseconds(16)
-            };
-            _physicsTimer.Tick += PhysicsTimer_Tick;
-
             Loaded += LoginView_Loaded;
+            Unloaded += LoginView_Unloaded;
         }
 
         private void LoginView_Loaded(object sender, RoutedEventArgs e)
@@ -66,9 +68,50 @@ namespace NovaChat.Client.Views
             _lampAngle = 0;
             _lampAngularVelocity = 0;
 
+            EnsureCordGeometry();
+            EnsurePullTransform();
+
             ApplyLampVisuals(false, false);
             UpdateCordVisual();
             ApplyLampTransform();
+        }
+
+        private void LoginView_Unloaded(object sender, RoutedEventArgs e)
+        {
+            StopPhysics();
+        }
+
+        private void EnsureCordGeometry()
+        {
+            if (_cordGeometry != null && _cordSegment != null)
+                return;
+
+            _cordSegment = new BezierSegment
+            {
+                IsStroked = true
+            };
+
+            var figure = new PathFigure
+            {
+                StartPoint = new Point(CordTopX, CordTopY),
+                IsClosed = false,
+                IsFilled = false
+            };
+            figure.Segments.Add(_cordSegment);
+
+            _cordGeometry = new PathGeometry();
+            _cordGeometry.Figures.Add(figure);
+            PullCord.Data = _cordGeometry;
+        }
+
+        private void EnsurePullTransform()
+        {
+            if (_pullTranslate != null)
+                return;
+
+            _pullTranslate = new TranslateTransform();
+            LampPull.RenderTransform = _pullTranslate;
+            LampPull.RenderTransformOrigin = new Point(0.5, 0.5);
         }
 
         private void LampPull_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -77,8 +120,8 @@ namespace NovaChat.Client.Views
             _lastMousePosition = e.GetPosition(LampCanvas);
             _pullVelocityX = 0;
             _pullVelocityY = 0;
-            _physicsTimer.Stop();
 
+            StartPhysics();
             LampPull.CaptureMouse();
             e.Handled = true;
         }
@@ -104,13 +147,16 @@ namespace NovaChat.Client.Views
                 nextY *= scale;
             }
 
-            _pullVelocityX = deltaX * 8.0;
-            _pullVelocityY = deltaY * 8.0;
+            // Input velocity is smoothed instead of directly multiplying mouse deltas.
+            _pullVelocityX = Math.Clamp(_pullVelocityX * 0.55 + deltaX * 12.0, -MaxSpeed, MaxSpeed);
+            _pullVelocityY = Math.Clamp(_pullVelocityY * 0.55 + deltaY * 12.0, -MaxSpeed, MaxSpeed);
+
             _pullX = nextX;
             _pullY = nextY;
 
-            _lampAngularVelocity += (deltaX * 0.018) - (deltaY * 0.004);
-            _lampAngularVelocity = Math.Clamp(_lampAngularVelocity, -3.0, 3.0);
+            // Horizontal movement gives the lamp a small, delayed swing.
+            _lampAngularVelocity += deltaX * 0.010 - deltaY * 0.002;
+            _lampAngularVelocity = Math.Clamp(_lampAngularVelocity, -2.2, 2.2);
 
             UpdateCordVisual();
             ApplyLampTransform();
@@ -134,36 +180,82 @@ namespace NovaChat.Client.Views
             if (distance >= ToggleThreshold)
                 ToggleLamp();
 
-            _lastPhysicsTime = DateTime.UtcNow;
-            _physicsTimer.Start();
+            StartPhysics();
         }
 
-        private void PhysicsTimer_Tick(object? sender, EventArgs e)
+        private void StartPhysics()
         {
-            double dt = (DateTime.UtcNow - _lastPhysicsTime).TotalSeconds;
-            _lastPhysicsTime = DateTime.UtcNow;
-            dt = Math.Clamp(dt, 0.008, 0.035);
+            if (_physicsRunning)
+                return;
 
-            double accelerationX = (-SpringStrength * _pullX) - (Damping * _pullVelocityX);
-            double accelerationY = (-SpringStrength * _pullY) - (Damping * _pullVelocityY);
+            _physicsRunning = true;
+            _physicsClock.Restart();
+            CompositionTarget.Rendering += PhysicsRendering;
+        }
 
-            _pullVelocityX += accelerationX * dt;
-            _pullVelocityY += accelerationY * dt;
-            _pullX += _pullVelocityX * dt;
-            _pullY += _pullVelocityY * dt;
+        private void StopPhysics()
+        {
+            if (!_physicsRunning)
+                return;
 
-            _lampAngularVelocity += (-13.5 * _lampAngle - 5.0 * _lampAngularVelocity) * dt;
-            _lampAngle += _lampAngularVelocity * dt;
+            CompositionTarget.Rendering -= PhysicsRendering;
+            _physicsRunning = false;
+            _physicsClock.Stop();
+        }
+
+        private void PhysicsRendering(object? sender, EventArgs e)
+        {
+            // Rendering is synchronized with WPF's actual render cadence instead of
+            // using a fixed 16 ms DispatcherTimer that can drift and pile up work.
+            double dt = _physicsClock.Elapsed.TotalSeconds;
+            _physicsClock.Restart();
+            dt = Math.Clamp(dt, 0.001, 0.032);
+
+            if (!_draggingCord)
+            {
+                double accelerationX = (-SpringStrength * _pullX) - (Damping * _pullVelocityX);
+                double accelerationY = (-SpringStrength * _pullY) - (Damping * _pullVelocityY);
+
+                _pullVelocityX += accelerationX * dt;
+                _pullVelocityY += accelerationY * dt;
+
+                double velocityLength = Math.Sqrt(
+                    _pullVelocityX * _pullVelocityX +
+                    _pullVelocityY * _pullVelocityY);
+
+                if (velocityLength > MaxSpeed)
+                {
+                    double scale = MaxSpeed / velocityLength;
+                    _pullVelocityX *= scale;
+                    _pullVelocityY *= scale;
+                }
+
+                _pullX += _pullVelocityX * dt;
+                _pullY += _pullVelocityY * dt;
+
+                // Prevent numerical overshoot from creating an artificial snap.
+                double distance = Math.Sqrt(_pullX * _pullX + _pullY * _pullY);
+                if (distance > MaxPullDistance)
+                {
+                    double scale = MaxPullDistance / distance;
+                    _pullX *= scale;
+                    _pullY *= scale;
+                }
+
+                _lampAngularVelocity += (-11.5 * _lampAngle - 4.2 * _lampAngularVelocity) * dt;
+                _lampAngle += _lampAngularVelocity * dt;
+            }
 
             UpdateCordVisual();
             ApplyLampTransform();
 
-            if (Math.Abs(_pullX) < 0.15 &&
-                Math.Abs(_pullY) < 0.15 &&
-                Math.Abs(_pullVelocityX) < 0.15 &&
-                Math.Abs(_pullVelocityY) < 0.15 &&
-                Math.Abs(_lampAngle) < 0.08 &&
-                Math.Abs(_lampAngularVelocity) < 0.08)
+            if (!_draggingCord &&
+                Math.Abs(_pullX) < 0.08 &&
+                Math.Abs(_pullY) < 0.08 &&
+                Math.Abs(_pullVelocityX) < 0.08 &&
+                Math.Abs(_pullVelocityY) < 0.08 &&
+                Math.Abs(_lampAngle) < 0.025 &&
+                Math.Abs(_lampAngularVelocity) < 0.025)
             {
                 _pullX = 0;
                 _pullY = 0;
@@ -174,46 +266,37 @@ namespace NovaChat.Client.Views
 
                 UpdateCordVisual();
                 ApplyLampTransform();
-                _physicsTimer.Stop();
+                StopPhysics();
             }
         }
 
         private void UpdateCordVisual()
         {
+            EnsureCordGeometry();
+            EnsurePullTransform();
+
             double endX = CordTopX + _pullX;
             double endY = RestPullY + _pullY;
-
             double length = Math.Max(1, endY - CordTopY);
             double horizontal = endX - CordTopX;
-            double sway = Math.Clamp(horizontal * 0.34 + _pullVelocityX * 0.5, -55, 55);
 
-            double control1X = CordTopX + sway * 0.18;
-            double control2X = CordTopX + sway;
-            double control1Y = CordTopY + length * 0.27;
-            double control2Y = CordTopY + length * 0.72;
+            // The lower half follows the pull more strongly, while the upper half
+            // stays anchored, producing a natural hanging curve.
+            double sway = Math.Clamp(horizontal * 0.30 + _pullVelocityX * 0.025, -62, 62);
 
-            PullCord.Data = new PathGeometry
-            {
-                Figures = new PathFigureCollection
-                {
-                    new PathFigure
-                    {
-                        StartPoint = new Point(CordTopX, CordTopY),
-                        IsClosed = false,
-                        Segments = new PathSegmentCollection
-                        {
-                            new BezierSegment(
-                                new Point(control1X, control1Y),
-                                new Point(control2X, control2Y),
-                                new Point(endX, endY),
-                                true)
-                        }
-                    }
-                }
-            };
+            _cordSegment!.Point1 = new Point(
+                CordTopX + sway * 0.10,
+                CordTopY + length * 0.28);
 
-            Canvas.SetLeft(LampPull, endX - LampPull.Width / 2);
-            Canvas.SetTop(LampPull, endY - LampPull.Height / 2);
+            _cordSegment.Point2 = new Point(
+                CordTopX + sway,
+                CordTopY + length * 0.73);
+
+            _cordSegment.Point3 = new Point(endX, endY);
+
+            // Updating a transform avoids changing Canvas layout on every frame.
+            _pullTranslate!.X = _pullX;
+            _pullTranslate.Y = _pullY;
         }
 
         private void ToggleLamp()
