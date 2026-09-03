@@ -38,7 +38,7 @@
     <Style x:Key="GhostButtonStyle" TargetType="Button">
         <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="12,8"/><Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
-            <Border Background="{TemplateBinding Background}" CornerRadius="10"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/></Border>
+            <Border Background="{TemplateBinding Background}" CornerRadius="10"><ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/></Border>
             <ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource PrimarySoftBrush}"/><Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}"/></Trigger></ControlTemplate.Triggers>
         </ControlTemplate></Setter.Value></Setter>
     </Style>
