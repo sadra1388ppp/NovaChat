@@ -31,7 +31,6 @@
                         Background="Transparent"
                         MouseMove="LampCanvas_MouseMove"
                         MouseLeftButtonUp="LampCanvas_MouseLeftButtonUp">
-                    <!-- Keep the visual lamp vertically centered while its local coordinates remain aligned with the physics. -->
                     <Canvas.RenderTransform>
                         <TranslateTransform Y="-42.8" />
                     </Canvas.RenderTransform>
@@ -75,7 +74,6 @@
                         <Path x:Name="LampReflector" Data="M 0,0 L 0,0" Fill="#282A31" Opacity="0" IsHitTestVisible="False" />
                     </Canvas>
 
-                    <!-- The cord is anchored to the exact lower-center point of the lamp. -->
                     <Path x:Name="PullCord"
                           Stroke="#555555"
                           StrokeThickness="2.2"
@@ -83,9 +81,9 @@
                           StrokeEndLineCap="Round"
                           IsHitTestVisible="False" />
 
-                    <!-- Center of the bead is exactly (250,350), matching the physics endpoint. -->
+                    <!-- Bead center is exactly the same point as the cord endpoint (258,350). -->
                     <Ellipse x:Name="LampPull" Width="15" Height="15"
-                             Canvas.Left="242.5" Canvas.Top="342.5"
+                             Canvas.Left="250.5" Canvas.Top="342.5"
                              Fill="#D4A373" Stroke="#E8C79C" StrokeThickness="1"
                              Cursor="Hand"
                              MouseLeftButtonDown="LampPull_MouseLeftButtonDown"
