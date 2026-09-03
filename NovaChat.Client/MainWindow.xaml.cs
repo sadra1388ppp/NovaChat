@@ -54,6 +54,16 @@ namespace NovaChat.Client
             }
         }
 
+        public void ShowManageUsers()
+        {
+            if (!_isOwner) return;
+
+            MainContainer.Children.Clear();
+            ManageUsersView manageUsersView = new ManageUsersView();
+            manageUsersView.BackToChatRequested += ShowMain;
+            MainContainer.Children.Add(manageUsersView);
+        }
+
         public void ShowProfile()
         {
             MainContainer.Children.Clear();
