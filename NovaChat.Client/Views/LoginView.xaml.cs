@@ -33,7 +33,9 @@ namespace NovaChat.Client.Views
         private double _lampAngle;
         private double _lampAngularVelocity;
 
-        private const double CordTopX = 250;
+        // Cord is intentionally a few pixels to the right of the lamp stem.
+        // The pull bead uses the same center coordinate so the cord and bead never separate.
+        private const double CordTopX = 258;
         private const double CordTopY = 239;
         private const double RestPullY = 350;
         private const double MaxPullDistance = 175;
