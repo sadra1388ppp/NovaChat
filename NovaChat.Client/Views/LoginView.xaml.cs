@@ -105,8 +105,6 @@ namespace NovaChat.Client.Views
             WelcomeText.Text = "Welcome to NovaChat";
             WelcomeSubText.Text = "Turn on the lamp to get started.";
 
-            // WelcomeText stays directly above the Sign In card.
-            // WelcomeSubText stays in LampCanvas and is centered near the bottom.
             if (_loginContentPanel == null && LoginCard.Parent is Grid loginColumn)
             {
                 loginColumn.Children.Remove(LoginCard);
@@ -153,8 +151,14 @@ namespace NovaChat.Client.Views
                     ? WelcomeSubText.ActualWidth
                     : WelcomeSubText.DesiredSize.Width;
 
-                Canvas.SetLeft(WelcomeSubText, (LampCanvas.Width - subtitleWidth) / 2.0);
-                Canvas.SetTop(WelcomeSubText, Math.Max(0, LampCanvas.Height - 42));
+                // Center it relative to the whole window, not the lamp.
+                double rootWidth = LoginRoot.ActualWidth > 0 ? LoginRoot.ActualWidth : ActualWidth;
+                double rootHeight = LoginRoot.ActualHeight > 0 ? LoginRoot.ActualHeight : ActualHeight;
+                double canvasOffsetX = (rootWidth - LampCanvas.Width) / 2.0;
+                double left = (rootWidth - subtitleWidth) / 2.0 - canvasOffsetX;
+
+                Canvas.SetLeft(WelcomeSubText, left);
+                Canvas.SetTop(WelcomeSubText, Math.Max(0, LampCanvas.Height - WelcomeSubText.ActualHeight - 12));
             }), System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
@@ -426,12 +430,8 @@ namespace NovaChat.Client.Views
             AnimateOpacity(LampReflector, on ? 0.55 : 0.0, 320, animate);
             AnimateOpacity(WarmLightOverlay, on ? 0.78 : 0.0, 720, animate);
             AnimateOpacity(LoginCard, on ? 1.0 : 0.0, 700, animate);
-
-            // The welcome title is visible only when the lamp is on.
-            // The instruction is visible only when the lamp is off.
             AnimateOpacity(WelcomeText, on ? 1.0 : 0.0, 420, animate);
             AnimateOpacity(WelcomeSubText, on ? 0.0 : 1.0, 420, animate);
-
             LoginCard.IsHitTestVisible = on;
             AnimateBrushColor(LoginCard, Border.BackgroundProperty, on ? Color.FromRgb(28, 31, 36) : Color.FromRgb(13, 15, 19), 420, animate);
             AnimateBrushColor(LoginCard, Border.BorderBrushProperty, on ? Color.FromArgb(35, 255, 255, 255) : Color.FromArgb(26, 255, 255, 255), 420, animate);
