@@ -11,7 +11,7 @@
 
         <Border x:Name="WarmLightOverlay" IsHitTestVisible="False" Opacity="0">
             <Border.Background>
-                <RadialGradientBrush Center="0.25,0.40" GradientOrigin="0.25,0.40" RadiusX="0.58" RadiusY="0.68">
+                <RadialGradientBrush Center="0.30,0.40" GradientOrigin="0.30,0.40" RadiusX="0.58" RadiusY="0.68">
                     <GradientStop Color="#FFFFF3B8" Offset="0" />
                     <GradientStop Color="#70FFD66E" Offset="0.22" />
                     <GradientStop Color="#28FFD66E" Offset="0.48" />
@@ -22,18 +22,17 @@
 
         <Grid Margin="35,0,35,0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="430" />
+                <ColumnDefinition Width="470" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- Larger lamp area. -->
-            <Grid Grid.Column="0" Width="390" Height="500" HorizontalAlignment="Center" VerticalAlignment="Center">
-                <Canvas x:Name="LampCanvas" Width="390" Height="500"
+            <Grid Grid.Column="0" Width="420" Height="500" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Canvas x:Name="LampCanvas" Width="420" Height="500"
                         Background="Transparent"
                         MouseMove="LampCanvas_MouseMove"
                         MouseLeftButtonUp="LampCanvas_MouseLeftButtonUp">
 
-                    <Ellipse x:Name="LampGlow" Width="370" Height="370" Canvas.Left="10" Canvas.Top="35"
+                    <Ellipse x:Name="LampGlow" Width="370" Height="370" Canvas.Left="30" Canvas.Top="35"
                              IsHitTestVisible="False" Opacity="0">
                         <Ellipse.Fill>
                             <RadialGradientBrush>
@@ -45,9 +44,8 @@
                         </Ellipse.Fill>
                     </Ellipse>
 
-                    <!-- Same lamp silhouette as the reference, scaled 1.22x. -->
                     <Canvas x:Name="LampAssembly" Width="244" Height="366"
-                            Canvas.Left="73" Canvas.Top="62"
+                            Canvas.Left="88" Canvas.Top="62"
                             RenderTransformOrigin="0.5,0.36" Effect="{StaticResource LampShadow}">
                         <Canvas.RenderTransform>
                             <RotateTransform x:Name="LampRotateTransform" Angle="0" />
@@ -73,7 +71,7 @@
                         <Path x:Name="LampReflector" Data="M 0,0 L 0,0" Fill="#282A31" Opacity="0" IsHitTestVisible="False" />
                     </Canvas>
 
-                    <!-- Cord begins at the exact center of the shade's lower edge. -->
+                    <!-- The cord starts exactly at the shade's bottom-center and its bead sits exactly on the cord endpoint. -->
                     <Path x:Name="PullCord"
                           Stroke="#555555"
                           StrokeThickness="2.2"
@@ -81,7 +79,8 @@
                           StrokeEndLineCap="Round"
                           IsHitTestVisible="False" />
 
-                    <Ellipse x:Name="LampPull" Width="15" Height="15" Canvas.Left="270" Canvas.Top="401"
+                    <Ellipse x:Name="LampPull" Width="15" Height="15"
+                             Canvas.Left="278" Canvas.Top="396.5"
                              Fill="#D4A373" Stroke="#E8C79C" StrokeThickness="1"
                              Cursor="Hand"
                              MouseLeftButtonDown="LampPull_MouseLeftButtonDown"
@@ -100,7 +99,6 @@
                 </Canvas>
             </Grid>
 
-            <!-- Login card is anchored toward the right side with a large, deliberate gap. -->
             <Grid Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center"
                   Width="390" Margin="0,0,25,0">
                 <Border x:Name="LoginCard"
