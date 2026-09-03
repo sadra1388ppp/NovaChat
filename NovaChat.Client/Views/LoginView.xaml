@@ -10,7 +10,6 @@
             <ColumnDefinition Width="0.85*" />
         </Grid.ColumnDefinitions>
 
-        <!-- Warm light that appears from the lamp instead of a flat screen tint. -->
         <Border x:Name="WarmLightOverlay"
                 Grid.ColumnSpan="2"
                 IsHitTestVisible="False"
@@ -28,7 +27,6 @@
             </Border.Background>
         </Border>
 
-        <!-- Left hero area: the lamp is free-standing, with no blue panel around it. -->
         <Grid Grid.Column="0" MinWidth="420">
             <Canvas x:Name="LampCanvas"
                     Width="500"
@@ -39,96 +37,109 @@
                     MouseMove="LampCanvas_MouseMove"
                     MouseLeftButtonUp="LampCanvas_MouseLeftButtonUp">
 
-                <!-- Soft pool of light around the lamp. -->
                 <Ellipse x:Name="LampGlow"
-                         Width="360"
-                         Height="360"
-                         Canvas.Left="70"
-                         Canvas.Top="65"
+                         Width="390"
+                         Height="390"
+                         Canvas.Left="55"
+                         Canvas.Top="45"
                          IsHitTestVisible="False"
                          Opacity="0">
                     <Ellipse.Fill>
                         <RadialGradientBrush>
-                            <GradientStop Color="#FFFFF1AE" Offset="0" />
-                            <GradientStop Color="#FFF5CF62" Offset="0.28" />
-                            <GradientStop Color="#40E4B94D" Offset="0.58" />
+                            <GradientStop Color="#FFFFF5C4" Offset="0" />
+                            <GradientStop Color="#FFF5CF62" Offset="0.25" />
+                            <GradientStop Color="#45E4B94D" Offset="0.58" />
                             <GradientStop Color="#00E4B94D" Offset="1" />
                         </RadialGradientBrush>
                     </Ellipse.Fill>
                 </Ellipse>
 
-                <!-- Main suspension wire. -->
                 <Path x:Name="SuspensionWire"
-                      Stroke="#4B4D56"
+                      Stroke="#41434B"
                       StrokeThickness="3"
-                      Data="M 250,0 L 250,108"
+                      Data="M 250,0 L 250,105"
                       IsHitTestVisible="False" />
 
-                <!-- Lamp body + small transform so it can naturally sway. -->
                 <Canvas x:Name="LampAssembly"
-                        Width="170"
-                        Height="155"
-                        Canvas.Left="165"
-                        Canvas.Top="92"
+                        Width="190"
+                        Height="170"
+                        Canvas.Left="155"
+                        Canvas.Top="88"
                         RenderTransformOrigin="0.5,0">
                     <Canvas.RenderTransform>
                         <RotateTransform x:Name="LampRotateTransform" Angle="0" />
                     </Canvas.RenderTransform>
 
-                    <Ellipse Width="20"
-                             Height="20"
-                             Canvas.Left="75"
+                    <Ellipse Width="22"
+                             Height="22"
+                             Canvas.Left="84"
                              Canvas.Top="0"
-                             Fill="#3F414A" />
+                             Fill="#383A42"
+                             Stroke="#555761"
+                             StrokeThickness="1.5" />
 
-                    <Path Data="M 35,27 Q 85,5 135,27 L 118,104 Q 85,132 52,104 Z"
-                          Fill="#242630"
-                          Stroke="#565865"
+                    <Rectangle Width="8"
+                               Height="18"
+                               Canvas.Left="91"
+                               Canvas.Top="16"
+                               RadiusX="3"
+                               RadiusY="3"
+                               Fill="#44464F" />
+
+                    <Path Data="M 30,32 Q 95,4 160,32 L 139,116 Q 95,151 51,116 Z"
+                          Fill="#22242C"
+                          Stroke="#5A5C66"
                           StrokeThickness="3" />
 
+                    <Path Data="M 45,40 Q 95,17 145,40"
+                          Stroke="#72747D"
+                          StrokeThickness="2"
+                          Opacity="0.55"
+                          IsHitTestVisible="False" />
+
                     <Ellipse x:Name="LampShadeGlow"
-                             Width="76"
-                             Height="23"
-                             Canvas.Left="47"
-                             Canvas.Top="91"
-                             Fill="#1D1E25"
-                             Stroke="#5D5E68"
+                             Width="94"
+                             Height="27"
+                             Canvas.Left="48"
+                             Canvas.Top="103"
+                             Fill="#1B1C22"
+                             Stroke="#676974"
                              StrokeThickness="2" />
 
                     <Ellipse x:Name="LampBulb"
-                             Width="38"
-                             Height="38"
-                             Canvas.Left="66"
-                             Canvas.Top="74"
-                             Fill="#454751"
-                             Stroke="#777986"
+                             Width="42"
+                             Height="42"
+                             Canvas.Left="74"
+                             Canvas.Top="91"
+                             Fill="#41434D"
+                             Stroke="#777985"
                              StrokeThickness="2" />
                 </Canvas>
 
-                <!-- Pull cord starts directly underneath the lamp. -->
+                <!-- The pull cord is attached directly to the bottom of the lamp. -->
                 <Path x:Name="PullCord"
-                      Stroke="#B7A985"
+                      Stroke="#AFA17D"
                       StrokeThickness="4"
                       StrokeStartLineCap="Round"
                       StrokeEndLineCap="Round"
                       IsHitTestVisible="False" />
 
                 <Ellipse x:Name="LampPull"
-                         Width="24"
-                         Height="24"
-                         Canvas.Left="238"
+                         Width="25"
+                         Height="25"
+                         Canvas.Left="237.5"
                          Canvas.Top="350"
-                         Fill="#B9A96F"
-                         Stroke="#F1E1A5"
+                         Fill="#AFA16F"
+                         Stroke="#E8D99C"
                          StrokeThickness="2"
                          Cursor="Hand"
                          MouseLeftButtonDown="LampPull_MouseLeftButtonDown" />
 
                 <TextBlock x:Name="PullHint"
                            Text="pull the cord"
-                           Canvas.Left="196"
-                           Canvas.Top="386"
-                           Width="108"
+                           Canvas.Left="145"
+                           Canvas.Top="614"
+                           Width="210"
                            TextAlignment="Center"
                            FontSize="13"
                            Foreground="#777983"
@@ -159,7 +170,6 @@
             </Canvas>
         </Grid>
 
-        <!-- Login card remains functionally identical, but emerges from the dark. -->
         <Grid Grid.Column="1"
               Margin="42,30,58,30"
               MaxWidth="430"
