@@ -1,3 +1,4 @@
+using NovaChat.Client;
 using System.Windows;
 
 namespace NovaChat.Client.Views;
