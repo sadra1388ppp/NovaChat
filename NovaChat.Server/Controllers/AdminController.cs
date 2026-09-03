@@ -30,6 +30,7 @@ public class AdminController : ControllerBase
             .Select(u => new { u.Id, u.DisplayName, u.Email, u.CreatedAt })
             .OrderBy(u => u.CreatedAt)
             .ToListAsync();
+
         return Ok(users);
     }
 
@@ -41,7 +42,9 @@ public class AdminController : ControllerBase
             .Select(u => new { u.Id, u.DisplayName, u.Email, u.CreatedAt })
             .FirstOrDefaultAsync();
 
-        return user == null ? NotFound(new { message = "User not found." }) : Ok(user);
+        return user == null
+            ? NotFound(new { message = "User not found." })
+            : Ok(user);
     }
 
     [HttpPut("users/{id}")]
@@ -53,18 +56,24 @@ public class AdminController : ControllerBase
             !string.IsNullOrWhiteSpace(dto.NewUserId) &&
             !string.Equals(dto.NewUserId.Trim(), id, StringComparison.Ordinal))
         {
-            return BadRequest(new { message = "The Owner User ID is managed by Owner:UserId and cannot be changed here." });
+            return BadRequest(new
+            {
+                message = "The Owner User ID is managed by Owner:UserId and cannot be changed here."
+            });
         }
 
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == id);
         if (user == null)
             return NotFound(new { message = "User not found." });
 
-        var newId = string.IsNullOrWhiteSpace(dto.NewUserId) ? id : dto.NewUserId.Trim();
+        var newId = string.IsNullOrWhiteSpace(dto.NewUserId)
+            ? id
+            : dto.NewUserId.Trim();
+
+        var displayName = dto.DisplayName.Trim();
         var email = dto.Email.Trim();
         var phone = NormalizePhone(dto.PhoneNumber);
         var bio = (dto.Bio ?? string.Empty).Trim();
-        var displayName = dto.DisplayName.Trim();
 
         if (string.IsNullOrWhiteSpace(displayName) || string.IsNullOrWhiteSpace(email))
             return BadRequest(new { message = "Display Name and Email are required." });
@@ -75,25 +84,50 @@ public class AdminController : ControllerBase
         if (await _db.Users.AsNoTracking().AnyAsync(u => u.Email == email && u.Id != id))
             return Conflict(new { message = "This Email is already registered." });
 
-        // Normal profile edit: let EF handle the update normally.
+        // A normal profile edit does not require any special handling.
         if (string.Equals(id, newId, StringComparison.Ordinal))
         {
             user.DisplayName = displayName;
             user.Email = email;
             user.PhoneNumber = phone;
             user.Bio = bio;
+
             await _db.SaveChangesAsync();
 
-            return Ok(new { message = "User updated successfully.", user });
+            return Ok(new
+            {
+                message = "User updated successfully.",
+                user
+            });
         }
 
-        // User.Id is a primary key referenced by other tables. We therefore create
-        // the new user first, move all references with EF, then delete the old user.
-        // This avoids provider-specific SQL completely and works with MariaDB/MySQL.
+        // User.Id is a primary key referenced by Chats, Messages and Contacts.
+        // EF Core cannot safely change that key in-place. We therefore perform a
+        // transactional replacement: create the new user, move every reference,
+        // then remove the old user.
         await using var transaction = await _db.Database.BeginTransactionAsync();
 
         try
         {
+            // PhoneNumber is UNIQUE in the EF model. If the replacement keeps the
+            // same phone number, the old row must temporarily release it before the
+            // replacement can be inserted. The same precaution is used for Email
+            // because older databases may already have a unique email index.
+            var oldEmail = user.Email;
+            var oldPhone = user.PhoneNumber;
+
+            var emailIsSame = string.Equals(oldEmail, email, StringComparison.OrdinalIgnoreCase);
+            var phoneIsSame = string.Equals(oldPhone, phone, StringComparison.OrdinalIgnoreCase);
+
+            if (emailIsSame)
+                user.Email = $"__renaming_{Guid.NewGuid():N}@novachat.local";
+
+            if (phoneIsSame)
+                user.PhoneNumber = null;
+
+            if (emailIsSame || phoneIsSame)
+                await _db.SaveChangesAsync();
+
             var replacement = new User
             {
                 Id = newId,
@@ -110,41 +144,71 @@ public class AdminController : ControllerBase
             _db.Users.Add(replacement);
             await _db.SaveChangesAsync();
 
-            var messages = await _db.Messages.Where(m => m.SenderId == id).ToListAsync();
+            // Move message ownership.
+            var messages = await _db.Messages
+                .Where(m => m.SenderId == id)
+                .ToListAsync();
+
             foreach (var message in messages)
                 message.SenderId = newId;
 
-            var chats = await _db.Chats.Where(c => c.User1Id == id || c.User2Id == id).ToListAsync();
+            // Move both sides of every private chat.
+            var chats = await _db.Chats
+                .Where(c => c.User1Id == id || c.User2Id == id)
+                .ToListAsync();
+
             foreach (var chat in chats)
             {
-                if (chat.User1Id == id) chat.User1Id = newId;
-                if (chat.User2Id == id) chat.User2Id = newId;
+                if (chat.User1Id == id)
+                    chat.User1Id = newId;
+
+                if (chat.User2Id == id)
+                    chat.User2Id = newId;
             }
 
+            // Move contact ownership and contact targets.
             var contacts = await _db.Contacts
                 .Where(c => c.OwnerUserId == id || c.ContactUserId == id)
                 .ToListAsync();
 
             foreach (var contact in contacts)
             {
-                if (contact.OwnerUserId == id) contact.OwnerUserId = newId;
-                if (contact.ContactUserId == id) contact.ContactUserId = newId;
+                if (contact.OwnerUserId == id)
+                    contact.OwnerUserId = newId;
+
+                if (contact.ContactUserId == id)
+                    contact.ContactUserId = newId;
             }
 
             await _db.SaveChangesAsync();
 
+            // All foreign keys now point at the replacement row, so the old row
+            // can be removed without violating the Restrict relationships.
             _db.Users.Remove(user);
             await _db.SaveChangesAsync();
 
             await transaction.CommitAsync();
             _db.ChangeTracker.Clear();
 
-            var updatedUser = await _db.Users.AsNoTracking().FirstAsync(u => u.Id == newId);
+            var updatedUser = await _db.Users
+                .AsNoTracking()
+                .FirstAsync(u => u.Id == newId);
 
             return Ok(new
             {
                 message = "User updated successfully. Please sign in again because your User ID changed.",
                 user = updatedUser
+            });
+        }
+        catch (DbUpdateException ex)
+        {
+            await transaction.RollbackAsync();
+            _db.ChangeTracker.Clear();
+
+            return Conflict(new
+            {
+                message = "The User ID could not be changed because the database rejected the update. No data was changed.",
+                detail = ex.InnerException?.Message ?? ex.Message
             });
         }
         catch
@@ -159,8 +223,14 @@ public class AdminController : ControllerBase
     public async Task<IActionResult> DeleteUser(string id)
     {
         var ownerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
         if (string.Equals(ownerId, id, StringComparison.OrdinalIgnoreCase))
-            return BadRequest(new { message = "Owner cannot delete the Owner account." });
+        {
+            return BadRequest(new
+            {
+                message = "Owner cannot delete the Owner account."
+            });
+        }
 
         var user = await _db.Users.FindAsync(id);
         if (user == null)
@@ -168,6 +238,7 @@ public class AdminController : ControllerBase
 
         _db.Users.Remove(user);
         await _db.SaveChangesAsync();
+
         return Ok(new { message = "User deleted successfully." });
     }
 
@@ -192,7 +263,9 @@ public class AdminController : ControllerBase
 
     private static string? NormalizePhone(string? value)
     {
-        if (string.IsNullOrWhiteSpace(value)) return null;
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
         return value.Trim()
             .Replace(" ", string.Empty)
             .Replace("-", string.Empty)
