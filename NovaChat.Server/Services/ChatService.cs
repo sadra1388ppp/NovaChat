@@ -176,13 +176,13 @@ public class ChatService
         var query = _context.Messages
             .AsNoTracking()
             .Include(m => m.Sender)
-            .Where(m => m.ChatId == chatId);
+            .Where(m => m.ChatId == chatId && !m.DeletedForEveryone);
 
         if (beforeMessageId.HasValue)
         {
             var beforeMessage = await _context.Messages
                 .AsNoTracking()
-                .FirstOrDefaultAsync(m => m.Id == beforeMessageId.Value && m.ChatId == chatId);
+                .FirstOrDefaultAsync(m => m.Id == beforeMessageId.Value && m.ChatId == chatId && !m.DeletedForEveryone);
 
             if (beforeMessage != null)
             {
@@ -208,7 +208,7 @@ public class ChatService
     {
         var firstMessage = await _context.Messages
             .AsNoTracking()
-            .FirstOrDefaultAsync(m => m.Id == firstMessageId && m.ChatId == chatId);
+            .FirstOrDefaultAsync(m => m.Id == firstMessageId && m.ChatId == chatId && !m.DeletedForEveryone);
 
         if (firstMessage == null)
             return false;
@@ -217,6 +217,7 @@ public class ChatService
             .AsNoTracking()
             .AnyAsync(m =>
                 m.ChatId == chatId &&
+                !m.DeletedForEveryone &&
                 (m.SentAt < firstMessage.SentAt ||
                  (m.SentAt == firstMessage.SentAt && m.Id < firstMessage.Id)));
     }
@@ -226,7 +227,7 @@ public class ChatService
         return await _context.Messages
             .AsNoTracking()
             .Include(m => m.Sender)
-            .Where(m => m.ChatId == chatId)
+            .Where(m => m.ChatId == chatId && !m.DeletedForEveryone)
             .OrderByDescending(m => m.SentAt)
             .ThenByDescending(m => m.Id)
             .FirstOrDefaultAsync();
