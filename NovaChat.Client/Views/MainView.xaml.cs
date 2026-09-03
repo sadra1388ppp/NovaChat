@@ -45,8 +45,26 @@ public partial class MainView : UserControl
 
     private async void MainView_Loaded(object sender, RoutedEventArgs e)
     {
-        try { await ConnectSignalRAsync(); await LoadChatsAsync(); }
-        catch (Exception ex) { MessageBox.Show($"Could not initialize chat.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error); }
+        try
+        {
+            await LoadChatsAsync();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Could not load chats.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+
+        try
+        {
+            await ConnectSignalRAsync();
+        }
+        catch (Exception ex)
+        {
+            ChatStatusText.Text = "Offline";
+            ChatStatusIndicator.Fill = Brushes.Gray;
+            _hubConnection = null;
+            System.Diagnostics.Debug.WriteLine($"SignalR connection failed: {ex}");
+        }
     }
 
     private async void MainView_Unloaded(object sender, RoutedEventArgs e) => await DisconnectSignalRAsync();
@@ -181,7 +199,7 @@ public partial class MainView : UserControl
             if (result?.Chat == null) { MessageBox.Show("User not found or chat could not be created.", "New Chat", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
             await LoadChatsAsync(); var item = _chats.FirstOrDefault(x => x.Chat.Id == result.Chat.Id); if (item != null) await OpenChatAsync(item.Chat);
         }
-        catch (Exception ex) { MessageBox.Show($"Could not create chat.\n\n{ex.Message}", "New Chat", MessageBoxButton.OK, MessageBoxImage.Error); }
+        catch (Exception ex) { MessageBox.Show($"Could not create chat.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error); }
     }
 
     private async void ChatButton_Click(object sender, RoutedEventArgs e) { if (sender is Button { DataContext: ChatListItem item }) await OpenChatAsync(item.Chat); }
