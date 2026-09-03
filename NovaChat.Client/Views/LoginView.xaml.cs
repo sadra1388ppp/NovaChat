@@ -96,7 +96,6 @@ namespace NovaChat.Client.Views
             double nextX = _pullX + deltaX;
             double nextY = _pullY + deltaY;
 
-            // The cord can be pulled in any direction, while staying physically attached to the lamp.
             double distance = Math.Sqrt(nextX * nextX + nextY * nextY);
             if (distance > MaxPullDistance)
             {
@@ -110,7 +109,6 @@ namespace NovaChat.Client.Views
             _pullX = nextX;
             _pullY = nextY;
 
-            // Horizontal pulling makes the hanging lamp sway naturally.
             _lampAngularVelocity += (deltaX * 0.018) - (deltaY * 0.004);
             _lampAngularVelocity = Math.Clamp(_lampAngularVelocity, -3.0, 3.0);
 
@@ -146,7 +144,6 @@ namespace NovaChat.Client.Views
             _lastPhysicsTime = DateTime.UtcNow;
             dt = Math.Clamp(dt, 0.008, 0.035);
 
-            // 2D damped spring: the cord returns toward its natural hanging position.
             double accelerationX = (-SpringStrength * _pullX) - (Damping * _pullVelocityX);
             double accelerationY = (-SpringStrength * _pullY) - (Damping * _pullVelocityY);
 
@@ -155,7 +152,6 @@ namespace NovaChat.Client.Views
             _pullX += _pullVelocityX * dt;
             _pullY += _pullVelocityY * dt;
 
-            // Subtle rotational spring for the lamp itself.
             _lampAngularVelocity += (-13.5 * _lampAngle - 5.0 * _lampAngularVelocity) * dt;
             _lampAngle += _lampAngularVelocity * dt;
 
@@ -191,7 +187,6 @@ namespace NovaChat.Client.Views
             double horizontal = endX - CordTopX;
             double sway = Math.Clamp(horizontal * 0.34 + _pullVelocityX * 0.5, -55, 55);
 
-            // The curve is shaped from the lamp downward, giving the cord natural slack.
             double control1X = CordTopX + sway * 0.18;
             double control2X = CordTopX + sway;
             double control1Y = CordTopY + length * 0.27;
@@ -219,9 +214,6 @@ namespace NovaChat.Client.Views
 
             Canvas.SetLeft(LampPull, endX - LampPull.Width / 2);
             Canvas.SetTop(LampPull, endY - LampPull.Height / 2);
-
-            PullHint.Text = _lampOn ? "pull the cord to turn off" : "pull the cord to turn on";
-            PullHint.Opacity = Math.Sqrt(_pullX * _pullX + _pullY * _pullY) > 18 ? 0.35 : 0.78;
         }
 
         private void ToggleLamp()
@@ -234,23 +226,36 @@ namespace NovaChat.Client.Views
         {
             Color bulbColor = on ? Color.FromRgb(255, 241, 154) : Color.FromRgb(69, 71, 81);
             Color shadeColor = on ? Color.FromRgb(78, 69, 41) : Color.FromRgb(36, 38, 48);
+            Color reflectorColor = on ? Color.FromRgb(105, 91, 50) : Color.FromRgb(40, 42, 49);
             Color cordColor = on ? Color.FromRgb(238, 220, 153) : Color.FromRgb(174, 160, 124);
             Color pullColor = on ? Color.FromRgb(255, 226, 122) : Color.FromRgb(177, 160, 102);
 
             SetAnimatedColor(LampBulb, Shape.FillProperty, bulbColor, animate);
             SetAnimatedColor(LampShadeGlow, Shape.FillProperty, shadeColor, animate);
+            SetAnimatedColor(LampReflector, Shape.FillProperty, reflectorColor, animate);
             SetAnimatedColor(PullCord, Shape.StrokeProperty, cordColor, animate);
             SetAnimatedColor(LampPull, Shape.FillProperty, pullColor, animate);
 
             AnimateOpacity(LampGlow, on ? 1.0 : 0.0, 480, animate);
+            AnimateOpacity(LampBulbGlow, on ? 0.92 : 0.04, 320, animate);
             AnimateOpacity(WarmLightOverlay, on ? 0.78 : 0.0, 720, animate);
 
+            AnimateCardColor(LoginCard, Border.BackgroundProperty,
+                on ? Color.FromRgb(31, 28, 20) : Color.FromRgb(18, 20, 27), 420, animate);
+            AnimateCardColor(LoginCard, Border.BorderBrushProperty,
+                on ? Color.FromRgb(113, 91, 35) : Color.FromRgb(41, 44, 54), 420, animate);
+
+            LoginCardShadow.Color = on ? Color.FromRgb(218, 170, 54) : Color.FromRgb(0, 0, 0);
+            LoginCardShadow.Opacity = on ? 0.48 : 0.35;
+
+            SignInTitle.Foreground = new SolidColorBrush(
+                on ? Color.FromRgb(255, 248, 220) : Color.FromRgb(233, 233, 237));
+            SignInSubtitle.Foreground = new SolidColorBrush(
+                on ? Color.FromRgb(188, 168, 111) : Color.FromRgb(119, 121, 131));
             WelcomeText.Foreground = new SolidColorBrush(
                 on ? Color.FromRgb(255, 248, 218) : Color.FromRgb(233, 233, 237));
             WelcomeSubText.Foreground = new SolidColorBrush(
                 on ? Color.FromRgb(214, 196, 133) : Color.FromRgb(110, 112, 122));
-            PullHint.Foreground = new SolidColorBrush(
-                on ? Color.FromRgb(221, 196, 111) : Color.FromRgb(119, 121, 131));
         }
 
         private static void SetAnimatedColor(Shape shape, DependencyProperty property, Color color, bool animate)
@@ -276,6 +281,32 @@ namespace NovaChat.Client.Views
             else
             {
                 shape.SetValue(property, new SolidColorBrush(color));
+            }
+        }
+
+        private static void AnimateCardColor(Border border, DependencyProperty property, Color color, int milliseconds, bool animate)
+        {
+            if (border.GetValue(property) is SolidColorBrush current)
+            {
+                if (animate)
+                {
+                    var animation = new ColorAnimation
+                    {
+                        To = color,
+                        Duration = TimeSpan.FromMilliseconds(milliseconds),
+                        EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+                    };
+                    current.BeginAnimation(SolidColorBrush.ColorProperty, animation);
+                }
+                else
+                {
+                    current.BeginAnimation(SolidColorBrush.ColorProperty, null);
+                    current.Color = color;
+                }
+            }
+            else
+            {
+                border.SetValue(property, new SolidColorBrush(color));
             }
         }
 
