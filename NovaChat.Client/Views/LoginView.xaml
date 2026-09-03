@@ -3,51 +3,52 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              HorizontalAlignment="Stretch"
              VerticalAlignment="Stretch"
-             Background="#121417">
+             Background="#0F1115">
     <UserControl.Resources>
-        <!-- Remove the default Windows blue hover/focus chrome from every login control. -->
         <Style x:Key="GlassSignInButton" TargetType="Button">
-            <Setter Property="Foreground" Value="#F8F8F8" />
+            <Setter Property="OverridesDefaultStyle" Value="True" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Foreground" Value="#FFFFFF" />
             <Setter Property="FontSize" Value="15" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Background" Value="#D4A373" />
-            <Setter Property="BorderBrush" Value="#D4A373" />
+            <Setter Property="BorderBrush" Value="#E8C79C" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="16,0" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Grid RenderTransformOrigin="0.5,0.5">
+                        <Grid RenderTransformOrigin="0.5,0.5" SnapsToDevicePixels="True">
                             <Grid.RenderTransform>
                                 <ScaleTransform x:Name="ButtonScale" ScaleX="1" ScaleY="1" />
                             </Grid.RenderTransform>
-                            <Border x:Name="ButtonGlow" CornerRadius="16" Background="#00FFFFFF" BorderBrush="#00FFFFFF" BorderThickness="0" Margin="-5">
+                            <Border x:Name="ButtonGlow" CornerRadius="16" Background="#00D4A373" BorderBrush="#00D4A373" BorderThickness="0" Margin="-5">
                                 <Border.Effect>
-                                    <DropShadowEffect Color="#FFD7A66E" BlurRadius="0" ShadowDepth="0" Opacity="0" />
+                                    <DropShadowEffect Color="#FFD4A373" BlurRadius="0" ShadowDepth="0" Opacity="0" />
                                 </Border.Effect>
                             </Border>
                             <Border x:Name="ButtonSurface" CornerRadius="16" Background="#D4A373" BorderBrush="#E8C79C" BorderThickness="1">
-                                <Grid Clip="{Binding RelativeSource={RelativeSource AncestorType=Border}, Path=Clip}">
-                                    <Border CornerRadius="15" Margin="1" Background="#12FFFFFF" BorderBrush="#18FFFFFF" BorderThickness="1" />
+                                <Grid>
+                                    <Border CornerRadius="15" Margin="1" Background="#18FFFFFF" BorderBrush="#24FFFFFF" BorderThickness="1" />
                                     <Border x:Name="ButtonTopGlass" CornerRadius="15" Margin="1" Opacity="0">
                                         <Border.Background>
                                             <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                                <GradientStop Color="#CFFFFFFF" Offset="0" />
-                                                <GradientStop Color="#45FFFFFF" Offset="0.22" />
-                                                <GradientStop Color="#08FFFFFF" Offset="0.62" />
+                                                <GradientStop Color="#DFFFFFFF" Offset="0" />
+                                                <GradientStop Color="#55FFFFFF" Offset="0.20" />
+                                                <GradientStop Color="#10FFFFFF" Offset="0.58" />
                                                 <GradientStop Color="#00FFFFFF" Offset="1" />
                                             </LinearGradientBrush>
                                         </Border.Background>
                                     </Border>
-                                    <Border x:Name="ButtonShine" Width="85" HorizontalAlignment="Left" Margin="-120,0,0,0" Opacity="0" IsHitTestVisible="False" RenderTransformOrigin="0.5,0.5">
+                                    <Border x:Name="ButtonShine" Width="90" HorizontalAlignment="Left" Margin="-130,0,0,0" Opacity="0" IsHitTestVisible="False" RenderTransformOrigin="0.5,0.5">
                                         <Border.RenderTransform>
                                             <SkewTransform AngleX="-18" />
                                         </Border.RenderTransform>
                                         <Border.Background>
                                             <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
                                                 <GradientStop Color="#00FFFFFF" Offset="0" />
-                                                <GradientStop Color="#BFFFFFFF" Offset="0.5" />
+                                                <GradientStop Color="#CFFFFFFF" Offset="0.5" />
                                                 <GradientStop Color="#00FFFFFF" Offset="1" />
                                             </LinearGradientBrush>
                                         </Border.Background>
@@ -58,35 +59,35 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ButtonSurface" Property="Background" Value="#E4B98D" />
-                                <Setter TargetName="ButtonSurface" Property="BorderBrush" Value="#FFFFFFFF" />
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="#E5B98E" />
+                                <Setter TargetName="ButtonSurface" Property="BorderBrush" Value="#FFF4E6" />
                                 <Setter TargetName="ButtonTopGlass" Property="Opacity" Value="1" />
                                 <Setter TargetName="ButtonGlow" Property="BorderThickness" Value="5" />
-                                <Setter TargetName="ButtonGlow" Property="BorderBrush" Value="#50FFE4B0" />
-                                <Setter TargetName="ButtonGlow" Property="Background" Value="#22FFE4B0" />
+                                <Setter TargetName="ButtonGlow" Property="BorderBrush" Value="#65FFE0A6" />
+                                <Setter TargetName="ButtonGlow" Property="Background" Value="#25FFE0A6" />
                                 <Setter TargetName="ButtonGlow" Property="Effect">
                                     <Setter.Value>
-                                        <DropShadowEffect Color="#FFFFC979" BlurRadius="22" ShadowDepth="0" Opacity="0.9" />
+                                        <DropShadowEffect Color="#FFFFC978" BlurRadius="24" ShadowDepth="0" Opacity="0.95" />
                                     </Setter.Value>
                                 </Setter>
-                                <Setter TargetName="ButtonShine" Property="Opacity" Value="0.8" />
-                                <Setter Property="Foreground" Value="#FFFFFF" />
+                                <Setter TargetName="ButtonShine" Property="Opacity" Value="0.9" />
                                 <BeginStoryboard>
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleX" To="1.035" Duration="0:0:0.16" />
-                                        <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleY" To="1.035" Duration="0:0:0.16" />
-                                        <DoubleAnimation Storyboard.TargetName="ButtonShine" Storyboard.TargetProperty="Margin" From="-120,0,0,0" To="390,0,-510,0" Duration="0:0:0.65" />
+                                        <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleX" To="1.035" Duration="0:0:0.14" />
+                                        <DoubleAnimation Storyboard.TargetName="ButtonScale" Storyboard.TargetProperty="ScaleY" To="1.035" Duration="0:0:0.14" />
+                                        <DoubleAnimation Storyboard.TargetName="ButtonShine" Storyboard.TargetProperty="Margin" From="-130,0,0,0" To="390,0,-520,0" Duration="0:0:0.60" />
                                     </Storyboard>
                                 </BeginStoryboard>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="ButtonSurface" Property="Background" Value="#B98758" />
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="#B98253" />
+                                <Setter TargetName="ButtonSurface" Property="BorderBrush" Value="#F2D1AE" />
                                 <Setter TargetName="ButtonScale" Property="ScaleX" Value="0.985" />
                                 <Setter TargetName="ButtonScale" Property="ScaleY" Value="0.985" />
-                                <Setter TargetName="ButtonTopGlass" Property="Opacity" Value="0.55" />
+                                <Setter TargetName="ButtonTopGlass" Property="Opacity" Value="0.5" />
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="ButtonSurface" Property="BorderBrush" Value="#FFFFFFFF" />
+                                <Setter TargetName="ButtonSurface" Property="BorderBrush" Value="#FFF4E6" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="ButtonSurface" Property="Opacity" Value="0.45" />
@@ -98,13 +99,17 @@
         </Style>
 
         <Style x:Key="GlassTextBox" TargetType="TextBox">
+            <Setter Property="OverridesDefaultStyle" Value="True" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Foreground" Value="#FFFFFF" />
-            <Setter Property="Background" Value="#14FFFFFF" />
-            <Setter Property="BorderBrush" Value="#28FFFFFF" />
+            <Setter Property="Background" Value="#18FFFFFF" />
+            <Setter Property="BorderBrush" Value="#35FFFFFF" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="14,0" />
             <Setter Property="FontSize" Value="14" />
             <Setter Property="CaretBrush" Value="#FFFFFF" />
+            <Setter Property="SelectionBrush" Value="#66D4A373" />
+            <Setter Property="SelectionTextBrush" Value="#FFFFFF" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TextBox">
@@ -112,18 +117,18 @@
                             <Border x:Name="Box" CornerRadius="14" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
                                 <ScrollViewer x:Name="PART_ContentHost" Margin="0" VerticalAlignment="Center" />
                             </Border>
-                            <Border x:Name="FocusGlow" CornerRadius="14" BorderBrush="#00FFFFFF" BorderThickness="1" IsHitTestVisible="False" />
+                            <Border x:Name="FocusGlow" CornerRadius="14" BorderBrush="#00D4A373" BorderThickness="1" IsHitTestVisible="False" />
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Box" Property="Background" Value="#20FFFFFF" />
-                                <Setter TargetName="Box" Property="BorderBrush" Value="#70FFFFFF" />
-                                <Setter TargetName="FocusGlow" Property="BorderBrush" Value="#35D4A373" />
+                                <Setter TargetName="Box" Property="Background" Value="#25FFFFFF" />
+                                <Setter TargetName="Box" Property="BorderBrush" Value="#90FFFFFF" />
+                                <Setter TargetName="FocusGlow" Property="BorderBrush" Value="#45D4A373" />
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Box" Property="Background" Value="#25FFFFFF" />
-                                <Setter TargetName="Box" Property="BorderBrush" Value="#BFD4A373" />
-                                <Setter TargetName="FocusGlow" Property="BorderBrush" Value="#80D4A373" />
+                                <Setter TargetName="Box" Property="Background" Value="#30FFFFFF" />
+                                <Setter TargetName="Box" Property="BorderBrush" Value="#FFD4A373" />
+                                <Setter TargetName="FocusGlow" Property="BorderBrush" Value="#90D4A373" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -132,13 +137,17 @@
         </Style>
 
         <Style x:Key="GlassPasswordBox" TargetType="PasswordBox">
+            <Setter Property="OverridesDefaultStyle" Value="True" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Foreground" Value="#FFFFFF" />
-            <Setter Property="Background" Value="#14FFFFFF" />
-            <Setter Property="BorderBrush" Value="#28FFFFFF" />
+            <Setter Property="Background" Value="#18FFFFFF" />
+            <Setter Property="BorderBrush" Value="#35FFFFFF" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="14,0" />
             <Setter Property="FontSize" Value="14" />
             <Setter Property="CaretBrush" Value="#FFFFFF" />
+            <Setter Property="SelectionBrush" Value="#66D4A373" />
+            <Setter Property="SelectionTextBrush" Value="#FFFFFF" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="PasswordBox">
@@ -146,18 +155,18 @@
                             <Border x:Name="Box" CornerRadius="14" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
                                 <ScrollViewer x:Name="PART_ContentHost" Margin="0" VerticalAlignment="Center" />
                             </Border>
-                            <Border x:Name="FocusGlow" CornerRadius="14" BorderBrush="#00FFFFFF" BorderThickness="1" IsHitTestVisible="False" />
+                            <Border x:Name="FocusGlow" CornerRadius="14" BorderBrush="#00D4A373" BorderThickness="1" IsHitTestVisible="False" />
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Box" Property="Background" Value="#20FFFFFF" />
-                                <Setter TargetName="Box" Property="BorderBrush" Value="#70FFFFFF" />
-                                <Setter TargetName="FocusGlow" Property="BorderBrush" Value="#35D4A373" />
+                                <Setter TargetName="Box" Property="Background" Value="#25FFFFFF" />
+                                <Setter TargetName="Box" Property="BorderBrush" Value="#90FFFFFF" />
+                                <Setter TargetName="FocusGlow" Property="BorderBrush" Value="#45D4A373" />
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Box" Property="Background" Value="#25FFFFFF" />
-                                <Setter TargetName="Box" Property="BorderBrush" Value="#BFD4A373" />
-                                <Setter TargetName="FocusGlow" Property="BorderBrush" Value="#80D4A373" />
+                                <Setter TargetName="Box" Property="Background" Value="#30FFFFFF" />
+                                <Setter TargetName="Box" Property="BorderBrush" Value="#FFD4A373" />
+                                <Setter TargetName="FocusGlow" Property="BorderBrush" Value="#90D4A373" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -166,8 +175,11 @@
         </Style>
 
         <Style x:Key="CreateAccountButton" TargetType="Button">
+            <Setter Property="OverridesDefaultStyle" Value="True" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Foreground" Value="#D4A373" />
             <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="FontSize" Value="12" />
@@ -179,12 +191,12 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="CreateSurface" Property="Background" Value="#18D4A373" />
-                                <Setter TargetName="CreateSurface" Property="BorderBrush" Value="#55D4A373" />
-                                <Setter Property="Foreground" Value="#FFE6C9" />
+                                <Setter TargetName="CreateSurface" Property="Background" Value="#25D4A373" />
+                                <Setter TargetName="CreateSurface" Property="BorderBrush" Value="#80D4A373" />
+                                <Setter Property="Foreground" Value="#FFF2DC" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="CreateSurface" Property="Background" Value="#30D4A373" />
+                                <Setter TargetName="CreateSurface" Property="Background" Value="#40D4A373" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -193,13 +205,14 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid x:Name="LoginRoot" Background="#121417">
+    <Grid x:Name="LoginRoot" Background="#0F1115">
         <Grid.Resources>
             <DropShadowEffect x:Key="LampShadow" BlurRadius="18" ShadowDepth="4" Opacity="0.35" />
         </Grid.Resources>
+
         <Border x:Name="WarmLightOverlay" IsHitTestVisible="False" Opacity="0">
             <Border.Background>
-                <RadialGradientBrush Center="0.30,0.40" GradientOrigin="0.30,0.40" RadiusX="0.58" RadiusY="0.68">
+                <RadialGradientBrush Center="0.28,0.42" GradientOrigin="0.28,0.42" RadiusX="0.62" RadiusY="0.72">
                     <GradientStop Color="#FFFFF3B8" Offset="0" />
                     <GradientStop Color="#70FFD66E" Offset="0.22" />
                     <GradientStop Color="#28FFD66E" Offset="0.48" />
@@ -207,11 +220,13 @@
                 </RadialGradientBrush>
             </Border.Background>
         </Border>
+
         <Grid Margin="35,0,35,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="470" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
+
             <Grid Grid.Column="0" Width="420" Height="500" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <Canvas x:Name="LampCanvas" Width="420" Height="500" Background="Transparent" MouseMove="LampCanvas_MouseMove" MouseLeftButtonUp="LampCanvas_MouseLeftButtonUp">
                     <Canvas.RenderTransform>
@@ -244,19 +259,27 @@
                             <TranslateTransform x:Name="LampPullTransform" X="0" Y="0" />
                         </Ellipse.RenderTransform>
                     </Ellipse>
+
+                    <StackPanel Canvas.Left="55" Canvas.Top="365" Width="310" HorizontalAlignment="Center">
+                        <TextBlock x:Name="WelcomeText" Text="Welcome to NovaChat" FontSize="27" FontWeight="SemiBold" Foreground="#FFFFFF" HorizontalAlignment="Center" TextAlignment="Center" />
+                        <TextBlock x:Name="WelcomeSubText" Text="Pull the cord to turn on the light" FontSize="12" Foreground="#9EA3AB" HorizontalAlignment="Center" TextAlignment="Center" Margin="0,8,0,0" />
+                    </StackPanel>
                 </Canvas>
             </Grid>
+
             <Grid Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" Width="390" Margin="0,0,25,0">
-                <Border x:Name="LoginCard" Background="#1A1D22" BorderBrush="#2AFFFFFF" BorderThickness="1" CornerRadius="30" Padding="32" Opacity="0" IsHitTestVisible="False">
-                    <Border.Effect><DropShadowEffect x:Name="LoginCardShadow" BlurRadius="40" ShadowDepth="18" Opacity="0.3" /></Border.Effect>
+                <Border x:Name="LoginCard" Background="#B91A1D22" BorderBrush="#55FFFFFF" BorderThickness="1" CornerRadius="30" Padding="32" Opacity="0" IsHitTestVisible="False">
+                    <Border.Effect>
+                        <DropShadowEffect x:Name="LoginCardShadow" BlurRadius="42" ShadowDepth="16" Opacity="0.30" />
+                    </Border.Effect>
                     <StackPanel>
-                        <TextBlock x:Name="SignInTitle" Text="Welcome to NovaChat" FontSize="25" FontWeight="Medium" Foreground="#FFFFFF" HorizontalAlignment="Center" Margin="0,0,0,25" />
-                        <TextBlock Text="User ID" FontSize="12" Foreground="#999999" Margin="5,0,0,7" />
+                        <TextBlock x:Name="SignInTitle" Text="Sign In" FontSize="25" FontWeight="Medium" Foreground="#FFFFFF" HorizontalAlignment="Center" Margin="0,0,0,25" />
+                        <TextBlock Text="User ID" FontSize="12" Foreground="#B4B7BD" Margin="5,0,0,7" />
                         <TextBox x:Name="UserIdTextBox" Height="48" Margin="0,0,0,18" Style="{StaticResource GlassTextBox}" />
-                        <TextBlock Text="Password" FontSize="12" Foreground="#999999" Margin="5,0,0,7" />
+                        <TextBlock Text="Password" FontSize="12" Foreground="#B4B7BD" Margin="5,0,0,7" />
                         <PasswordBox x:Name="PasswordBox" Height="48" Margin="0,0,0,20" Style="{StaticResource GlassPasswordBox}" />
                         <Button x:Name="LoginButton" Content="Sign In" Height="50" Click="LoginButton_Click" Style="{StaticResource GlassSignInButton}" />
-                        <TextBlock x:Name="SignInSubtitle" Text="Continue to your NovaChat account" FontSize="11" Foreground="#777777" HorizontalAlignment="Center" Margin="0,18,0,0" />
+                        <TextBlock x:Name="SignInSubtitle" Text="Continue to your NovaChat account" FontSize="11" Foreground="#8E939B" HorizontalAlignment="Center" Margin="0,18,0,0" />
                         <Button Content="Create a new account" Height="36" Margin="0,8,0,0" Click="CreateAccountButton_Click" Style="{StaticResource CreateAccountButton}" />
                     </StackPanel>
                 </Border>
