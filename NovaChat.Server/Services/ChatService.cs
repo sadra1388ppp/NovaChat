@@ -14,13 +14,27 @@ public class ChatService
         _context = context;
     }
 
+    public async Task<bool> UserExistsAsync(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return false;
+
+        var normalizedId = userId.Trim();
+        return await _context.Users.AsNoTracking().AnyAsync(u => u.Id == normalizedId);
+    }
+
     public async Task<Chat?> CreatePrivateChatAsync(string currentUserId, string otherUserId)
     {
-        if (string.IsNullOrWhiteSpace(otherUserId) || currentUserId == otherUserId)
+        currentUserId = currentUserId?.Trim() ?? string.Empty;
+        otherUserId = otherUserId?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(otherUserId) ||
+            string.IsNullOrWhiteSpace(currentUserId) ||
+            string.Equals(currentUserId, otherUserId, StringComparison.OrdinalIgnoreCase))
             return null;
 
-        var currentUserExists = await _context.Users.AnyAsync(u => u.Id == currentUserId);
-        var otherUserExists = await _context.Users.AnyAsync(u => u.Id == otherUserId);
+        var currentUserExists = await UserExistsAsync(currentUserId);
+        var otherUserExists = await UserExistsAsync(otherUserId);
         if (!currentUserExists || !otherUserExists)
             return null;
 
