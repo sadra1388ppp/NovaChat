@@ -11,7 +11,7 @@
 
         <Border x:Name="WarmLightOverlay" IsHitTestVisible="False" Opacity="0">
             <Border.Background>
-                <RadialGradientBrush Center="0.27,0.40" GradientOrigin="0.27,0.40" RadiusX="0.62" RadiusY="0.68">
+                <RadialGradientBrush Center="0.25,0.40" GradientOrigin="0.25,0.40" RadiusX="0.58" RadiusY="0.68">
                     <GradientStop Color="#FFFFF3B8" Offset="0" />
                     <GradientStop Color="#70FFD66E" Offset="0.22" />
                     <GradientStop Color="#28FFD66E" Offset="0.48" />
@@ -22,18 +22,18 @@
 
         <Grid Margin="35,0,35,0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="330" />
-                <ColumnDefinition Width="520" />
+                <ColumnDefinition Width="430" />
+                <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- Lamp side: based directly on Coding Stella's SVG proportions. -->
-            <Grid Grid.Column="0" Width="330" Height="430" HorizontalAlignment="Center" VerticalAlignment="Center">
-                <Canvas x:Name="LampCanvas" Width="330" Height="430"
+            <!-- Larger lamp area. -->
+            <Grid Grid.Column="0" Width="390" Height="500" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Canvas x:Name="LampCanvas" Width="390" Height="500"
                         Background="Transparent"
                         MouseMove="LampCanvas_MouseMove"
                         MouseLeftButtonUp="LampCanvas_MouseLeftButtonUp">
 
-                    <Ellipse x:Name="LampGlow" Width="310" Height="310" Canvas.Left="10" Canvas.Top="10"
+                    <Ellipse x:Name="LampGlow" Width="370" Height="370" Canvas.Left="10" Canvas.Top="35"
                              IsHitTestVisible="False" Opacity="0">
                         <Ellipse.Fill>
                             <RadialGradientBrush>
@@ -45,47 +45,43 @@
                         </Ellipse.Fill>
                     </Ellipse>
 
-                    <!-- The reference lamp itself is centered around the 200x300 SVG. -->
-                    <Canvas x:Name="LampAssembly" Width="200" Height="300" Canvas.Left="65" Canvas.Top="114"
+                    <!-- Same lamp silhouette as the reference, scaled 1.22x. -->
+                    <Canvas x:Name="LampAssembly" Width="244" Height="366"
+                            Canvas.Left="73" Canvas.Top="62"
                             RenderTransformOrigin="0.5,0.36" Effect="{StaticResource LampShadow}">
                         <Canvas.RenderTransform>
                             <RotateTransform x:Name="LampRotateTransform" Angle="0" />
                         </Canvas.RenderTransform>
 
-                        <!-- SVG: <rect x="92" y="100" width="16" height="160" rx="8"> -->
-                        <Rectangle Width="16" Height="160" Canvas.Left="92" Canvas.Top="100"
-                                   RadiusX="8" RadiusY="8" Fill="#D1CCC2" />
+                        <Rectangle Width="19.5" Height="195.2" Canvas.Left="112.2" Canvas.Top="122"
+                                   RadiusX="9.75" RadiusY="9.75" Fill="#D1CCC2" />
 
-                        <!-- SVG: <rect x="60" y="250" width="80" height="12" rx="6"> -->
-                        <Rectangle Width="80" Height="12" Canvas.Left="60" Canvas.Top="250"
-                                   RadiusX="6" RadiusY="6" Fill="#D1CCC2" />
+                        <Rectangle Width="97.6" Height="14.6" Canvas.Left="73.2" Canvas.Top="305"
+                                   RadiusX="7.3" RadiusY="7.3" Fill="#D1CCC2" />
 
-                        <!-- SVG lamp shade: same silhouette and dimensions as the reference. -->
                         <Path x:Name="LampBulb"
-                              Data="M 30,110 C 30,50 170,50 170,110 C 170,125 30,125 30,110 Z"
+                              Data="M 36.6,134.2 C 36.6,61 207.4,61 207.4,134.2 C 207.4,152.5 36.6,152.5 36.6,134.2 Z"
                               Fill="#F5F0E6" />
 
                         <Path x:Name="LampShadeGlow"
-                              Data="M 30,110 C 30,50 170,50 170,110 C 170,125 30,125 30,110 Z"
+                              Data="M 36.6,134.2 C 36.6,61 207.4,61 207.4,134.2 C 207.4,152.5 36.6,152.5 36.6,134.2 Z"
                               Fill="#FFFFFF" Opacity="0.04" IsHitTestVisible="False" />
 
-                        <Ellipse x:Name="LampBulbGlow" Width="120" Height="60" Canvas.Left="40" Canvas.Top="76"
+                        <Ellipse x:Name="LampBulbGlow" Width="146.4" Height="73.2" Canvas.Left="48.8" Canvas.Top="92.7"
                                  Fill="#FFDB8A" Opacity="0" IsHitTestVisible="False" />
 
-                        <!-- Compatibility element for the existing animation code. -->
                         <Path x:Name="LampReflector" Data="M 0,0 L 0,0" Fill="#282A31" Opacity="0" IsHitTestVisible="False" />
                     </Canvas>
 
-                    <!-- IMPORTANT: cord is drawn independently and starts exactly at the underside of the shade. -->
+                    <!-- Cord begins at the exact center of the shade's lower edge. -->
                     <Path x:Name="PullCord"
                           Stroke="#555555"
-                          StrokeThickness="2"
+                          StrokeThickness="2.2"
                           StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round"
                           IsHitTestVisible="False" />
 
-                    <!-- Exact circular pull bead, kept separate so the existing physics can drag it smoothly. -->
-                    <Ellipse x:Name="LampPull" Width="14" Height="14" Canvas.Left="243" Canvas.Top="343"
+                    <Ellipse x:Name="LampPull" Width="15" Height="15" Canvas.Left="270" Canvas.Top="401"
                              Fill="#D4A373" Stroke="#E8C79C" StrokeThickness="1"
                              Cursor="Hand"
                              MouseLeftButtonDown="LampPull_MouseLeftButtonDown"
@@ -95,7 +91,7 @@
                         </Ellipse.RenderTransform>
                     </Ellipse>
 
-                    <StackPanel Canvas.Left="15" Canvas.Top="20" Width="300" IsHitTestVisible="False" Visibility="Collapsed">
+                    <StackPanel Canvas.Left="15" Canvas.Top="20" Width="350" IsHitTestVisible="False" Visibility="Collapsed">
                         <TextBlock x:Name="WelcomeText" Text="Welcome to NovaChat" FontSize="25" FontWeight="SemiBold"
                                    Foreground="#FFFFFF" TextAlignment="Center" />
                         <TextBlock x:Name="WelcomeSubText" Text="Pull the light to continue" FontSize="12"
@@ -104,9 +100,9 @@
                 </Canvas>
             </Grid>
 
-            <!-- Login is intentionally pushed far to the RIGHT with a clear empty gap. -->
-            <Grid Grid.Column="1" Width="390" Margin="105,0,0,0"
-                  HorizontalAlignment="Left" VerticalAlignment="Center">
+            <!-- Login card is anchored toward the right side with a large, deliberate gap. -->
+            <Grid Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center"
+                  Width="390" Margin="0,0,25,0">
                 <Border x:Name="LoginCard"
                         Background="#0D0F13"
                         BorderBrush="#FFFFFF1A"
