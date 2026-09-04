@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="NovaChat">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/app.css">
+  <title>NovaChat</title>
+</head>
+<body>
+  <main id="app" class="shell">
+    <section id="authView" class="screen">
+      <div class="brand">NovaChat</div>
+      <p class="subtitle">Fast mobile test build</p>
+
+      <div class="tabs">
+        <button id="loginTab" class="tab active">Login</button>
+        <button id="registerTab" class="tab">Register</button>
+      </div>
+
+      <form id="loginForm" class="card form">
+        <label>User ID<input id="loginId" required autocomplete="username"></label>
+        <label>Password<input id="loginPassword" required type="password" autocomplete="current-password"></label>
+        <button class="primary" type="submit">Login</button>
+      </form>
+
+      <form id="registerForm" class="card form hidden">
+        <label>User ID<input id="registerId" required minlength="3" maxlength="30"></label>
+        <label>Display name<input id="registerName" required minlength="2" maxlength="50"></label>
+        <label>Email<input id="registerEmail" required type="email"></label>
+        <label>Phone number<input id="registerPhone" required minlength="7" maxlength="32"></label>
+        <label>Password<input id="registerPassword" required type="password" minlength="6" maxlength="100"></label>
+        <button class="primary" type="submit">Create account</button>
+      </form>
+      <div id="authStatus" class="status"></div>
+    </section>
+
+    <section id="chatView" class="chat-screen hidden">
+      <header class="topbar">
+        <div>
+          <div class="brand small">NovaChat</div>
+          <div id="meLabel" class="muted"></div>
+        </div>
+        <button id="logoutButton" class="icon-btn" aria-label="Logout">↪</button>
+      </header>
+
+      <div id="chatListView" class="chat-list-view">
+        <div class="toolbar">
+          <input id="userSearch" placeholder="Search user ID..." autocomplete="off">
+          <button id="searchButton" class="primary compact">New Chat</button>
+        </div>
+        <div id="searchResults" class="search-results hidden"></div>
+        <div id="chatsList" class="list"></div>
+      </div>
+
+      <div id="conversationView" class="conversation hidden">
+        <header class="conversation-head">
+          <button id="backButton" class="icon-btn" aria-label="Back">‹</button>
+          <div>
+            <div id="conversationName" class="conversation-name">Chat</div>
+            <div id="conversationStatus" class="muted">Offline</div>
+          </div>
+        </header>
+        <div id="messages" class="messages"></div>
+        <form id="messageForm" class="composer">
+          <input id="messageInput" placeholder="Write a message..." autocomplete="off" maxlength="4000">
+          <button class="send" type="submit">➤</button>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
