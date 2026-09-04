@@ -8,10 +8,7 @@
         </Grid.ColumnDefinitions>
 
         <!-- Conversation sidebar -->
-        <Border Grid.Column="0"
-                Background="{DynamicResource PanelBackgroundBrush}"
-                BorderBrush="{DynamicResource BorderBrush}"
-                BorderThickness="0,0,1,0">
+        <Border Grid.Column="0" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
             <Grid Margin="16,14,16,14">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="64"/>
@@ -27,82 +24,31 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="40"/>
                     </Grid.ColumnDefinitions>
-                    <Border Width="46"
-                            Height="46"
-                            CornerRadius="15"
-                            Background="{DynamicResource PrimaryBrush}"
-                            VerticalAlignment="Center">
-                        <TextBlock Text="N"
-                                   Foreground="White"
-                                   FontSize="22"
-                                   FontWeight="Bold"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"/>
+                    <Border Width="46" Height="46" CornerRadius="15" Background="{DynamicResource PrimaryBrush}" VerticalAlignment="Center">
+                        <TextBlock Text="N" Foreground="White" FontSize="22" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
-                    <StackPanel Grid.Column="1"
-                                VerticalAlignment="Center"
-                                Margin="10,0,4,0">
-                        <TextBlock Text="NovaChat"
-                                   FontSize="18"
-                                   FontWeight="Bold"
-                                   Foreground="{DynamicResource TextBrush}"
-                                   TextTrimming="CharacterEllipsis"/>
-                        <TextBlock x:Name="AccountTypeText"
-                                   Text="User Account"
-                                   FontSize="11"
-                                   Foreground="{DynamicResource SecondaryTextBrush}"
-                                   Margin="0,2,0,0"
-                                   TextTrimming="CharacterEllipsis"/>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0,4,0">
+                        <TextBlock Text="NovaChat" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock x:Name="AccountTypeText" Text="User Account" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
                     </StackPanel>
-                    <Button Grid.Column="2"
-                            Content="•••"
-                            Style="{StaticResource IconButtonStyle}"
-                            Width="38"
-                            Height="38"
-                            ToolTip="More options"/>
+                    <Button Grid.Column="2" Content="•••" Style="{StaticResource IconButtonStyle}" Width="38" Height="38" ToolTip="More options"/>
                 </Grid>
 
                 <!-- Search and new conversation -->
                 <StackPanel Grid.Row="1">
-                    <Border Height="44"
-                            CornerRadius="13"
-                            Background="{DynamicResource InputBackgroundBrush}"
-                            BorderBrush="{DynamicResource BorderBrush}"
-                            BorderThickness="1"
-                            Margin="0,0,0,9">
+                    <Border Height="44" CornerRadius="13" Background="{DynamicResource InputBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Margin="0,0,0,9">
                         <Grid>
-                            <TextBlock Text="⌕"
-                                       FontSize="20"
-                                       Foreground="{DynamicResource SecondaryTextBrush}"
-                                       Margin="12,0,0,0"
-                                       VerticalAlignment="Center"/>
-                            <TextBox x:Name="SearchTextBox"
-                                     Margin="38,0,8,0"
-                                     Background="Transparent"
-                                     BorderThickness="0"
-                                     VerticalContentAlignment="Center"
-                                     ToolTip="Search conversations"/>
+                            <TextBlock Text="⌕" FontSize="20" Foreground="{DynamicResource SecondaryTextBrush}" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                            <TextBox x:Name="SearchTextBox" Margin="38,0,8,0" Background="Transparent" BorderThickness="0" VerticalContentAlignment="Center" ToolTip="Search conversations"/>
                         </Grid>
                     </Border>
-                    <Button Content="＋   New conversation"
-                            Height="43"
-                            Style="{StaticResource PrimaryButtonStyle}"
-                            HorizontalContentAlignment="Left"
-                            Padding="10,0"
-                            Click="StartNewChatSafelyButton_Click"/>
+                    <Button Content="＋   New conversation" Height="43" Style="{StaticResource PrimaryButtonStyle}" HorizontalContentAlignment="Left" Padding="10,0" Click="StartNewChatSafelyButton_Click"/>
                 </StackPanel>
 
                 <!-- Scrollable conversations + owner controls -->
-                <ScrollViewer Grid.Row="2"
-                               Margin="0,16,0,10"
-                               VerticalScrollBarVisibility="Auto"
-                               HorizontalScrollBarVisibility="Disabled">
+                <ScrollViewer Grid.Row="2" Margin="0,16,0,10" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel>
-                        <TextBlock Text="CONVERSATIONS"
-                                   FontSize="10"
-                                   FontWeight="Bold"
-                                   Foreground="{DynamicResource SecondaryTextBrush}"
-                                   Margin="0,0,0,8"/>
+                        <TextBlock Text="CONVERSATIONS" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,0,8"/>
                         <ItemsControl x:Name="ChatsList">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -112,12 +58,7 @@
                                             <ColumnDefinition Width="38"/>
                                         </Grid.ColumnDefinitions>
 
-                                        <Button Grid.Column="0"
-                                                Height="64"
-                                                Style="{StaticResource GhostButtonStyle}"
-                                                Padding="0"
-                                                HorizontalContentAlignment="Stretch"
-                                                Click="ChatButton_Click">
+                                        <Button Grid.Column="0" Height="64" Style="{StaticResource GhostButtonStyle}" Padding="0" HorizontalContentAlignment="Stretch" Click="ChatButton_Click">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="48"/>
@@ -125,129 +66,43 @@
                                                 </Grid.ColumnDefinitions>
                                                 <Grid Width="44" Height="44">
                                                     <Ellipse Fill="{DynamicResource SelectedChatBrush}"/>
-                                                    <TextBlock Text="{Binding Initials}"
-                                                               Foreground="{DynamicResource PrimaryBrush}"
-                                                               FontSize="14"
-                                                               FontWeight="Bold"
-                                                               HorizontalAlignment="Center"
-                                                               VerticalAlignment="Center"/>
-                                                    <Image Source="{Binding AvatarUri}"
-                                                           Width="44"
-                                                           Height="44"
-                                                           Stretch="UniformToFill"
-                                                           IsHitTestVisible="False">
+                                                    <TextBlock Text="{Binding Initials}" Foreground="{DynamicResource PrimaryBrush}" FontSize="14" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    <Image Source="{Binding AvatarUri}" Width="44" Height="44" Stretch="UniformToFill" IsHitTestVisible="False">
                                                         <Image.Clip>
                                                             <EllipseGeometry Center="22,22" RadiusX="22" RadiusY="22"/>
                                                         </Image.Clip>
                                                     </Image>
-                                                    <Ellipse Width="10"
-                                                             Height="10"
-                                                             Fill="{DynamicResource SuccessBrush}"
-                                                             Stroke="{DynamicResource PanelBackgroundBrush}"
-                                                             StrokeThickness="2"
-                                                             HorizontalAlignment="Right"
-                                                             VerticalAlignment="Bottom"
-                                                             Visibility="{Binding OnlineVisibility}"/>
+                                                    <Ellipse Width="10" Height="10" Fill="{DynamicResource SuccessBrush}" Stroke="{DynamicResource PanelBackgroundBrush}" StrokeThickness="2" HorizontalAlignment="Right" VerticalAlignment="Bottom" Visibility="{Binding OnlineVisibility}"/>
                                                 </Grid>
-                                                <StackPanel Grid.Column="1"
-                                                            Margin="10,0,4,0"
-                                                            VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding DisplayName}"
-                                                               FontSize="14"
-                                                               FontWeight="SemiBold"
-                                                               Foreground="{DynamicResource TextBrush}"
-                                                               TextTrimming="CharacterEllipsis"/>
-                                                    <TextBlock Text="{Binding LastMessage}"
-                                                               FontSize="12"
-                                                               Foreground="{DynamicResource SecondaryTextBrush}"
-                                                               Margin="0,4,0,0"
-                                                               TextTrimming="CharacterEllipsis"/>
+                                                <StackPanel Grid.Column="1" Margin="10,0,4,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding DisplayName}" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding LastMessage}" FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
                                                 </StackPanel>
                                             </Grid>
                                         </Button>
-                                        <Button Grid.Column="1"
-                                                Content="•••"
-                                                Style="{StaticResource IconButtonStyle}"
-                                                Width="34"
-                                                Height="34"
-                                                HorizontalAlignment="Center"
-                                                VerticalAlignment="Center"
-                                                ToolTip="Delete this conversation"
-                                                Click="DeleteSingleChatButton_Click"/>
+                                        <Button Grid.Column="1" Content="•••" Style="{StaticResource IconButtonStyle}" Width="34" Height="34" HorizontalAlignment="Center" VerticalAlignment="Center" ToolTip="Delete this conversation" Click="DeleteSingleChatButton_Click"/>
                                     </Grid>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                        <TextBlock x:Name="NoChatsText"
-                                   Text="No conversations yet"
-                                   FontSize="13"
-                                   Foreground="{DynamicResource SecondaryTextBrush}"
-                                   Margin="0,10,0,0"/>
+                        <TextBlock x:Name="NoChatsText" Text="No conversations yet" FontSize="13" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,10,0,0"/>
 
-                        <Border x:Name="OwnerPanel"
-                                Visibility="Collapsed"
-                                Margin="0,20,0,0"
-                                Padding="0,14,0,4"
-                                BorderBrush="{DynamicResource BorderBrush}"
-                                BorderThickness="0,1,0,0">
+                        <Border x:Name="OwnerPanel" Visibility="Collapsed" Margin="0,20,0,0" Padding="0,14,0,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
                             <StackPanel>
-                                <TextBlock Text="OWNER CONTROL"
-                                           FontSize="10"
-                                           FontWeight="Bold"
-                                           Foreground="{DynamicResource PrimaryBrush}"
-                                           Margin="0,0,0,8"/>
-                                <Button Content="👥   Manage Users"
-                                        Height="38"
-                                        Margin="0,0,0,3"
-                                        Style="{StaticResource GhostButtonStyle}"
-                                        HorizontalContentAlignment="Left"
-                                        Padding="10,0"
-                                        Click="ManageUsersButton_Click"/>
-                                <Button Content="💬   All Chats"
-                                        Height="38"
-                                        Margin="0,0,0,3"
-                                        Style="{StaticResource GhostButtonStyle}"
-                                        HorizontalContentAlignment="Left"
-                                        Padding="10,0"
-                                        Click="AllChatsButton_Click"/>
-                                <Button Content="📊   Server Overview"
-                                        Height="38"
-                                        Margin="0,0,0,3"
-                                        Style="{StaticResource GhostButtonStyle}"
-                                        HorizontalContentAlignment="Left"
-                                        Padding="10,0"
-                                        Click="ServerOverviewButton_Click"/>
-                                <Button Content="⚙   Admin Settings"
-                                        Height="38"
-                                        Style="{StaticResource GhostButtonStyle}"
-                                        HorizontalContentAlignment="Left"
-                                        Padding="10,0"
-                                        Click="AdminSettingsButton_Click"/>
+                                <TextBlock Text="OWNER CONTROL" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PrimaryBrush}" Margin="0,0,0,8"/>
+                                <Button Content="👥   Manage Users" Height="38" Margin="0,0,0,3" Style="{StaticResource GhostButtonStyle}" HorizontalContentAlignment="Left" Padding="10,0" Click="ManageUsersButton_Click"/>
+                                <Button Content="💬   All Chats" Height="38" Margin="0,0,0,3" Style="{StaticResource GhostButtonStyle}" HorizontalContentAlignment="Left" Padding="10,0" Click="AllChatsButton_Click"/>
+                                <Button Content="⚙   Admin Settings" Height="38" Style="{StaticResource GhostButtonStyle}" HorizontalContentAlignment="Left" Padding="10,0" Click="AdminSettingsButton_Click"/>
                             </StackPanel>
                         </Border>
                     </StackPanel>
                 </ScrollViewer>
 
                 <!-- Fixed bottom navigation -->
-                <Border Grid.Row="3"
-                        Background="{DynamicResource PanelBackgroundBrush}"
-                        BorderBrush="{DynamicResource BorderBrush}"
-                        BorderThickness="0,1,0,0"
-                        Padding="0,10,0,0">
+                <Border Grid.Row="3" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="0,10,0,0">
                     <StackPanel>
-                        <Button Content="👤   Profile"
-                                Height="36"
-                                Margin="0,0,0,4"
-                                Style="{StaticResource GhostButtonStyle}"
-                                HorizontalContentAlignment="Left"
-                                Padding="10,0"
-                                Click="ProfileButton_Click"/>
-                        <Button Content="⚙   Settings"
-                                Height="36"
-                                Style="{StaticResource GhostButtonStyle}"
-                                HorizontalContentAlignment="Left"
-                                Padding="10,0"
-                                Click="SettingsButton_Click"/>
+                        <Button Content="👤   Profile" Height="36" Margin="0,0,0,4" Style="{StaticResource GhostButtonStyle}" HorizontalContentAlignment="Left" Padding="10,0" Click="ProfileButton_Click"/>
+                        <Button Content="⚙   Settings" Height="36" Style="{StaticResource GhostButtonStyle}" HorizontalContentAlignment="Left" Padding="10,0" Click="SettingsButton_Click"/>
                     </StackPanel>
                 </Border>
             </Grid>
@@ -261,147 +116,54 @@
                 <RowDefinition Height="86"/>
             </Grid.RowDefinitions>
 
-            <Border Grid.Row="0"
-                    Background="{DynamicResource PanelBackgroundBrush}"
-                    BorderBrush="{DynamicResource BorderBrush}"
-                    BorderThickness="0,0,0,1"
-                    Padding="18,10">
+            <Border Grid.Row="0" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="18,10">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="56"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <Grid Width="48"
-                          Height="48"
-                          Cursor="Hand"
-                          MouseLeftButtonUp="ChatHeaderAvatarDirect_Click">
+                    <Grid Width="48" Height="48" Cursor="Hand" MouseLeftButtonUp="ChatHeaderAvatarDirect_Click">
                         <Ellipse x:Name="ChatAvatarBackground" Fill="{DynamicResource SelectedChatBrush}"/>
-                        <TextBlock x:Name="ChatAvatarInitialsText"
-                                   Text="N"
-                                   Foreground="{DynamicResource PrimaryBrush}"
-                                   FontSize="19"
-                                   FontWeight="Bold"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"/>
-                        <Image x:Name="ChatHeaderAvatarImage"
-                               Width="48"
-                               Height="48"
-                               Stretch="UniformToFill"
-                               Visibility="Collapsed"
-                               IsHitTestVisible="False">
+                        <TextBlock x:Name="ChatAvatarInitialsText" Text="N" Foreground="{DynamicResource PrimaryBrush}" FontSize="19" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <Image x:Name="ChatHeaderAvatarImage" Width="48" Height="48" Stretch="UniformToFill" Visibility="Collapsed" IsHitTestVisible="False">
                             <Image.Clip>
                                 <EllipseGeometry Center="24,24" RadiusX="24" RadiusY="24"/>
                             </Image.Clip>
                         </Image>
-                        <Ellipse x:Name="ChatAvatarStatusDot"
-                                 Width="12"
-                                 Height="12"
-                                 Fill="{DynamicResource SecondaryTextBrush}"
-                                 Stroke="{DynamicResource PanelBackgroundBrush}"
-                                 StrokeThickness="2"
-                                 HorizontalAlignment="Right"
-                                 VerticalAlignment="Bottom"/>
+                        <Ellipse x:Name="ChatAvatarStatusDot" Width="12" Height="12" Fill="{DynamicResource SecondaryTextBrush}" Stroke="{DynamicResource PanelBackgroundBrush}" StrokeThickness="2" HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
                     </Grid>
-                    <StackPanel Grid.Column="1"
-                                VerticalAlignment="Center"
-                                Margin="12,0,12,0">
-                        <TextBlock x:Name="ChatUserNameText"
-                                   Text="Select a conversation"
-                                   FontSize="16"
-                                   FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextBrush}"
-                                   TextTrimming="CharacterEllipsis"
-                                   MouseLeftButtonUp="ChatUserNameText_MouseLeftButtonUp"/>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,12,0">
+                        <TextBlock x:Name="ChatUserNameText" Text="Select a conversation" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" TextTrimming="CharacterEllipsis" MouseLeftButtonUp="ChatUserNameText_MouseLeftButtonUp"/>
                         <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
-                            <Ellipse x:Name="ChatStatusIndicator"
-                                     Width="7"
-                                     Height="7"
-                                     Fill="{DynamicResource SecondaryTextBrush}"
-                                     VerticalAlignment="Center"
-                                     Margin="0,0,6,0"/>
-                            <TextBlock x:Name="ChatStatusText"
-                                       Text="Offline"
-                                       FontSize="12"
-                                       Foreground="{DynamicResource SecondaryTextBrush}"/>
+                            <Ellipse x:Name="ChatStatusIndicator" Width="7" Height="7" Fill="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock x:Name="ChatStatusText" Text="Offline" FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}"/>
                         </StackPanel>
                     </StackPanel>
-                    <StackPanel Grid.Column="2"
-                                Orientation="Horizontal"
-                                VerticalAlignment="Center">
-                        <Button Content="⌕"
-                                Style="{StaticResource IconButtonStyle}"
-                                ToolTip="Search in conversation"/>
-                        <Button Content="•••"
-                                Style="{StaticResource IconButtonStyle}"
-                                ToolTip="Conversation menu"/>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Content="⌕" Style="{StaticResource IconButtonStyle}" ToolTip="Search in conversation"/>
+                        <Button Content="•••" Style="{StaticResource IconButtonStyle}" ToolTip="Conversation menu"/>
                     </StackPanel>
                 </Grid>
             </Border>
 
-            <ScrollViewer x:Name="MessagesScrollViewer"
-                          Grid.Row="1"
-                          Background="{DynamicResource AppBackgroundBrush}"
-                          Padding="28,22"
-                          VerticalScrollBarVisibility="Auto"
-                          ScrollChanged="MessagesScrollViewer_ScrollChanged">
+            <ScrollViewer x:Name="MessagesScrollViewer" Grid.Row="1" Background="{DynamicResource AppBackgroundBrush}" Padding="28,22" VerticalScrollBarVisibility="Auto" ScrollChanged="MessagesScrollViewer_ScrollChanged">
                 <StackPanel x:Name="MessagesPanel">
-                    <Border CornerRadius="22"
-                            Background="{DynamicResource PanelBackgroundBrush}"
-                            BorderBrush="{DynamicResource BorderBrush}"
-                            BorderThickness="1"
-                            Padding="34"
-                            MaxWidth="520"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            Margin="0,90,0,90">
+                    <Border CornerRadius="22" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="34" MaxWidth="520" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,90,0,90">
                         <StackPanel HorizontalAlignment="Center">
-                            <Border Width="72"
-                                    Height="72"
-                                    CornerRadius="24"
-                                    Background="{DynamicResource PrimarySoftBrush}">
-                                <TextBlock Text="💬"
-                                           FontSize="32"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center"/>
+                            <Border Width="72" Height="72" CornerRadius="24" Background="{DynamicResource PrimarySoftBrush}">
+                                <TextBlock Text="💬" FontSize="32" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
-                            <TextBlock Text="Start a conversation"
-                                       FontSize="24"
-                                       FontWeight="Bold"
-                                       Foreground="{DynamicResource TextBrush}"
-                                       HorizontalAlignment="Center"
-                                       Margin="0,18,0,6"/>
-                            <TextBlock Text="Choose a chat from the left, or create a new conversation to start messaging."
-                                       FontSize="13"
-                                       Foreground="{DynamicResource SecondaryTextBrush}"
-                                       TextAlignment="Center"
-                                       TextWrapping="Wrap"
-                                       MaxWidth="380"/>
-                            <Button Content="＋   Start a new chat"
-                                    Style="{StaticResource PrimaryButtonStyle}"
-                                    Height="44"
-                                    Margin="0,22,0,0"
-                                    Click="StartNewChatSafelyButton_Click"/>
-                            <Button x:Name="LoadOlderMessagesButton"
-                                    Content="Load older messages"
-                                    Visibility="Collapsed"
-                                    Margin="0,16,0,0"
-                                    HorizontalAlignment="Center"
-                                    Style="{StaticResource SecondaryButtonStyle}"
-                                    Height="36"
-                                    Padding="14,0"
-                                    Click="LoadOlderMessagesButton_Click"/>
+                            <TextBlock Text="Start a conversation" FontSize="24" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Center" Margin="0,18,0,6"/>
+                            <TextBlock Text="Choose a chat from the left, or create a new conversation to start messaging." FontSize="13" Foreground="{DynamicResource SecondaryTextBrush}" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="380"/>
+                            <Button Content="＋   Start a new chat" Style="{StaticResource PrimaryButtonStyle}" Height="44" Margin="0,22,0,0" Click="StartNewChatSafelyButton_Click"/>
+                            <Button x:Name="LoadOlderMessagesButton" Content="Load older messages" Visibility="Collapsed" Margin="0,16,0,0" HorizontalAlignment="Center" Style="{StaticResource SecondaryButtonStyle}" Height="36" Padding="14,0" Click="LoadOlderMessagesButton_Click"/>
                         </StackPanel>
                     </Border>
                 </StackPanel>
             </ScrollViewer>
 
-            <!-- Message composer: file + voice on the left, input in the middle, send on the right -->
-            <Border Grid.Row="2"
-                    Background="{DynamicResource PanelBackgroundBrush}"
-                    BorderBrush="{DynamicResource BorderBrush}"
-                    BorderThickness="0,1,0,0"
-                    Padding="14,12">
+            <Border Grid.Row="2" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="14,12">
                 <Grid VerticalAlignment="Center">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="46"/>
@@ -409,37 +171,12 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="88"/>
                     </Grid.ColumnDefinitions>
-                    <Button Content="＋"
-                            Style="{StaticResource IconButtonStyle}"
-                            ToolTip="Attach file"
-                            HorizontalAlignment="Left"/>
-                    <Button Grid.Column="1"
-                            Content="🎤"
-                            Style="{StaticResource IconButtonStyle}"
-                            ToolTip="Voice message"
-                            HorizontalAlignment="Left"/>
-                    <Border Grid.Column="2"
-                            Height="48"
-                            CornerRadius="16"
-                            Background="{DynamicResource InputBackgroundBrush}"
-                            BorderBrush="{DynamicResource BorderBrush}"
-                            BorderThickness="1"
-                            Margin="4,0,10,0">
-                        <TextBox x:Name="MessageTextBox"
-                                 Background="Transparent"
-                                 BorderThickness="0"
-                                 Padding="14,0"
-                                 FontSize="14"
-                                 VerticalContentAlignment="Center"
-                                 KeyDown="MessageTextBox_KeyDown"
-                                 ToolTip="Write a message"/>
+                    <Button Content="＋" Style="{StaticResource IconButtonStyle}" ToolTip="Attach file" HorizontalAlignment="Left"/>
+                    <Button Grid.Column="1" Content="🎤" Style="{StaticResource IconButtonStyle}" ToolTip="Voice message" HorizontalAlignment="Left"/>
+                    <Border Grid.Column="2" Height="48" CornerRadius="16" Background="{DynamicResource InputBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Margin="4,0,10,0">
+                        <TextBox x:Name="MessageTextBox" Background="Transparent" BorderThickness="0" Padding="14,0" FontSize="14" VerticalContentAlignment="Center" KeyDown="MessageTextBox_KeyDown" ToolTip="Write a message"/>
                     </Border>
-                    <Button Grid.Column="3"
-                            Content="Send  ➤"
-                            Height="46"
-                            Style="{StaticResource PrimaryButtonStyle}"
-                            Click="SendButton_Click"
-                            ToolTip="Send message"/>
+                    <Button Grid.Column="3" Content="Send  ➤" Height="46" Style="{StaticResource PrimaryButtonStyle}" Click="SendButton_Click" ToolTip="Send message"/>
                 </Grid>
             </Border>
         </Grid>
