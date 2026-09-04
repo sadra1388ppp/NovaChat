@@ -11,9 +11,6 @@ public partial class MainView
         (Window.GetWindow(this) as MainWindow)?.ShowManageUsers();
     }
 
-    private void ServerOverviewButton_Click(object sender, RoutedEventArgs e)
-        => MessageBox.Show("Server overview is coming next.", "NovaChat Owner", MessageBoxButton.OK, MessageBoxImage.Information);
-
     private void AdminSettingsButton_Click(object sender, RoutedEventArgs e)
         => MessageBox.Show("Admin settings are coming next.", "NovaChat Owner", MessageBoxButton.OK, MessageBoxImage.Information);
 }
