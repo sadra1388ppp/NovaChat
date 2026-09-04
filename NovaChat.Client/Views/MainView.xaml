@@ -210,13 +210,6 @@
                                         HorizontalContentAlignment="Left"
                                         Padding="10,0"
                                         Click="AllChatsButton_Click"/>
-                                <Button Content="🗑   Delete Chats"
-                                        Height="38"
-                                        Margin="0,0,0,3"
-                                        Style="{StaticResource GhostButtonStyle}"
-                                        HorizontalContentAlignment="Left"
-                                        Padding="10,0"
-                                        Click="DeleteChatsButton_Click"/>
                                 <Button Content="📊   Server Overview"
                                         Height="38"
                                         Margin="0,0,0,3"
