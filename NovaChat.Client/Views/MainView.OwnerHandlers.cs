@@ -10,7 +10,4 @@ public partial class MainView
         if (!_isOwner) return;
         (Window.GetWindow(this) as MainWindow)?.ShowManageUsers();
     }
-
-    private void AdminSettingsButton_Click(object sender, RoutedEventArgs e)
-        => MessageBox.Show("Admin settings are coming next.", "NovaChat Owner", MessageBoxButton.OK, MessageBoxImage.Information);
 }
