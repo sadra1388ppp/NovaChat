@@ -73,7 +73,7 @@ public partial class MainView : UserControl
     {
         _isOwner = isOwner;
         AccountTypeText.Text = isOwner ? "OWNER • Full Access" : "User Account";
-        OwnerPanel.Visibility = isOwner ? Visibility.Visible : Visibility.Collapsed;
+        OwnerBottomPanel.Visibility = isOwner ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private async Task ConnectSignalRAsync()
