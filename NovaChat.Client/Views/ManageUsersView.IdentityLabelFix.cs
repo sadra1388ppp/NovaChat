@@ -19,8 +19,11 @@ public partial class ManageUsersView
         foreach (var textBlock in FindVisualChildren<TextBlock>(this))
         {
             var text = textBlock.Text?.Trim();
-            if (string.Equals(text, "USER ID", StringComparison.OrdinalIgnoreCase))
-                textBlock.Text = "USERNAME";
+            if (string.IsNullOrWhiteSpace(text))
+                continue;
+
+            if (text.IndexOf("User ID", StringComparison.OrdinalIgnoreCase) >= 0)
+                textBlock.Text = text.Replace("User ID", "Username", StringComparison.OrdinalIgnoreCase);
         }
 
         foreach (var textBox in FindVisualChildren<TextBox>(this))
