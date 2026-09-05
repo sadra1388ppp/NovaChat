@@ -2,5 +2,5 @@ namespace NovaChat.Server.DTOs;
 
 public class CreateChatDto
 {
-    public string UserId { get; set; } = string.Empty;
+    public string Username { get; set; } = string.Empty;
 }
