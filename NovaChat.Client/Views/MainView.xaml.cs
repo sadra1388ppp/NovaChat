@@ -45,19 +45,9 @@ public partial class MainView : UserControl
 
     private async void MainView_Loaded(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            await LoadChatsAsync();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"Could not load chats.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-
-        try
-        {
-            await ConnectSignalRAsync();
-        }
+        try { await LoadChatsAsync(); }
+        catch (Exception ex) { MessageBox.Show($"Could not load chats.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error); }
+        try { await ConnectSignalRAsync(); }
         catch (Exception ex)
         {
             ChatStatusText.Text = "Offline";
@@ -190,16 +180,10 @@ public partial class MainView : UserControl
         var dialog = new Window { Title = "New Chat", Width = 400, Height = 220, WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = Window.GetWindow(this), ResizeMode = ResizeMode.NoResize, Background = (Brush)FindResource("PanelBackgroundBrush") };
         var box = new TextBox { Margin = new Thickness(20), Height = 40, Padding = new Thickness(10) };
         var button = new Button { Content = "Start Chat", Width = 100, Height = 35, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(20), Background = (Brush)FindResource("PrimaryBrush"), Foreground = Brushes.White };
-        var panel = new StackPanel(); panel.Children.Add(new TextBlock { Text = "Enter User ID", Margin = new Thickness(20, 20, 20, 0), Foreground = (Brush)FindResource("TextBrush") }); panel.Children.Add(box); panel.Children.Add(button); dialog.Content = panel;
-        string? userId = null; button.Click += (_, _) => { userId = box.Text.Trim(); if (!string.IsNullOrWhiteSpace(userId)) dialog.DialogResult = true; }; box.KeyDown += (_, e) => { if (e.Key == Key.Enter) button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); }; dialog.Loaded += (_, _) => box.Focus(); dialog.ShowDialog();
-        if (string.IsNullOrWhiteSpace(userId) || string.Equals(userId, AuthState.UserId, StringComparison.OrdinalIgnoreCase)) return;
-        try
-        {
-            var result = await _apiService.PostAsync<CreateChatRequest, CreateChatResponse>("api/Chat", new CreateChatRequest { UserId = userId });
-            if (result?.Chat == null) { MessageBox.Show("User not found or chat could not be created.", "New Chat", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
-            await LoadChatsAsync(); var item = _chats.FirstOrDefault(x => x.Chat.Id == result.Chat.Id); if (item != null) await OpenChatAsync(item.Chat);
-        }
-        catch (Exception ex) { MessageBox.Show($"Could not create chat.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error); }
+        var panel = new StackPanel(); panel.Children.Add(new TextBlock { Text = "Enter Username", Margin = new Thickness(20, 20, 20, 0), Foreground = (Brush)FindResource("TextBrush") }); panel.Children.Add(box); panel.Children.Add(button); dialog.Content = panel;
+        string? username = null; button.Click += (_, _) => { username = box.Text.Trim(); if (!string.IsNullOrWhiteSpace(username)) dialog.DialogResult = true; }; box.KeyDown += (_, e) => { if (e.Key == Key.Enter) button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); }; dialog.Loaded += (_, _) => box.Focus(); dialog.ShowDialog();
+        if (string.IsNullOrWhiteSpace(username) || string.Equals(username, AuthState.Username, StringComparison.OrdinalIgnoreCase)) return;
+        await OpenChatWithUsernameAsync(username);
     }
 
     private async void ChatButton_Click(object sender, RoutedEventArgs e) { if (sender is Button { DataContext: ChatListItem item }) await OpenChatAsync(item.Chat); }
@@ -213,7 +197,7 @@ public partial class MainView : UserControl
             _currentChatId = chat.Id; _currentOtherUserId = chat.OtherUserId(AuthState.UserId); ChatUserNameText.Text = chat.OtherUserName(AuthState.UserId); UpdateCurrentChatPresence();
             MessagesPanel.Children.Clear(); _loadedMessageIds.Clear(); _oldestLoadedMessageId = null; _hasMoreMessages = false; UpdateLoadOlderButton();
             if (_hubConnection?.State == HubConnectionState.Connected) await _hubConnection.InvokeAsync("JoinChat", chat.Id);
-            await LoadInitialMessagesAsync(chat.Id); await ScrollMessagesToBottomAsync(); await RefreshCurrentChatAvatarAsync();
+            await LoadInitialMessagesAsync(chat.Id); await ScrollMessagesToBottomAsync(); await RefreshCurrentUserAvatarAsync();
         }
         catch (Exception ex) { MessageBox.Show($"Could not open chat.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error); }
         finally { _isOpeningChat = false; }
@@ -270,19 +254,6 @@ public partial class MainView : UserControl
         if (!_currentChatId.HasValue) { MessageBox.Show("Please select a chat first.", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Information); return; }
         var content = MessageTextBox.Text.Trim(); if (string.IsNullOrWhiteSpace(content)) return;
         if (_hubConnection?.State != HubConnectionState.Connected) { MessageBox.Show("Real-time connection is not available.", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
-        try { MessageTextBox.Clear(); await _hubConnection.InvokeAsync("SendMessage", _currentChatId.Value, content); } catch (Exception ex) { MessageBox.Show($"Message could not be sent.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error); }
+        try { MessageTextBox.Clear(); await _hubConnection.InvokeAsync("SendMessage", _currentChatId.Value, content); } catch (Exception ex) { MessageBox.Show($"Could not send message.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error); }
     }
-
-    private void AddMessageToUi(MessageModel message, bool insertAtTop = false)
-    {
-        var mine = string.Equals(message.SenderId, AuthState.UserId, StringComparison.OrdinalIgnoreCase);
-        var border = new Border { Background = mine ? (Brush)FindResource("PrimaryBrush") : (Brush)FindResource("PanelBackgroundBrush"), Padding = new Thickness(12), CornerRadius = new CornerRadius(12), HorizontalAlignment = mine ? HorizontalAlignment.Right : HorizontalAlignment.Left, MaxWidth = 450, Margin = new Thickness(0, 0, 0, 12) };
-        var panel = new StackPanel(); panel.Children.Add(new TextBlock { Text = message.Content, TextWrapping = TextWrapping.Wrap, Foreground = mine ? Brushes.White : (Brush)FindResource("TextBrush") }); panel.Children.Add(new TextBlock { Text = message.SentAt.ToLocalTime().ToString("HH:mm"), FontSize = 10, Margin = new Thickness(0, 5, 0, 0), Foreground = mine ? Brushes.White : (Brush)FindResource("SecondaryTextBrush"), HorizontalAlignment = HorizontalAlignment.Right }); border.Child = panel;
-        if (message.MessageType is "image" or "file" or "voice") border.Loaded += (_, _) => _ = RenderMediaBubbleAsync(border, message.Id);
-        if (insertAtTop) MessagesPanel.Children.Insert(Math.Min(1, MessagesPanel.Children.Count), border); else MessagesPanel.Children.Add(border);
-    }
-
-    private async Task ScrollMessagesToBottomAsync() { await Task.Delay(50); MessagesScrollViewer.ScrollToEnd(); }
-    private void ProfileButton_Click(object sender, RoutedEventArgs e) => ProfileRequested?.Invoke();
-    private void SettingsButton_Click(object sender, RoutedEventArgs e) => SettingsRequested?.Invoke();
 }
