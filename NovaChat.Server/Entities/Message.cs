@@ -5,7 +5,7 @@ public class Message
     public int Id { get; set; }
     public int ChatId { get; set; }
     public Chat Chat { get; set; } = null!;
-    public string SenderId { get; set; } = string.Empty;
+    public long SenderId { get; set; }
     public User Sender { get; set; } = null!;
     public string Content { get; set; } = string.Empty;
     public DateTime SentAt { get; set; } = DateTime.UtcNow;
