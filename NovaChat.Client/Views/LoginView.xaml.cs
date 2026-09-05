@@ -151,7 +151,6 @@ namespace NovaChat.Client.Views
                     ? WelcomeSubText.ActualWidth
                     : WelcomeSubText.DesiredSize.Width;
 
-                // Center it relative to the whole window, not the lamp.
                 double rootWidth = LoginRoot.ActualWidth > 0 ? LoginRoot.ActualWidth : ActualWidth;
                 double rootHeight = LoginRoot.ActualHeight > 0 ? LoginRoot.ActualHeight : ActualHeight;
                 double canvasOffsetX = (rootWidth - LampCanvas.Width) / 2.0;
@@ -224,37 +223,30 @@ namespace NovaChat.Client.Views
                 nextX *= scale;
                 nextY *= scale;
             }
-            _pullVelocityX = Math.Clamp(_pullVelocityX * 0.55 + deltaX * 12.0, -MaxSpeed, MaxSpeed);
-            _pullVelocityY = Math.Clamp(_pullVelocityY * 0.55 + deltaY * 12.0, -MaxSpeed, MaxSpeed);
+            _pullVelocityX = deltaX * 60;
+            _pullVelocityY = deltaY * 60;
             _pullX = nextX;
             _pullY = nextY;
-            _lampAngularVelocity += deltaX * 0.010 - deltaY * 0.002;
-            _lampAngularVelocity = Math.Clamp(_lampAngularVelocity, -2.2, 2.2);
             UpdateCordVisual();
-            ApplyLampTransform();
         }
 
-        private void LampCanvas_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-        {
-            ReleaseCord();
-            e.Handled = true;
-        }
-
-        private void LampPull_LostMouseCapture(object sender, MouseEventArgs e)
-        {
-            if (_draggingCord)
-                ReleaseCord();
-        }
-
-        private void ReleaseCord()
+        private void LampPull_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
             if (!_draggingCord)
                 return;
             _draggingCord = false;
             LampPull.ReleaseMouseCapture();
-            double distance = Math.Sqrt(_pullX * _pullX + _pullY * _pullY);
-            if (distance >= ToggleThreshold)
+            if (Math.Sqrt(_pullX * _pullX + _pullY * _pullY) >= ToggleThreshold)
                 ToggleLamp();
+            StartPhysics();
+            e.Handled = true;
+        }
+
+        private void LampPull_LostMouseCapture(object? sender, MouseEventArgs e)
+        {
+            if (!_draggingCord)
+                return;
+            _draggingCord = false;
             StartPhysics();
         }
 
@@ -271,79 +263,76 @@ namespace NovaChat.Client.Views
         {
             if (!_physicsRunning)
                 return;
-            CompositionTarget.Rendering -= PhysicsRendering;
             _physicsRunning = false;
+            CompositionTarget.Rendering -= PhysicsRendering;
             _physicsClock.Stop();
         }
 
         private void PhysicsRendering(object? sender, EventArgs e)
         {
-            double dt = _physicsClock.Elapsed.TotalSeconds;
+            double dt = Math.Min(_physicsClock.Elapsed.TotalSeconds, 0.033);
             _physicsClock.Restart();
-            dt = Math.Clamp(dt, 0.001, 0.032);
+            if (dt <= 0)
+                return;
+
             if (!_draggingCord)
             {
-                double accelerationX = (-SpringStrength * _pullX) - (Damping * _pullVelocityX);
-                double accelerationY = (-SpringStrength * _pullY) - (Damping * _pullVelocityY);
-                _pullVelocityX += accelerationX * dt;
-                _pullVelocityY += accelerationY * dt;
-                double velocityLength = Math.Sqrt(_pullVelocityX * _pullVelocityX + _pullVelocityY * _pullVelocityY);
-                if (velocityLength > MaxSpeed)
+                double ax = -SpringStrength * _pullX - Damping * _pullVelocityX;
+                double ay = -SpringStrength * _pullY - Damping * _pullVelocityY;
+                _pullVelocityX += ax * dt;
+                _pullVelocityY += ay * dt;
+                double speed = Math.Sqrt(_pullVelocityX * _pullVelocityX + _pullVelocityY * _pullVelocityY);
+                if (speed > MaxSpeed)
                 {
-                    double scale = MaxSpeed / velocityLength;
+                    double scale = MaxSpeed / speed;
                     _pullVelocityX *= scale;
                     _pullVelocityY *= scale;
                 }
                 _pullX += _pullVelocityX * dt;
                 _pullY += _pullVelocityY * dt;
-                double distance = Math.Sqrt(_pullX * _pullX + _pullY * _pullY);
-                if (distance > MaxPullDistance)
-                {
-                    double scale = MaxPullDistance / distance;
-                    _pullX *= scale;
-                    _pullY *= scale;
-                }
-                _lampAngularVelocity += (-11.5 * _lampAngle - 4.2 * _lampAngularVelocity) * dt;
+                _lampAngularVelocity += (-_lampAngle * 25.0 - _lampAngularVelocity * 7.0) * dt;
                 _lampAngle += _lampAngularVelocity * dt;
+                if (Math.Abs(_pullX) < 0.05 && Math.Abs(_pullY) < 0.05 && Math.Abs(_pullVelocityX) < 0.1 && Math.Abs(_pullVelocityY) < 0.1 && Math.Abs(_lampAngle) < 0.05 && Math.Abs(_lampAngularVelocity) < 0.1)
+                {
+                    _pullX = 0;
+                    _pullY = 0;
+                    _pullVelocityX = 0;
+                    _pullVelocityY = 0;
+                    _lampAngle = 0;
+                    _lampAngularVelocity = 0;
+                    UpdateCordVisual();
+                    ApplyLampTransform();
+                    StopPhysics();
+                    return;
+                }
             }
-            double ropeSpeed = UpdateCordRopePhysics(dt);
+
+            SimulateCord(dt);
             UpdateCordVisual();
             ApplyLampTransform();
-            bool beadSettled = !_draggingCord && Math.Abs(_pullX) < 0.08 && Math.Abs(_pullY) < 0.08 && Math.Abs(_pullVelocityX) < 0.08 && Math.Abs(_pullVelocityY) < 0.08 && Math.Abs(_lampAngle) < 0.025 && Math.Abs(_lampAngularVelocity) < 0.025;
-            bool ropeSettled = ropeSpeed < CordRestSpeedEpsilon;
-            if (beadSettled && ropeSettled)
-            {
-                _pullX = 0;
-                _pullY = 0;
-                _pullVelocityX = 0;
-                _pullVelocityY = 0;
-                _lampAngle = 0;
-                _lampAngularVelocity = 0;
-                UpdateCordRopePhysics(dt);
-                UpdateCordVisual();
-                ApplyLampTransform();
-                StopPhysics();
-            }
         }
 
-        private double UpdateCordRopePhysics(double dt)
+        private double SimulateCord(double dt)
         {
             if (!_cordInitialized)
                 InitializeCordRope();
             int last = CordPointCount - 1;
             _cordPoints[0] = new Point(CordTopX, CordTopY);
             _cordPoints[last] = new Point(CordTopX + _pullX, RestPullY + _pullY);
-            _cordPointsPrev[0] = _cordPoints[0];
+
             for (int i = 1; i < last; i++)
             {
                 Point current = _cordPoints[i];
-                Vector velocity = (current - _cordPointsPrev[i]) * CordVerletDamping;
-                Point next = new Point(current.X + velocity.X, current.Y + velocity.Y + CordGravity * dt * dt);
+                Point previous = _cordPointsPrev[i];
+                Vector velocity = (current - previous) * CordVerletDamping;
                 _cordPointsPrev[i] = current;
-                _cordPoints[i] = next;
+                _cordPoints[i] = current + velocity + new Vector(0, CordGravity) * dt * dt;
             }
+
             for (int iteration = 0; iteration < CordConstraintIterations; iteration++)
             {
+                _cordPoints[0] = new Point(CordTopX, CordTopY);
+                _cordPoints[last] = new Point(CordTopX + _pullX, RestPullY + _pullY);
                 for (int i = 0; i < last; i++)
                 {
                     Point a = _cordPoints[i];
@@ -516,7 +505,7 @@ namespace NovaChat.Client.Views
             string password = PasswordBox.Password;
             if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(password))
             {
-                MessageBox.Show("Please enter your User ID and Password.", "Login", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("Please enter your Username or Phone Number and Password.", "Login", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
             var lifetimeToken = _viewCts;
@@ -529,12 +518,20 @@ namespace NovaChat.Client.Views
                     return;
                 if (result == null || string.IsNullOrWhiteSpace(result.Token))
                 {
-                    MessageBox.Show("Invalid User ID or Password.", "Login Failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show("Invalid Username/Phone Number or Password.", "Login Failed", MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
                 }
-                AuthState.Set(result.Token, result.User.Id, result.User.DisplayName, result.User.Email);
-                const string ownerId = "BlackRoom";
-                if (string.Equals(result.User.Id, ownerId, StringComparison.OrdinalIgnoreCase))
+
+                AuthState.Set(
+                    result.Token,
+                    result.User.Id,
+                    result.User.Username,
+                    result.User.DisplayName,
+                    result.User.Email);
+
+                // Owner identity is the public Username, not the internal database Id.
+                const string ownerUsername = "BlackRoom";
+                if (string.Equals(result.User.Username, ownerUsername, StringComparison.OrdinalIgnoreCase))
                     OwnerLoginSuccessful?.Invoke();
                 else
                     LoginSuccessful?.Invoke();
