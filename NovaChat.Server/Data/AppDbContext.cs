@@ -19,6 +19,14 @@ public class AppDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
+        // The existing MariaDB database stores internal user IDs as VARCHAR.
+        // Keep long IDs in the application layer, but transparently convert them
+        // to/from strings when reading/writing MariaDB.
+        modelBuilder.Entity<User>()
+            .Property(u => u.Id)
+            .HasColumnType("varchar(255)")
+            .HasConversion<string>();
+
         modelBuilder.Entity<User>()
             .Property(u => u.Username)
             .HasMaxLength(32)
@@ -37,6 +45,18 @@ public class AppDbContext : DbContext
             .IsUnique();
 
         modelBuilder.Entity<Chat>()
+            .Property(c => c.User1Id)
+            .HasColumnName("UserId")
+            .HasColumnType("varchar(255)")
+            .HasConversion<string>();
+
+        modelBuilder.Entity<Chat>()
+            .Property(c => c.User2Id)
+            .HasColumnName("UserId2")
+            .HasColumnType("varchar(255)")
+            .HasConversion<string>();
+
+        modelBuilder.Entity<Chat>()
             .HasOne(c => c.User1)
             .WithMany()
             .HasForeignKey(c => c.User1Id)
@@ -49,6 +69,11 @@ public class AppDbContext : DbContext
             .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<Message>()
+            .Property(m => m.SenderId)
+            .HasColumnType("varchar(255)")
+            .HasConversion<string>();
+
+        modelBuilder.Entity<Message>()
             .HasOne(m => m.Chat)
             .WithMany(c => c.Messages)
             .HasForeignKey(m => m.ChatId)
@@ -59,6 +84,16 @@ public class AppDbContext : DbContext
             .WithMany()
             .HasForeignKey(m => m.SenderId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Contact>()
+            .Property(c => c.OwnerUserId)
+            .HasColumnType("varchar(255)")
+            .HasConversion<string>();
+
+        modelBuilder.Entity<Contact>()
+            .Property(c => c.ContactUserId)
+            .HasColumnType("varchar(255)")
+            .HasConversion<string>();
 
         modelBuilder.Entity<Contact>()
             .HasOne(c => c.OwnerUser)
