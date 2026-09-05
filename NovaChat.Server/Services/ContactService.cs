@@ -24,7 +24,7 @@ public class ContactService
     {
         if (!long.TryParse(ownerUserId, out var ownerId)) return [];
         return await _context.Contacts.AsNoTracking().Where(c => c.OwnerUserId == ownerId).OrderBy(c => c.ContactUser.DisplayName)
-            .Select(c => new ContactResponseDto { UserId = c.ContactUserId.ToString(), DisplayName = c.ContactUser.DisplayName, Email = c.ContactUser.Email, AddedAt = c.CreatedAt }).ToListAsync();
+            .Select(c => new ContactResponseDto { UserId = c.ContactUserId.ToString(), Username = c.ContactUser.Username, DisplayName = c.ContactUser.DisplayName, Email = c.ContactUser.Email, AddedAt = c.CreatedAt }).ToListAsync();
     }
 
     public async Task<bool> RemoveAsync(string ownerUserId, string contactUserId)
