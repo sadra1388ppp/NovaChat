@@ -21,7 +21,7 @@ public class AppDbContext : DbContext
 
         // User.Id is an internal database identifier. The existing MariaDB
         // schema stores it as VARCHAR, so EF must never expect MariaDB to
-        // auto-generate it. UserService assigns a unique value before insert.
+        // auto-generate it. UserService assigns the value before insert.
         modelBuilder.Entity<User>()
             .Property(u => u.Id)
             .HasColumnType("varchar(255)")
@@ -45,15 +45,15 @@ public class AppDbContext : DbContext
             .HasIndex(u => u.PhoneNumber)
             .IsUnique();
 
+        // Keep the existing Chats column names from the database.
+        // EF conventions map these properties to User1Id and User2Id.
         modelBuilder.Entity<Chat>()
             .Property(c => c.User1Id)
-            .HasColumnName("UserId")
             .HasColumnType("varchar(255)")
             .HasConversion<string>();
 
         modelBuilder.Entity<Chat>()
             .Property(c => c.User2Id)
-            .HasColumnName("UserId2")
             .HasColumnType("varchar(255)")
             .HasConversion<string>();
 
