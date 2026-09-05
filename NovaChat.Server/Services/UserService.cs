@@ -10,7 +10,8 @@ namespace NovaChat.Server.Services;
 public class UserService
 {
     private static readonly SemaphoreSlim RegisterLock = new(1, 1);
-    private static readonly Regex PhoneRegex = new(@"^\+?[0-9]{7,15}$", RegexOptions.Compiled);
+    private static readonly Regex UsernameRegex = new("^[a-zA-Z0-9_.-]{3,32}$", RegexOptions.Compiled);
+    private static readonly Regex PhoneRegex = new("^\\+?[0-9]{7,15}$", RegexOptions.Compiled);
 
     private readonly AppDbContext _context;
     private readonly IPasswordHasher<User> _passwordHasher;
@@ -25,37 +26,39 @@ public class UserService
 
     public async Task<RegisterResult> RegisterAsync(RegisterDto dto)
     {
-        dto.Id = dto.Id.Trim();
-        dto.Email = dto.Email.Trim();
-        dto.DisplayName = dto.DisplayName.Trim();
+        var username = dto.Username.Trim().ToLowerInvariant();
+        var email = dto.Email.Trim();
+        var displayName = dto.DisplayName.Trim();
+
+        if (!UsernameRegex.IsMatch(username))
+            return new RegisterResult { Success = false, Message = "Username must be 3 to 32 characters and may contain only letters, numbers, dot, underscore and hyphen." };
+
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(displayName) || string.IsNullOrWhiteSpace(dto.Password))
+            return new RegisterResult { Success = false, Message = "All registration fields are required." };
 
         if (!TryNormalizePhoneNumber(dto.PhoneNumber, out var phoneNumber))
             return new RegisterResult { Success = false, Message = "Enter a valid phone number using 7 to 15 digits." };
 
-        dto.PhoneNumber = phoneNumber;
-
-        if (string.IsNullOrWhiteSpace(dto.Id) || string.IsNullOrWhiteSpace(dto.Email) ||
-            string.IsNullOrWhiteSpace(dto.DisplayName) || string.IsNullOrWhiteSpace(dto.Password))
-            return new RegisterResult { Success = false, Message = "All registration fields are required." };
-
         await RegisterLock.WaitAsync();
         try
         {
-            if (await _context.Users.AnyAsync(u => u.Id == dto.Id))
-                return new RegisterResult { Success = false, Message = "This User ID is already taken." };
+            if (await _context.Users.AnyAsync(u => u.Username == username))
+                return new RegisterResult { Success = false, Message = "This username is already taken." };
 
-            if (await _context.Users.AnyAsync(u => u.Email == dto.Email))
+            if (await _context.Users.AnyAsync(u => u.Email == email))
                 return new RegisterResult { Success = false, Message = "This Email is already registered." };
 
-            if (await _context.Users.AnyAsync(u => u.PhoneNumber == dto.PhoneNumber))
+            if (await _context.Users.AnyAsync(u => u.PhoneNumber == phoneNumber))
                 return new RegisterResult { Success = false, Message = "This phone number is already registered." };
 
             var user = new User
             {
-                Id = dto.Id,
-                DisplayName = dto.DisplayName,
-                Email = dto.Email,
-                PhoneNumber = dto.PhoneNumber,
+                // Internal database ID. It is never chosen or changed by the user.
+                Id = Guid.NewGuid().ToString("N"),
+                Username = username,
+                DisplayName = displayName,
+                Email = email,
+                PhoneNumber = phoneNumber,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -78,7 +81,22 @@ public class UserService
 
     public async Task<User?> LoginAsync(LoginDto dto)
     {
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == dto.Id);
+        var login = dto.Login.Trim();
+        if (string.IsNullOrWhiteSpace(login)) return null;
+
+        User? user = null;
+
+        if (TryNormalizePhoneNumber(login, out var phoneNumber))
+        {
+            user = await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber);
+        }
+
+        if (user == null)
+        {
+            var username = login.ToLowerInvariant();
+            user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+        }
+
         if (user == null) return null;
 
         var passwordResult = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, dto.Password);
@@ -100,7 +118,7 @@ public class UserService
         var users = await _context.Users
             .AsNoTracking()
             .Where(u => u.Id != currentUserId &&
-                (EF.Functions.Like(u.Id, pattern) ||
+                (EF.Functions.Like(u.Username, pattern) ||
                  EF.Functions.Like(u.DisplayName, pattern) ||
                  EF.Functions.Like(u.Email, pattern)))
             .OrderBy(u => u.DisplayName)
@@ -113,11 +131,15 @@ public class UserService
     public async Task<RegisterResult> UpdateUserAsync(string id, UpdateUserDto dto)
     {
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
-
         if (user == null)
             return new RegisterResult { Success = false, Message = "User not found." };
 
-        var newId = string.IsNullOrWhiteSpace(dto.NewUserId) ? id : dto.NewUserId.Trim();
+        var newUsername = string.IsNullOrWhiteSpace(dto.NewUsername)
+            ? user.Username
+            : dto.NewUsername.Trim().ToLowerInvariant();
+
+        if (!UsernameRegex.IsMatch(newUsername))
+            return new RegisterResult { Success = false, Message = "Username must be 3 to 32 characters and may contain only letters, numbers, dot, underscore and hyphen." };
 
         dto.DisplayName = dto.DisplayName.Trim();
         dto.Email = dto.Email.Trim();
@@ -126,8 +148,8 @@ public class UserService
         if (!TryNormalizePhoneNumber(dto.PhoneNumber, out var phoneNumber))
             return new RegisterResult { Success = false, Message = "Enter a valid phone number using 7 to 15 digits." };
 
-        if (await _context.Users.AsNoTracking().AnyAsync(u => u.Id == newId && u.Id != id))
-            return new RegisterResult { Success = false, Message = "This User ID is already taken." };
+        if (await _context.Users.AsNoTracking().AnyAsync(u => u.Username == newUsername && u.Id != id))
+            return new RegisterResult { Success = false, Message = "This username is already taken." };
 
         if (await _context.Users.AsNoTracking().AnyAsync(u => u.Email == dto.Email && u.Id != id))
             return new RegisterResult { Success = false, Message = "This Email is already registered." };
@@ -135,104 +157,7 @@ public class UserService
         if (await _context.Users.AsNoTracking().AnyAsync(u => u.PhoneNumber == phoneNumber && u.Id != id))
             return new RegisterResult { Success = false, Message = "This phone number is already registered." };
 
-        if (!string.Equals(id, newId, StringComparison.Ordinal))
-        {
-            await using var transaction = await _context.Database.BeginTransactionAsync();
-
-            try
-            {
-                // NovaChat uses MariaDB/MySQL. Keep MySQL identifier quoting here.
-                await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                    INSERT INTO `Users`
-                    (`Id`, `DisplayName`, `Email`, `PhoneNumber`, `PasswordHash`, `Bio`, `AvatarUrl`, `LastSeenAt`, `CreatedAt`)
-                    SELECT
-                        {newId}, `DisplayName`, `Email`, {phoneNumber}, `PasswordHash`, `Bio`, `AvatarUrl`, `LastSeenAt`, `CreatedAt`
-                    FROM `Users`
-                    WHERE `Id` = {id}
-                    """);
-
-                await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                    UPDATE `Users`
-                    SET `DisplayName` = {dto.DisplayName},
-                        `Email` = {dto.Email},
-                        `PhoneNumber` = {phoneNumber},
-                        `Bio` = {dto.Bio}
-                    WHERE `Id` = {newId}
-                    """);
-
-                await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                    UPDATE `Messages`
-                    SET `SenderId` = {newId}
-                    WHERE `SenderId` = {id}
-                    """);
-
-                await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                    UPDATE `Chats`
-                    SET `User1Id` = {newId}
-                    WHERE `User1Id` = {id}
-                    """);
-
-                await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                    UPDATE `Chats`
-                    SET `User2Id` = {newId}
-                    WHERE `User2Id` = {id}
-                    """);
-
-                await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                    UPDATE `Contacts`
-                    SET `OwnerUserId` = {newId}
-                    WHERE `OwnerUserId` = {id}
-                    """);
-
-                await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                    UPDATE `Contacts`
-                    SET `ContactUserId` = {newId}
-                    WHERE `ContactUserId` = {id}
-                    """);
-
-                if (await TableExistsAsync("GroupMembers"))
-                {
-                    await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                        UPDATE `GroupMembers`
-                        SET `UserId` = {newId}
-                        WHERE `UserId` = {id}
-                        """);
-                }
-
-                if (await TableExistsAsync("Groups"))
-                {
-                    await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                        UPDATE `Groups`
-                        SET `CreatorId` = {newId}
-                        WHERE `CreatorId` = {id}
-                        """);
-                }
-
-                await _context.Database.ExecuteSqlInterpolatedAsync($"""
-                    DELETE FROM `Users`
-                    WHERE `Id` = {id}
-                    """);
-
-                await transaction.CommitAsync();
-            }
-            catch
-            {
-                await transaction.RollbackAsync();
-                throw;
-            }
-
-            _context.ChangeTracker.Clear();
-
-            var updatedUser = await _context.Users.AsNoTracking().FirstAsync(u => u.Id == newId);
-
-            return new RegisterResult
-            {
-                Success = true,
-                Message = "User updated successfully. Please sign in again because your User ID changed.",
-                User = ToUserResponse(updatedUser, includePhoneNumber: true)
-            };
-        }
-
+        user.Username = newUsername;
         user.DisplayName = dto.DisplayName;
         user.Email = dto.Email;
         user.PhoneNumber = phoneNumber;
@@ -384,6 +309,7 @@ public class UserService
         return new UserResponseDto
         {
             Id = user.Id,
+            Username = user.Username,
             DisplayName = user.DisplayName,
             Email = user.Email,
             PhoneNumber = includePhoneNumber ? user.PhoneNumber : null,
@@ -398,9 +324,7 @@ public class UserService
     private static bool TryNormalizePhoneNumber(string? input, out string normalized)
     {
         normalized = string.Empty;
-
-        if (string.IsNullOrWhiteSpace(input))
-            return false;
+        if (string.IsNullOrWhiteSpace(input)) return false;
 
         normalized = input.Trim()
             .Replace(" ", string.Empty)
