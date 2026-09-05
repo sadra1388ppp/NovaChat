@@ -35,7 +35,7 @@ public class UserService
 
             var user = new User
             {
-                Id = await GenerateUniqueUserIdAsync(),
+                Id = GenerateUserId(),
                 Username = username,
                 DisplayName = displayName,
                 Email = email,
@@ -146,14 +146,12 @@ public class UserService
         user.PasswordHash = _passwordHasher.HashPassword(user, dto.NewPassword); await _context.SaveChangesAsync(); return (true, "Password changed successfully.");
     }
 
-    private async Task<long> GenerateUniqueUserIdAsync()
+    private long GenerateUserId()
     {
-        while (true)
-        {
-            var candidate = RandomNumberGenerator.GetInt64(1_000_000_000_000_000_000L, 9_000_000_000_000_000_000L);
-            if (!await _context.Users.AnyAsync(u => u.Id == candidate))
-                return candidate;
-        }
+        Span<byte> bytes = stackalloc byte[8];
+        RandomNumberGenerator.Fill(bytes);
+        var value = BitConverter.ToUInt64(bytes);
+        return (long)(value % 8_000_000_000_000_000_000UL) + 1_000_000_000_000_000_000L;
     }
 
     private async Task<bool> TableExistsAsync(string tableName) => await _context.Database.SqlQueryRaw<bool>("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = {0}) AS `Value`", tableName).FirstAsync();
