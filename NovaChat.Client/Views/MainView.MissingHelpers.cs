@@ -1,4 +1,5 @@
 using NovaChat.Client.Models;
+using NovaChat.Client.Services;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -106,7 +107,6 @@ public partial class MainView
         }
         catch
         {
-            // Keep the existing header state on transient profile/avatar failures.
         }
     }
 
