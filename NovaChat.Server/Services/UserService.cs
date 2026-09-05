@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using NovaChat.Server.Data;
 using NovaChat.Server.DTOs;
 using NovaChat.Server.Entities;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 
 namespace NovaChat.Server.Services;
@@ -31,8 +32,20 @@ public class UserService
             if (await _context.Users.AnyAsync(u => u.Username == username)) return Fail("This username is already taken.");
             if (await _context.Users.AnyAsync(u => u.Email == email)) return Fail("This Email is already registered.");
             if (await _context.Users.AnyAsync(u => u.PhoneNumber == phoneNumber)) return Fail("This phone number is already registered.");
-            var user = new User { Username = username, DisplayName = displayName, Email = email, PhoneNumber = phoneNumber, CreatedAt = DateTime.UtcNow };
-            user.PasswordHash = _passwordHasher.HashPassword(user, dto.Password); _context.Users.Add(user); await _context.SaveChangesAsync();
+
+            var user = new User
+            {
+                Id = await GenerateUniqueUserIdAsync(),
+                Username = username,
+                DisplayName = displayName,
+                Email = email,
+                PhoneNumber = phoneNumber,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            user.PasswordHash = _passwordHasher.HashPassword(user, dto.Password);
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
             return new RegisterResult { Success = true, Message = "User registered successfully.", User = ToUserResponse(user) };
         }
         finally { RegisterLock.Release(); }
@@ -131,6 +144,16 @@ public class UserService
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId); if (user == null) return (false, "User not found.");
         if (_passwordHasher.VerifyHashedPassword(user, user.PasswordHash, dto.CurrentPassword) == PasswordVerificationResult.Failed) return (false, "Current password is incorrect.");
         user.PasswordHash = _passwordHasher.HashPassword(user, dto.NewPassword); await _context.SaveChangesAsync(); return (true, "Password changed successfully.");
+    }
+
+    private async Task<long> GenerateUniqueUserIdAsync()
+    {
+        while (true)
+        {
+            var candidate = RandomNumberGenerator.GetInt64(1_000_000_000_000_000_000L, 9_000_000_000_000_000_000L);
+            if (!await _context.Users.AnyAsync(u => u.Id == candidate))
+                return candidate;
+        }
     }
 
     private async Task<bool> TableExistsAsync(string tableName) => await _context.Database.SqlQueryRaw<bool>("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = {0}) AS `Value`", tableName).FirstAsync();
