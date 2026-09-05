@@ -145,15 +145,25 @@ public class ApiService
     {
         public override string? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            return reader.TokenType switch
+            switch (reader.TokenType)
             {
-                JsonTokenType.String => reader.GetString(),
-                JsonTokenType.Number => reader.GetRawText(),
-                JsonTokenType.True => "true",
-                JsonTokenType.False => "false",
-                JsonTokenType.Null => null,
-                _ => throw new JsonException($"Cannot convert JSON token {reader.TokenType} to string.")
-            };
+                case JsonTokenType.String:
+                    return reader.GetString();
+                case JsonTokenType.Number:
+                    if (reader.TryGetInt64(out var integer))
+                        return integer.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    if (reader.TryGetDecimal(out var decimalValue))
+                        return decimalValue.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    return reader.GetDouble().ToString(System.Globalization.CultureInfo.InvariantCulture);
+                case JsonTokenType.True:
+                    return "true";
+                case JsonTokenType.False:
+                    return "false";
+                case JsonTokenType.Null:
+                    return null;
+                default:
+                    throw new JsonException($"Cannot convert JSON token {reader.TokenType} to string.");
+            }
         }
 
         public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
