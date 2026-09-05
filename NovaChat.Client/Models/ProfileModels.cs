@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace NovaChat.Client.Models;
 
 public class ProfileModel
@@ -21,6 +23,14 @@ public class UpdateProfileRequest
     public string PhoneNumber { get; set; } = string.Empty;
     public string? Bio { get; set; }
     public string? NewUsername { get; set; }
+
+    // Backward-compatible alias for the existing profile UI. It maps to Username and is not serialized.
+    [JsonIgnore]
+    public string? NewUserId
+    {
+        get => NewUsername;
+        set => NewUsername = value;
+    }
 }
 
 public class ProfileActionResponse
