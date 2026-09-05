@@ -5,10 +5,7 @@ namespace NovaChat.Server.Data;
 
 public class AppDbContext : DbContext
 {
-    public AppDbContext(DbContextOptions<AppDbContext> options)
-        : base(options)
-    {
-    }
+    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
     public DbSet<User> Users { get; set; } = null!;
     public DbSet<Chat> Chats { get; set; } = null!;
@@ -19,9 +16,6 @@ public class AppDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        // User.Id is an internal database identifier. The existing MariaDB
-        // schema stores it as VARCHAR, so EF must never expect MariaDB to
-        // auto-generate it. UserService assigns the value before insert.
         modelBuilder.Entity<User>()
             .Property(u => u.Id)
             .HasColumnType("varchar(255)")
@@ -45,15 +39,16 @@ public class AppDbContext : DbContext
             .HasIndex(u => u.PhoneNumber)
             .IsUnique();
 
-        // Keep the existing Chats column names from the database.
-        // EF conventions map these properties to User1Id and User2Id.
+        // IMPORTANT: these are the actual column names in the existing MariaDB Chats table.
         modelBuilder.Entity<Chat>()
             .Property(c => c.User1Id)
+            .HasColumnName("User1Id")
             .HasColumnType("varchar(255)")
             .HasConversion<string>();
 
         modelBuilder.Entity<Chat>()
             .Property(c => c.User2Id)
+            .HasColumnName("User2Id")
             .HasColumnType("varchar(255)")
             .HasConversion<string>();
 
