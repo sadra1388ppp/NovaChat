@@ -13,7 +13,6 @@ public class ChatModel
     public string? User2AvatarUrl { get; set; }
     public DateTime CreatedAt { get; set; }
     public MessageModel? LastMessage { get; set; }
-
     public string OtherUserId(string currentUserId) => string.Equals(User1Id, currentUserId, StringComparison.OrdinalIgnoreCase) ? User2Id : User1Id;
     public string OtherUserName(string currentUserId) => string.Equals(User1Id, currentUserId, StringComparison.OrdinalIgnoreCase) ? User2Name : User1Name;
     public string? OtherUserAvatarUrl => string.Equals(User1Id, AuthState.UserId, StringComparison.OrdinalIgnoreCase) ? User2AvatarUrl : User1AvatarUrl;
@@ -44,7 +43,7 @@ public class ChatHistoryResponse
 
 public class CreateChatRequest
 {
-    public string UserId { get; set; } = string.Empty;
+    public string Username { get; set; } = string.Empty;
 }
 
 public class CreateChatResponse
