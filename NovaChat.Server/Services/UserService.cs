@@ -53,8 +53,10 @@ public class UserService
 
             var user = new User
             {
-                // Internal database ID. It is never chosen or changed by the user.
-                Id = Guid.NewGuid().ToString("N"),
+                // Internal database ID only. It is never entered, displayed or changed by users.
+                // Keep it numeric while retaining the existing string column so this change does
+                // not require destructive conversion of the existing MariaDB schema.
+                Id = await GenerateNextNumericIdAsync(),
                 Username = username,
                 DisplayName = displayName,
                 Email = email,
@@ -87,9 +89,7 @@ public class UserService
         User? user = null;
 
         if (TryNormalizePhoneNumber(login, out var phoneNumber))
-        {
             user = await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber);
-        }
 
         if (user == null)
         {
@@ -285,6 +285,24 @@ public class UserService
         user.PasswordHash = _passwordHasher.HashPassword(user, dto.NewPassword);
         await _context.SaveChangesAsync();
         return (true, "Password changed successfully.");
+    }
+
+    private async Task<string> GenerateNextNumericIdAsync()
+    {
+        // Existing legacy IDs may be GUIDs. Ignore them and continue the numeric sequence.
+        var ids = await _context.Users
+            .AsNoTracking()
+            .Select(u => u.Id)
+            .ToListAsync();
+
+        long maxId = 0;
+        foreach (var value in ids)
+        {
+            if (long.TryParse(value, out var parsed) && parsed > maxId)
+                maxId = parsed;
+        }
+
+        return checked(maxId + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private async Task<bool> TableExistsAsync(string tableName)
