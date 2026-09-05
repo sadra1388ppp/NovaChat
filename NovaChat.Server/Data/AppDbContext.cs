@@ -19,13 +19,14 @@ public class AppDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        // The existing MariaDB database stores internal user IDs as VARCHAR.
-        // Keep long IDs in the application layer, but transparently convert them
-        // to/from strings when reading/writing MariaDB.
+        // User.Id is an internal database identifier. The existing MariaDB
+        // schema stores it as VARCHAR, so EF must never expect MariaDB to
+        // auto-generate it. UserService assigns a unique value before insert.
         modelBuilder.Entity<User>()
             .Property(u => u.Id)
             .HasColumnType("varchar(255)")
-            .HasConversion<string>();
+            .HasConversion<string>()
+            .ValueGeneratedNever();
 
         modelBuilder.Entity<User>()
             .Property(u => u.Username)
