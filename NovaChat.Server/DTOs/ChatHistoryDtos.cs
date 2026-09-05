@@ -47,30 +47,18 @@ public static class MessageDtoMapper
         {
             Id = message.Id,
             ChatId = message.ChatId,
-            SenderId = message.SenderId,
+            SenderId = message.SenderId.ToString(System.Globalization.CultureInfo.InvariantCulture),
             SenderName = message.Sender?.DisplayName ?? string.Empty,
             Content = message.Content,
             SentAt = message.SentAt
         };
-
         if (MediaMessageEnvelope.TryParse(message.Content, out var media) && media != null)
         {
-            dto.MessageType = media.Type;
-            dto.FileName = media.FileName;
-            dto.ContentType = media.ContentType;
-            dto.FileSize = media.Size;
-            dto.DurationSeconds = media.DurationSeconds;
+            dto.MessageType = media.Type; dto.FileName = media.FileName; dto.ContentType = media.ContentType; dto.FileSize = media.Size; dto.DurationSeconds = media.DurationSeconds;
             dto.AttachmentUrl = $"/api/ChatMedia/{message.Id}";
-            var icon = media.Type switch
-            {
-                "image" => "📷",
-                "voice" => "🎙",
-                _ => "📎"
-            };
-            // The zero-width marker carries the message id for the WPF renderer without appearing in previews.
+            var icon = media.Type switch { "image" => "📷", "voice" => "🎙", _ => "📎" };
             dto.Content = $"{icon} {media.FileName}\u200B{message.Id}";
         }
-
         return dto;
     }
 }
