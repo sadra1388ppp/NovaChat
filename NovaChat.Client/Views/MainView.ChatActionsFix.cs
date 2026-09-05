@@ -15,27 +15,23 @@ public partial class MainView
     private async void StartNewChatSafelyButton_Click(object sender, RoutedEventArgs e)
     {
         if (_isCreatingChatSafely) return;
-
         var dialog = new Window { Title = "New Chat", Width = 400, Height = 220, WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = Window.GetWindow(this), ResizeMode = ResizeMode.NoResize, Background = (Brush)FindResource("PanelBackgroundBrush") };
         var box = new TextBox { Margin = new Thickness(20), Height = 40, Padding = new Thickness(10) };
         var button = new Button { Content = "Start Chat", Width = 100, Height = 35, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(20), Background = (Brush)FindResource("PrimaryBrush"), Foreground = Brushes.White };
         var panel = new StackPanel();
-        panel.Children.Add(new TextBlock { Text = "Enter User ID", Margin = new Thickness(20, 20, 20, 0), Foreground = (Brush)FindResource("TextBrush") });
+        panel.Children.Add(new TextBlock { Text = "Enter Username", Margin = new Thickness(20, 20, 20, 0), Foreground = (Brush)FindResource("TextBrush") });
         panel.Children.Add(box); panel.Children.Add(button); dialog.Content = panel;
-        string? userId = null;
-        button.Click += (_, _) => { userId = box.Text.Trim(); if (!string.IsNullOrWhiteSpace(userId)) dialog.DialogResult = true; };
+        string? username = null;
+        button.Click += (_, _) => { username = box.Text.Trim(); if (!string.IsNullOrWhiteSpace(username)) dialog.DialogResult = true; };
         box.KeyDown += (_, e) => { if (e.Key == Key.Enter) button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); };
         dialog.Loaded += (_, _) => box.Focus(); dialog.ShowDialog();
-        if (string.IsNullOrWhiteSpace(userId) || string.Equals(userId, AuthState.UserId, StringComparison.OrdinalIgnoreCase)) return;
+        if (string.IsNullOrWhiteSpace(username) || string.Equals(username, AuthState.Username, StringComparison.OrdinalIgnoreCase)) return;
 
         _isCreatingChatSafely = true;
         try
         {
-            var existing = _chats.FirstOrDefault(x => string.Equals(x.Chat.OtherUserId(AuthState.UserId), userId, StringComparison.OrdinalIgnoreCase));
-            if (existing != null) { await OpenChatAsync(existing.Chat); return; }
-
-            var result = await _apiService.PostAsync<CreateChatRequest, CreateChatResponse>("api/Chat", new CreateChatRequest { UserId = userId });
-            if (result?.Chat == null) { MessageBox.Show("User not found or chat could not be created.", "New Chat", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+            var result = await _apiService.PostAsync<CreateChatRequest, CreateChatResponse>("api/Chat", new CreateChatRequest { Username = username });
+            if (result?.Chat == null) { MessageBox.Show("Username not found or chat could not be created.", "New Chat", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
             var item = _chats.FirstOrDefault(x => x.Chat.Id == result.Chat.Id);
             if (item == null) { await LoadChatsAsync(); item = _chats.FirstOrDefault(x => x.Chat.Id == result.Chat.Id); }
             if (item != null) await OpenChatAsync(item.Chat);
@@ -47,8 +43,7 @@ public partial class MainView
     private async void DeleteSingleChatButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { DataContext: ChatListItem item }) return;
-        var chatId = item.Chat.Id;
-        if (chatId <= 0) return;
+        var chatId = item.Chat.Id; if (chatId <= 0) return;
         if (MessageBox.Show($"Delete chat with {item.DisplayName}?\n\nAll messages in this chat will also be deleted.", "Delete Chat", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
         try
         {
@@ -71,8 +66,7 @@ public partial class MainView
         if (string.IsNullOrWhiteSpace(_currentOtherUserId)) return;
         try
         {
-            var userId = _currentOtherUserId.Trim();
-            var profile = await _apiService.GetAsync<ProfileModel>($"api/User/profile/{Uri.EscapeDataString(userId)}");
+            var profile = await _apiService.GetAsync<ProfileModel>($"api/User/profile/{Uri.EscapeDataString(_currentOtherUserId.Trim())}");
             if (profile == null) { MessageBox.Show("This user's profile could not be loaded.", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
             ShowPublicProfile(profile);
         }
