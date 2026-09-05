@@ -2,7 +2,10 @@ namespace NovaChat.Server.DTOs;
 
 public class UserResponseDto
 {
+    // Internal database identifier. Returned for client-side relationships, not for login.
     public string Id { get; set; } = string.Empty;
+
+    public string Username { get; set; } = string.Empty;
 
     public string DisplayName { get; set; } = string.Empty;
 
