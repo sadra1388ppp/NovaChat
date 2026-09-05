@@ -52,17 +52,18 @@ public class AppDbContext : DbContext
             .HasColumnType("varchar(255)")
             .HasConversion<string>();
 
+        // Deleting a user automatically deletes every chat involving that user.
         modelBuilder.Entity<Chat>()
             .HasOne(c => c.User1)
             .WithMany()
             .HasForeignKey(c => c.User1Id)
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<Chat>()
             .HasOne(c => c.User2)
             .WithMany()
             .HasForeignKey(c => c.User2Id)
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<Message>()
             .Property(m => m.SenderId)
@@ -75,11 +76,12 @@ public class AppDbContext : DbContext
             .HasForeignKey(m => m.ChatId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // Messages sent by a deleted user are removed automatically.
         modelBuilder.Entity<Message>()
             .HasOne(m => m.Sender)
             .WithMany()
             .HasForeignKey(m => m.SenderId)
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<Contact>()
             .Property(c => c.OwnerUserId)
@@ -97,11 +99,12 @@ public class AppDbContext : DbContext
             .HasForeignKey(c => c.OwnerUserId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // Contacts belonging to the deleted user, or pointing to them, are removed automatically.
         modelBuilder.Entity<Contact>()
             .HasOne(c => c.ContactUser)
             .WithMany()
             .HasForeignKey(c => c.ContactUserId)
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<Contact>()
             .HasIndex(c => new { c.OwnerUserId, c.ContactUserId })
