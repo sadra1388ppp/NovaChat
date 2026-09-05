@@ -5,8 +5,9 @@ namespace NovaChat.Server.DTOs;
 public class RegisterDto
 {
     [Required]
-    [StringLength(30, MinimumLength = 3)]
-    public string Id { get; set; } = string.Empty;
+    [StringLength(32, MinimumLength = 3)]
+    [RegularExpression("^[a-zA-Z0-9_.-]+$", ErrorMessage = "Username may contain only letters, numbers, dot, underscore and hyphen.")]
+    public string Username { get; set; } = string.Empty;
 
     [Required]
     [StringLength(50, MinimumLength = 2)]
