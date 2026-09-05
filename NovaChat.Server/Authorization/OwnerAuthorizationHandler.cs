@@ -16,18 +16,24 @@ public class OwnerAuthorizationHandler : AuthorizationHandler<OwnerRequirement>
         AuthorizationHandlerContext context,
         OwnerRequirement requirement)
     {
-        var currentUserId =
-            context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var currentUsername = context.User.FindFirst("username")?.Value;
+        var configuredOwnerUsername = _configuration["Owner:Username"];
 
-        var ownerId =
-            _configuration["Owner:UserId"];
+        if (!string.IsNullOrWhiteSpace(currentUsername) &&
+            !string.IsNullOrWhiteSpace(configuredOwnerUsername) &&
+            string.Equals(currentUsername, configuredOwnerUsername, StringComparison.OrdinalIgnoreCase))
+        {
+            context.Succeed(requirement);
+            return Task.CompletedTask;
+        }
+
+        // Backward compatibility for installations that still configure Owner:UserId.
+        var currentUserId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var configuredOwnerId = _configuration["Owner:UserId"];
 
         if (!string.IsNullOrWhiteSpace(currentUserId) &&
-            !string.IsNullOrWhiteSpace(ownerId) &&
-            string.Equals(
-                currentUserId,
-                ownerId,
-                StringComparison.OrdinalIgnoreCase))
+            !string.IsNullOrWhiteSpace(configuredOwnerId) &&
+            string.Equals(currentUserId, configuredOwnerId, StringComparison.OrdinalIgnoreCase))
         {
             context.Succeed(requirement);
         }
