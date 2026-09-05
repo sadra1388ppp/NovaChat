@@ -45,7 +45,7 @@ public partial class ProfileView : UserControl
             NormalizeAvatarUrl();
             DataContext = _profile;
             DisplayNameBox.Text = _profile.DisplayName;
-            UserIdBox.Text = _profile.Id;
+            UserIdBox.Text = _profile.Username;
             EmailBox.Text = _profile.Email;
             PhoneBox.Text = _profile.PhoneNumber ?? string.Empty;
             BioBox.Text = _profile.Bio;
@@ -67,9 +67,9 @@ public partial class ProfileView : UserControl
     {
         if (_profile == null) return;
 
-        AvatarInitialsText.Text = GetInitials(_profile.DisplayName, _profile.Id);
+        AvatarInitialsText.Text = GetInitials(_profile.DisplayName, _profile.Username);
         ProfileDisplayNameText.Text = _profile.DisplayName;
-        ProfileUserIdText.Text = $"@{_profile.Id}";
+        ProfileUserIdText.Text = $"@{_profile.Username}";
         ProfileBioText.Text = string.IsNullOrWhiteSpace(_profile.Bio)
             ? "Add a short bio to tell people about yourself."
             : _profile.Bio;
@@ -85,7 +85,7 @@ public partial class ProfileView : UserControl
                 ? $"Last seen {FormatLastSeen(_profile.LastSeenAt.Value)}"
                 : "Last seen not available");
         JoinedText.Text = $"Joined {_profile.CreatedAt.ToLocalTime().ToString("dd MMM yyyy", CultureInfo.InvariantCulture)}";
-        CopyUserIdButton.ToolTip = $"Copy @{_profile.Id}";
+        CopyUserIdButton.ToolTip = $"Copy @{_profile.Username}";
     }
 
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
@@ -96,7 +96,7 @@ public partial class ProfileView : UserControl
             string.IsNullOrWhiteSpace(EmailBox.Text) ||
             string.IsNullOrWhiteSpace(PhoneBox.Text))
         {
-            ShowFeedback("Display name, User ID, Email and Phone Number are required.");
+            ShowFeedback("Display name, Username, Email and Phone Number are required.");
             return;
         }
         if (BioBox.Text.Length > 160)
@@ -109,18 +109,18 @@ public partial class ProfileView : UserControl
         SaveButton.IsEnabled = false;
         try
         {
-            var oldId = _profile.Id;
+            var internalId = _profile.Id;
             var request = new UpdateProfileRequest
             {
                 DisplayName = DisplayNameBox.Text.Trim(),
                 Email = EmailBox.Text.Trim(),
                 PhoneNumber = PhoneBox.Text.Trim(),
                 Bio = BioBox.Text.Trim(),
-                NewUserId = UserIdBox.Text.Trim()
+                NewUsername = UserIdBox.Text.Trim()
             };
 
             var result = await _apiService.PutAsync<UpdateProfileRequest, ProfileActionResponse>(
-                $"api/User/{Uri.EscapeDataString(oldId)}", request);
+                $"api/User/{Uri.EscapeDataString(internalId)}", request);
 
             if (result?.User == null)
             {
@@ -132,7 +132,7 @@ public partial class ProfileView : UserControl
             NormalizeAvatarUrl();
             DataContext = _profile;
             DisplayNameBox.Text = _profile.DisplayName;
-            UserIdBox.Text = _profile.Id;
+            UserIdBox.Text = _profile.Username;
             EmailBox.Text = _profile.Email;
             PhoneBox.Text = _profile.PhoneNumber ?? string.Empty;
             BioBox.Text = _profile.Bio;
@@ -146,7 +146,7 @@ public partial class ProfileView : UserControl
             }
             else
             {
-                AuthState.UpdateProfile(_profile.DisplayName, _profile.Email);
+                AuthState.UpdateProfile(_profile.Username, _profile.DisplayName, _profile.Email);
             }
         }
         catch (Exception ex)
@@ -230,9 +230,9 @@ public partial class ProfileView : UserControl
 
     private void CopyUserIdButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_profile == null || string.IsNullOrWhiteSpace(_profile.Id)) return;
-        Clipboard.SetText(_profile.Id);
-        ShowFeedback($"Copied @{_profile.Id} to clipboard.");
+        if (_profile == null || string.IsNullOrWhiteSpace(_profile.Username)) return;
+        Clipboard.SetText(_profile.Username);
+        ShowFeedback($"Copied @{_profile.Username} to clipboard.");
     }
 
     private async void ChangePasswordButton_Click(object sender, RoutedEventArgs e)
@@ -286,9 +286,9 @@ public partial class ProfileView : UserControl
         return box;
     }
 
-    private static string GetInitials(string displayName, string id)
+    private static string GetInitials(string displayName, string username)
     {
-        var value = string.IsNullOrWhiteSpace(displayName) ? id : displayName.Trim();
+        var value = string.IsNullOrWhiteSpace(displayName) ? username : displayName.Trim();
         if (string.IsNullOrWhiteSpace(value)) return "?";
         var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         return parts.Length >= 2 ? $"{parts[0][0]}{parts[1][0]}".ToUpperInvariant() : value[..Math.Min(2, value.Length)].ToUpperInvariant();
