@@ -43,7 +43,7 @@ public class UserController : ControllerBase
     public async Task<IActionResult> Login(LoginDto dto)
     {
         var user = await _userService.LoginAsync(dto);
-        if (user == null) return Unauthorized(new { message = "Invalid User ID or Password." });
+        if (user == null) return Unauthorized(new { message = "Invalid username/phone number or password." });
         var token = _jwtService.GenerateToken(user);
         return Ok(new { message = "Login successful.", token, user = await _userService.GetUserByIdAsync(user.Id) });
     }
@@ -111,8 +111,6 @@ public class UserController : ControllerBase
     public async Task<IActionResult> UpdateUser(string id, UpdateUserDto dto)
     {
         if (!IsOwner() && !IsCurrentUser(id)) return Forbid();
-        if (IsOwner() && !string.IsNullOrWhiteSpace(dto.NewUserId) && !string.Equals(dto.NewUserId, id, StringComparison.Ordinal))
-            return BadRequest(new { message = "The Owner User ID is managed by Owner:UserId and cannot be changed here." });
 
         var result = await _userService.UpdateUserAsync(id, dto);
         if (!result.Success)
@@ -120,7 +118,16 @@ public class UserController : ControllerBase
             if (result.Message == "User not found.") return NotFound(new { message = result.Message });
             return Conflict(new { message = result.Message });
         }
-        await _hub.Clients.All.SendAsync("ProfileUpdated", new { userId = id, displayName = result.User?.DisplayName ?? string.Empty, bio = result.User?.Bio ?? string.Empty, avatarUrl = result.User?.AvatarUrl });
+
+        await _hub.Clients.All.SendAsync("ProfileUpdated", new
+        {
+            userId = id,
+            username = result.User?.Username ?? string.Empty,
+            displayName = result.User?.DisplayName ?? string.Empty,
+            bio = result.User?.Bio ?? string.Empty,
+            avatarUrl = result.User?.AvatarUrl
+        });
+
         return Ok(new { message = result.Message, user = result.User });
     }
 
@@ -158,7 +165,14 @@ public class UserController : ControllerBase
             DeleteStoredAvatar(oldProfile?.AvatarUrl);
 
             var refreshedUser = await _userService.GetUserByIdAsync(id, includePhoneNumber: true);
-            await _hub.Clients.All.SendAsync("ProfileUpdated", new { userId = id, displayName = refreshedUser?.DisplayName ?? string.Empty, bio = refreshedUser?.Bio ?? string.Empty, avatarUrl = refreshedUser?.AvatarUrl });
+            await _hub.Clients.All.SendAsync("ProfileUpdated", new
+            {
+                userId = id,
+                username = refreshedUser?.Username ?? string.Empty,
+                displayName = refreshedUser?.DisplayName ?? string.Empty,
+                bio = refreshedUser?.Bio ?? string.Empty,
+                avatarUrl = refreshedUser?.AvatarUrl
+            });
             return Ok(new { message = result.Message, user = refreshedUser });
         }
         catch (UnknownImageFormatException)
@@ -176,7 +190,14 @@ public class UserController : ControllerBase
         if (!result.Success) return NotFound(new { message = result.Message });
         DeleteStoredAvatar(result.OldAvatarUrl);
         var user = await _userService.GetUserByIdAsync(id, includePhoneNumber: true);
-        await _hub.Clients.All.SendAsync("ProfileUpdated", new { userId = id, displayName = user?.DisplayName ?? string.Empty, bio = user?.Bio ?? string.Empty, avatarUrl = (string?)null });
+        await _hub.Clients.All.SendAsync("ProfileUpdated", new
+        {
+            userId = id,
+            username = user?.Username ?? string.Empty,
+            displayName = user?.DisplayName ?? string.Empty,
+            bio = user?.Bio ?? string.Empty,
+            avatarUrl = (string?)null
+        });
         return Ok(new { message = result.Message, user });
     }
 
@@ -205,8 +226,19 @@ public class UserController : ControllerBase
 
     private bool IsOwner()
     {
-        var ownerUserId = HttpContext.RequestServices.GetRequiredService<IConfiguration>()["Owner:UserId"];
-        return !string.IsNullOrWhiteSpace(ownerUserId) && string.Equals(CurrentUserId(), ownerUserId, StringComparison.Ordinal);
+        var ownerSetting = HttpContext.RequestServices.GetRequiredService<IConfiguration>()["Owner:Username"]
+            ?? HttpContext.RequestServices.GetRequiredService<IConfiguration>()["Owner:UserId"];
+
+        var currentUsername = User.FindFirst("username")?.Value;
+        if (!string.IsNullOrWhiteSpace(ownerSetting) &&
+            !string.IsNullOrWhiteSpace(currentUsername) &&
+            string.Equals(currentUsername, ownerSetting, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var currentUserId = CurrentUserId();
+        return !string.IsNullOrWhiteSpace(ownerSetting) &&
+               !string.IsNullOrWhiteSpace(currentUserId) &&
+               string.Equals(currentUserId, ownerSetting, StringComparison.Ordinal);
     }
 
     private void DeleteStoredAvatar(string? avatarUrl)

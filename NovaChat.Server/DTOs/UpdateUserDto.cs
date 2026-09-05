@@ -20,6 +20,6 @@ public class UpdateUserDto
     public string? Bio { get; set; }
 
     [StringLength(32, MinimumLength = 3)]
-    [RegularExpression("^[a-zA-Z0-9_.-]+$", ErrorMessage = "User ID may contain only letters, numbers, dot, underscore and hyphen.")]
-    public string? NewUserId { get; set; }
+    [RegularExpression("^[a-zA-Z0-9_.-]+$", ErrorMessage = "Username may contain only letters, numbers, dot, underscore and hyphen.")]
+    public string? NewUsername { get; set; }
 }

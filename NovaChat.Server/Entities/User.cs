@@ -2,7 +2,11 @@ namespace NovaChat.Server.Entities;
 
 public class User
 {
+    // Internal database identifier. Never used as a login credential.
     public string Id { get; set; } = string.Empty;
+
+    // Public username used for login and user discovery.
+    public string Username { get; set; } = string.Empty;
 
     public string DisplayName { get; set; } = string.Empty;
 

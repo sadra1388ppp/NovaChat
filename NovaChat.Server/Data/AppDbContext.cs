@@ -11,16 +11,22 @@ public class AppDbContext : DbContext
     }
 
     public DbSet<User> Users { get; set; } = null!;
-
     public DbSet<Chat> Chats { get; set; } = null!;
-
     public DbSet<Message> Messages { get; set; } = null!;
-
     public DbSet<Contact> Contacts { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<User>()
+            .Property(u => u.Username)
+            .HasMaxLength(32)
+            .IsRequired();
+
+        modelBuilder.Entity<User>()
+            .HasIndex(u => u.Username)
+            .IsUnique();
 
         modelBuilder.Entity<User>()
             .Property(u => u.PhoneNumber)
