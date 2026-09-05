@@ -226,8 +226,19 @@ public class UserController : ControllerBase
 
     private bool IsOwner()
     {
-        var ownerUserId = HttpContext.RequestServices.GetRequiredService<IConfiguration>()["Owner:UserId"];
-        return !string.IsNullOrWhiteSpace(ownerUserId) && string.Equals(CurrentUserId(), ownerUserId, StringComparison.Ordinal);
+        var ownerSetting = HttpContext.RequestServices.GetRequiredService<IConfiguration>()["Owner:Username"]
+            ?? HttpContext.RequestServices.GetRequiredService<IConfiguration>()["Owner:UserId"];
+
+        var currentUsername = User.FindFirst("username")?.Value;
+        if (!string.IsNullOrWhiteSpace(ownerSetting) &&
+            !string.IsNullOrWhiteSpace(currentUsername) &&
+            string.Equals(currentUsername, ownerSetting, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var currentUserId = CurrentUserId();
+        return !string.IsNullOrWhiteSpace(ownerSetting) &&
+               !string.IsNullOrWhiteSpace(currentUserId) &&
+               string.Equals(currentUserId, ownerSetting, StringComparison.Ordinal);
     }
 
     private void DeleteStoredAvatar(string? avatarUrl)
