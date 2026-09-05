@@ -67,8 +67,8 @@ public partial class ManageUsersView : UserControl
             ? _users
             : _users.Where(user =>
                 Contains(user.DisplayName, query) ||
-                Contains(user.Email, query) ||
-                Contains(user.Id, query));
+                Contains(user.Username, query) ||
+                Contains(user.Email, query));
 
         _filteredUsers.Clear();
         foreach (var user in results)
@@ -115,6 +115,7 @@ public partial class ManageUsersView : UserControl
             if (details == null) return;
 
             _selectedUser.Id = details.Id;
+            _selectedUser.Username = details.Username;
             _selectedUser.DisplayName = details.DisplayName;
             _selectedUser.Email = details.Email;
             _selectedUser.PhoneNumber = details.PhoneNumber ?? string.Empty;
@@ -140,7 +141,7 @@ public partial class ManageUsersView : UserControl
     {
         DetailInitialsText.Text = user.Initials;
         DetailNameText.Text = user.DisplayName;
-        DetailIdText.Text = $"User ID  •  {user.Id}";
+        DetailIdText.Text = $"@{user.Username}";
         DetailCreatedText.Text = FormatDate(user.CreatedAt);
         StatusText.Text = "Loading details…";
         StatusText.Foreground = FindBrush("SecondaryTextBrush");
@@ -155,7 +156,7 @@ public partial class ManageUsersView : UserControl
     {
         DetailInitialsText.Text = user.Initials;
         DetailNameText.Text = user.DisplayName;
-        DetailIdText.Text = $"User ID  •  {user.Id}";
+        DetailIdText.Text = $"@{user.Username}";
         DetailCreatedText.Text = $"Joined  •  {FormatDate(user.CreatedAt)}";
         DetailLastSeenText.Text = user.IsOnline
             ? "Currently online"
@@ -171,7 +172,7 @@ public partial class ManageUsersView : UserControl
         DisplayNameBox.Text = user.DisplayName;
         EmailBox.Text = user.Email;
         PhoneBox.Text = user.PhoneNumber;
-        UserIdBox.Text = user.Id;
+        UserIdBox.Text = user.Username;
         BioBox.Text = user.Bio;
         UpdateActionState();
     }
@@ -212,7 +213,7 @@ public partial class ManageUsersView : UserControl
         var displayName = DisplayNameBox.Text.Trim();
         var email = EmailBox.Text.Trim();
         var phone = PhoneBox.Text.Trim();
-        var userId = UserIdBox.Text.Trim();
+        var username = UserIdBox.Text.Trim();
         var bio = BioBox.Text.Trim();
 
         if (displayName.Length < 2 || displayName.Length > 50)
@@ -233,9 +234,9 @@ public partial class ManageUsersView : UserControl
             return;
         }
 
-        if (userId.Length < 3 || userId.Length > 32 || !Regex.IsMatch(userId, "^[a-zA-Z0-9_.-]+$"))
+        if (username.Length < 3 || username.Length > 32 || !Regex.IsMatch(username, "^[a-zA-Z0-9_.-]+$"))
         {
-            ShowValidation("User ID must be 3–32 characters and may contain only letters, numbers, dot, underscore and hyphen.");
+            ShowValidation("Username must be 3–32 characters and may contain only letters, numbers, dot, underscore and hyphen.");
             return;
         }
 
@@ -245,9 +246,9 @@ public partial class ManageUsersView : UserControl
             return;
         }
 
-        if (IsOwner(_selectedUser.Id) && !string.Equals(userId, _selectedUser.Id, StringComparison.Ordinal))
+        if (IsOwner(_selectedUser.Id) && !string.Equals(username, _selectedUser.Username, StringComparison.OrdinalIgnoreCase))
         {
-            ShowValidation("The Owner User ID cannot be changed from this panel.");
+            ShowValidation("The Owner Username cannot be changed from this panel.");
             return;
         }
 
@@ -258,15 +259,13 @@ public partial class ManageUsersView : UserControl
             Email = email,
             PhoneNumber = phone,
             Bio = bio,
-            NewUserId = userId
+            NewUsername = username
         };
 
         _isSaving = true;
         UpdateActionState();
         try
         {
-            // Manage Users is an Owner-only screen, so edits must use the
-            // Owner admin endpoint rather than the normal self-edit endpoint.
             var response = await _apiService.PutAsync<UpdateUserRequest, UpdateUserResponse>(
                 $"api/Admin/users/{Uri.EscapeDataString(oldId)}", request);
 
@@ -278,6 +277,7 @@ public partial class ManageUsersView : UserControl
             if (target != null)
             {
                 target.Id = updated.Id;
+                target.Username = updated.Username;
                 target.DisplayName = updated.DisplayName;
                 target.Email = updated.Email;
                 target.PhoneNumber = updated.PhoneNumber ?? string.Empty;
@@ -375,9 +375,18 @@ public partial class ManageUsersView : UserControl
         !string.IsNullOrWhiteSpace(AuthState.UserId) &&
         string.Equals(userId, AuthState.UserId, StringComparison.OrdinalIgnoreCase);
 
-    private static bool IsValidEmail(string email) =>
-        !string.IsNullOrWhiteSpace(email) &&
-        new System.Net.Mail.MailAddress(email).Address.Equals(email, StringComparison.OrdinalIgnoreCase);
+    private static bool IsValidEmail(string email)
+    {
+        try
+        {
+            return !string.IsNullOrWhiteSpace(email) &&
+                   new System.Net.Mail.MailAddress(email).Address.Equals(email, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     private static bool IsValidPhone(string phone) =>
         Regex.IsMatch(phone.Replace(" ", string.Empty).Replace("-", string.Empty).Replace("(", string.Empty).Replace(")", string.Empty), "^\\+?[0-9]{7,15}$");
@@ -410,6 +419,7 @@ public partial class ManageUsersView : UserControl
     private sealed class AdminUserModel
     {
         public string Id { get; set; } = string.Empty;
+        public string Username { get; set; } = string.Empty;
         public string DisplayName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public string PhoneNumber { get; set; } = string.Empty;
@@ -424,6 +434,7 @@ public partial class ManageUsersView : UserControl
     private sealed class UserDetailsModel
     {
         public string Id { get; set; } = string.Empty;
+        public string Username { get; set; } = string.Empty;
         public string DisplayName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public string? PhoneNumber { get; set; }
@@ -439,7 +450,7 @@ public partial class ManageUsersView : UserControl
         public string Email { get; set; } = string.Empty;
         public string PhoneNumber { get; set; } = string.Empty;
         public string Bio { get; set; } = string.Empty;
-        public string NewUserId { get; set; } = string.Empty;
+        public string NewUsername { get; set; } = string.Empty;
     }
 
     private sealed class UpdateUserResponse
