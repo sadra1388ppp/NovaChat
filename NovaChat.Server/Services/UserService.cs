@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using NovaChat.Server.Data;
 using NovaChat.Server.DTOs;
 using NovaChat.Server.Entities;
-using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 
 namespace NovaChat.Server.Services;
@@ -35,7 +34,8 @@ public class UserService
 
             var user = new User
             {
-                Id = GenerateUserId(),
+                // Internal database identifier only. New users receive the next available sequential ID.
+                Id = await GenerateNextUserIdAsync(),
                 Username = username,
                 DisplayName = displayName,
                 Email = email,
@@ -146,12 +146,22 @@ public class UserService
         user.PasswordHash = _passwordHasher.HashPassword(user, dto.NewPassword); await _context.SaveChangesAsync(); return (true, "Password changed successfully.");
     }
 
-    private long GenerateUserId()
+    private async Task<long> GenerateNextUserIdAsync()
     {
-        Span<byte> bytes = stackalloc byte[8];
-        RandomNumberGenerator.Fill(bytes);
-        var value = BitConverter.ToUInt64(bytes);
-        return (long)(value % 8_000_000_000_000_000_000UL) + 1_000_000_000_000_000_000L;
+        // IDs stay numeric and sequential: 1, 2, 3, ...
+        // We deliberately reuse the first free ID so deleted users do not cause gaps.
+        var existingIds = await _context.Users
+            .AsNoTracking()
+            .Select(u => u.Id)
+            .ToListAsync();
+
+        var usedIds = existingIds.ToHashSet();
+        long nextId = 1;
+
+        while (usedIds.Contains(nextId))
+            nextId++;
+
+        return nextId;
     }
 
     private async Task<bool> TableExistsAsync(string tableName) => await _context.Database.SqlQueryRaw<bool>("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = {0}) AS `Value`", tableName).FirstAsync();
