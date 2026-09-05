@@ -25,7 +25,7 @@ namespace NovaChat.Client.Views
             if (Interlocked.Exchange(ref _registrationInProgress, 1) == 1)
                 return;
 
-            string userId = UserIdTextBox.Text.Trim();
+            string username = UsernameTextBox.Text.Trim();
             string displayName = DisplayNameTextBox.Text.Trim();
             string email = EmailTextBox.Text.Trim();
             string phoneNumber = PhoneNumberTextBox.Text.Trim();
@@ -33,7 +33,7 @@ namespace NovaChat.Client.Views
 
             try
             {
-                if (string.IsNullOrWhiteSpace(userId) ||
+                if (string.IsNullOrWhiteSpace(username) ||
                     string.IsNullOrWhiteSpace(displayName) ||
                     string.IsNullOrWhiteSpace(email) ||
                     string.IsNullOrWhiteSpace(phoneNumber) ||
@@ -51,7 +51,7 @@ namespace NovaChat.Client.Views
 
                 var request = new RegisterRequest
                 {
-                    Id = userId,
+                    Username = username,
                     DisplayName = displayName,
                     Email = email,
                     PhoneNumber = phoneNumber,
@@ -72,18 +72,24 @@ namespace NovaChat.Client.Views
                     return;
                 }
 
+                bool success = result.Message.Contains("success", StringComparison.OrdinalIgnoreCase);
+
                 MessageBox.Show(
                     result.Message,
-                    result.Message.Contains("success", StringComparison.OrdinalIgnoreCase)
-                        ? "Registration Successful"
-                        : "Register",
+                    success ? "Registration Successful" : "Register",
                     MessageBoxButton.OK,
-                    result.Message.Contains("success", StringComparison.OrdinalIgnoreCase)
-                        ? MessageBoxImage.Information
-                        : MessageBoxImage.Warning);
+                    success ? MessageBoxImage.Information : MessageBoxImage.Warning);
 
-                if (result.Message.Contains("success", StringComparison.OrdinalIgnoreCase))
+                if (success)
                     BackToLoginRequested?.Invoke();
+            }
+            catch (HttpRequestException ex)
+            {
+                MessageBox.Show(
+                    ex.Message,
+                    "Registration Failed",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
             }
             catch (Exception ex)
             {
