@@ -2,10 +2,10 @@ namespace NovaChat.Client.Views;
 
 public partial class MainView
 {
-    public async Task OpenChatWithUserIdAsync(string userId)
+    public async Task OpenChatWithUsernameAsync(string username)
     {
-        if (string.IsNullOrWhiteSpace(userId) ||
-            string.Equals(userId, NovaChat.Client.Services.AuthState.UserId, StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(username) ||
+            string.Equals(username.Trim(), NovaChat.Client.Services.AuthState.Username, StringComparison.OrdinalIgnoreCase))
             return;
 
         try
@@ -14,7 +14,7 @@ public partial class MainView
                 NovaChat.Client.Models.CreateChatRequest,
                 NovaChat.Client.Models.CreateChatResponse>(
                 "api/Chat",
-                new NovaChat.Client.Models.CreateChatRequest { UserId = userId.Trim() });
+                new NovaChat.Client.Models.CreateChatRequest { Username = username.Trim() });
 
             if (result?.Chat == null)
                 return;
