@@ -32,6 +32,8 @@ namespace NovaChat.Client.Views
             string phoneNumber = PhoneNumberTextBox.Text.Trim();
             string password = PasswordBox.Password;
 
+            HideRegistrationError();
+
             try
             {
                 if (string.IsNullOrWhiteSpace(username) ||
@@ -75,17 +77,30 @@ namespace NovaChat.Client.Views
 
                 bool success = result.Message.Contains("success", StringComparison.OrdinalIgnoreCase);
 
+                if (!success)
+                {
+                    ShowRegistrationError(result.Message);
+                    return;
+                }
+
                 MessageBox.Show(
                     result.Message,
-                    success ? "Registration Successful" : "Register",
+                    "Registration Successful",
                     MessageBoxButton.OK,
-                    success ? MessageBoxImage.Information : MessageBoxImage.Warning);
+                    MessageBoxImage.Information);
 
-                if (success)
-                    BackToLoginRequested?.Invoke();
+                BackToLoginRequested?.Invoke();
             }
             catch (HttpRequestException ex)
             {
+                // Registration conflicts (HTTP 409) are expected user-facing validation
+                // errors, so show the server's specific message directly under the form.
+                if (ex.Message.Contains("(409 Conflict)", StringComparison.OrdinalIgnoreCase))
+                {
+                    ShowRegistrationError(ExtractApiMessage(ex.Message));
+                    return;
+                }
+
                 MessageBox.Show(
                     ex.Message,
                     "Registration Failed",
@@ -105,6 +120,28 @@ namespace NovaChat.Client.Views
                 RegisterButton.IsEnabled = true;
                 Interlocked.Exchange(ref _registrationInProgress, 0);
             }
+        }
+
+        private void ShowRegistrationError(string message)
+        {
+            RegistrationErrorTextBlock.Text = message;
+            RegistrationErrorTextBlock.Visibility = Visibility.Visible;
+        }
+
+        private void HideRegistrationError()
+        {
+            RegistrationErrorTextBlock.Text = string.Empty;
+            RegistrationErrorTextBlock.Visibility = Visibility.Collapsed;
+        }
+
+        private static string ExtractApiMessage(string exceptionMessage)
+        {
+            const string marker = "): ";
+            var index = exceptionMessage.IndexOf(marker, StringComparison.Ordinal);
+            if (index >= 0 && index + marker.Length < exceptionMessage.Length)
+                return exceptionMessage[(index + marker.Length)..].Trim();
+
+            return exceptionMessage;
         }
 
         private void BackToLoginButton_Click(object sender, RoutedEventArgs e)
