@@ -126,7 +126,7 @@ public class AdminController : ControllerBase
             .ThenBy(m => m.Id)
             .ToListAsync();
 
-        return Ok(messages.Select(MessageDtoMapper.Map).ToList());
+        return Ok(messages.Select(m => MessageDtoMapper.Map(m)).ToList());
     }
 
     [HttpPost("chats/{chatId}/messages")]
