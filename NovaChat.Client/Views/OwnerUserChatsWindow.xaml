@@ -52,8 +52,8 @@
                                 <Border Padding="11" CornerRadius="12" Background="{DynamicResource InputBackgroundBrush}">
                                     <StackPanel>
                                         <TextBlock Text="{Binding OtherDisplayName}" FontWeight="SemiBold" FontSize="14" Foreground="{DynamicResource TextBrush}"/>
-                                        <TextBlock Text="{Binding OtherUsername, StringFormat=@{0}}" Margin="0,3,0,0" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"/>
-                                        <TextBlock Text="{Binding MessageCount, StringFormat={}{0} messages}" Margin="0,6,0,0" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                                        <TextBlock Text="{Binding OtherUsername}" Margin="0,3,0,0" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                                        <TextBlock Text="{Binding MessageCount}" Margin="0,6,0,0" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/>
                                     </StackPanel>
                                 </Border>
                             </DataTemplate>
