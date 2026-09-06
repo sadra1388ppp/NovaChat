@@ -178,9 +178,7 @@ public class AdminController : ControllerBase
         var mapped = MessageDtoMapper.Map(message);
         var chat = await _db.Chats.AsNoTracking().FirstOrDefaultAsync(c => c.Id == message.ChatId);
         if (chat != null)
-        {
             await _hub.Clients.Users(chat.User1Id.ToString(), chat.User2Id.ToString()).SendAsync("MessageEdited", mapped);
-        }
 
         return Ok(new { message = "Message edited successfully.", data = mapped });
     }
@@ -213,7 +211,7 @@ public class AdminController : ControllerBase
 
     private static string? NormalizePhone(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim().Replace(" ", string.Empty).Replace("-", string.Empty).Replace("(", string.Empty).Replace(")", string.Empty);
 
-    private sealed class AdminChatDto
+    public sealed class AdminChatDto
     {
         public int Id { get; set; }
         public string OtherUserId { get; set; } = string.Empty;
@@ -225,13 +223,13 @@ public class AdminController : ControllerBase
         public MessageDto? LastMessage { get; set; }
     }
 
-    private sealed class AdminSendMessageDto
+    public sealed class AdminSendMessageDto
     {
         public long SenderUserId { get; set; }
         public string Content { get; set; } = string.Empty;
     }
 
-    private sealed class AdminEditMessageDto
+    public sealed class AdminEditMessageDto
     {
         public string Content { get; set; } = string.Empty;
     }
