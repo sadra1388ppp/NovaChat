@@ -15,6 +15,10 @@
         </Grid.RowDefinitions>
 
         <Grid Grid.Row="0" Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
             <StackPanel>
                 <TextBlock x:Name="TitleText" Text="User Chats" FontSize="26" FontWeight="Bold" Foreground="{DynamicResource TextBrush}"/>
                 <TextBlock x:Name="SubtitleText" Text="Owner chat administration" Margin="0,5,0,0" FontSize="13" Foreground="{DynamicResource SecondaryTextBrush}"/>
@@ -35,7 +39,26 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     <TextBlock Text="Conversations" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" Margin="8,4,8,12"/>
-                    <ListBox x:Name="ChatsList" Grid.Row="1" Background="Transparent" BorderThickness="0" SelectionChanged="ChatsList_SelectionChanged"/>
+                    <ListBox x:Name="ChatsList" Grid.Row="1" Background="Transparent" BorderThickness="0" SelectionChanged="ChatsList_SelectionChanged">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Padding" Value="0"/>
+                                <Setter Property="Margin" Value="0,2"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="11" CornerRadius="12" Background="{DynamicResource InputBackgroundBrush}">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding OtherDisplayName}" FontWeight="SemiBold" FontSize="14" Foreground="{DynamicResource TextBrush}"/>
+                                        <TextBlock Text="{Binding OtherUsername, StringFormat=@{0}}" Margin="0,3,0,0" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                                        <TextBlock Text="{Binding MessageCount, StringFormat={}{0} messages}" Margin="0,6,0,0" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
                 </Grid>
             </Border>
 
@@ -64,7 +87,7 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBox x:Name="MessageBox" Height="46" Padding="12" VerticalContentAlignment="Center" AcceptsReturn="True" TextWrapping="Wrap" Background="{DynamicResource AppBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource BorderBrush}" KeyDown="MessageBox_KeyDown"/>
+                            <TextBox x:Name="MessageInputBox" Height="46" Padding="12" VerticalContentAlignment="Center" AcceptsReturn="True" TextWrapping="Wrap" Background="{DynamicResource AppBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource BorderBrush}" KeyDown="MessageBox_KeyDown"/>
                             <Button x:Name="SendButton" Grid.Column="1" Content="Send as user" Width="118" Height="46" Margin="10,0,0,0" Style="{DynamicResource PrimaryButtonStyle}" Click="SendButton_Click" IsEnabled="False"/>
                         </Grid>
                     </Border>
