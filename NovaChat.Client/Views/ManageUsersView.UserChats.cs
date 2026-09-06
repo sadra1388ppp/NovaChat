@@ -33,7 +33,6 @@ public partial class ManageUsersView
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         Grid.SetRow(DeleteButton, 6);
-        Grid.SetRow(FindVisualChildByName<TextBlock>(grid, "DetailCreatedText")!, 3);
         Grid.SetRow(ValidationText, 8);
 
         var infoText = grid.Children
@@ -54,6 +53,8 @@ public partial class ManageUsersView
         _viewChatsButton.Click += ViewChatsButton_Click;
         Grid.SetRow(_viewChatsButton, 5);
         grid.Children.Add(_viewChatsButton);
+
+        UsersList.SelectionChanged += (_, _) => UpdateViewChatsButtonState();
         UpdateViewChatsButtonState();
     }
 
@@ -81,20 +82,5 @@ public partial class ManageUsersView
     {
         if (_viewChatsButton != null)
             _viewChatsButton.IsEnabled = _selectedUser != null && !_isSaving;
-    }
-
-    private static T? FindVisualChildByName<T>(DependencyObject parent, string name) where T : FrameworkElement
-    {
-        if (parent is T element && string.Equals(element.Name, name, StringComparison.Ordinal))
-            return element;
-
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
-        {
-            var result = FindVisualChildByName<T>(VisualTreeHelper.GetChild(parent, i), name);
-            if (result != null)
-                return result;
-        }
-
-        return null;
     }
 }
