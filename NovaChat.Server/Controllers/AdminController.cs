@@ -88,12 +88,12 @@ public class AdminController : ControllerBase
         {
             var last = await _db.Messages.AsNoTracking()
                 .Include(m => m.Sender)
-                .Where(m => m.ChatId == chat.Id)
+                .Where(m => m.ChatId == chat.Id && !m.DeletedForEveryone)
                 .OrderByDescending(m => m.SentAt)
                 .ThenByDescending(m => m.Id)
                 .FirstOrDefaultAsync();
 
-            var count = await _db.Messages.AsNoTracking().CountAsync(m => m.ChatId == chat.Id);
+            var count = await _db.Messages.AsNoTracking().CountAsync(m => m.ChatId == chat.Id && !m.DeletedForEveryone);
             var other = chat.User1Id == userId ? chat.User2 : chat.User1;
 
             result.Add(new AdminChatDto
@@ -121,7 +121,7 @@ public class AdminController : ControllerBase
 
         var messages = await _db.Messages.AsNoTracking()
             .Include(m => m.Sender)
-            .Where(m => m.ChatId == chatId)
+            .Where(m => m.ChatId == chatId && !m.DeletedForEveryone)
             .OrderBy(m => m.SentAt)
             .ThenBy(m => m.Id)
             .ToListAsync();
