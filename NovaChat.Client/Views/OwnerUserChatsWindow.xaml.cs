@@ -232,16 +232,22 @@ public partial class OwnerUserChatsWindow : Window
     private async Task SendMessageAsync()
     {
         if (_selectedChat == null || _busy) return;
-        var content = MessageBox.Text.Trim();
+        var content = MessageInputBox.Text.Trim();
         if (string.IsNullOrWhiteSpace(content)) return;
+
+        if (!long.TryParse(_userId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var senderUserId))
+        {
+            MessageBox.Show("The selected user's internal ID is invalid.", "Owner Chat Administration", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
 
         try
         {
             _busy = true;
             SendButton.IsEnabled = false;
-            var response = await _apiService.PostAsync<SendAsUserRequest, ActionResponse>($"api/Admin/chats/{_selectedChat.Id}/messages", new SendAsUserRequest { SenderUserId = long.Parse(_userId, CultureInfo.InvariantCulture), Content = content });
+            var response = await _apiService.PostAsync<SendAsUserRequest, ActionResponse>($"api/Admin/chats/{_selectedChat.Id}/messages", new SendAsUserRequest { SenderUserId = senderUserId, Content = content });
             if (response == null) throw new InvalidOperationException("The server returned no response.");
-            MessageBox.Clear();
+            MessageInputBox.Clear();
             await LoadMessagesAsync(_selectedChat.Id);
             await RefreshChatsAsync();
         }
@@ -300,7 +306,6 @@ public partial class OwnerUserChatsWindow : Window
         public DateTime CreatedAt { get; set; }
         public int MessageCount { get; set; }
         public MessageModel? LastMessage { get; set; }
-        public string DisplayLine => string.IsNullOrWhiteSpace(LastMessage?.Content) ? $"{OtherDisplayName}  •  {MessageCount} messages" : $"{OtherDisplayName}  •  {LastMessage.Content}";
     }
 
     private sealed class SendAsUserRequest
