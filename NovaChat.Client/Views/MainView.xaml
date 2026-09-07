@@ -130,7 +130,7 @@
                         <Ellipse x:Name="ChatAvatarStatusDot" Width="12" Height="12" Fill="{DynamicResource SecondaryTextBrush}" Stroke="{DynamicResource PanelBackgroundBrush}" StrokeThickness="2" HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
                     </Grid>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,12,0">
-                        <TextBlock x:Name="ChatUserNameText" Text="Select a conversation" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" TextTrimming="CharacterEllipsis" MouseLeftButtonUp="ChatUserNameText_MouseLeftButtonUp"/>
+                        <TextBlock x:Name="ChatUserNameText" Text="Select a conversation" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" TextTrimming="CharacterEllipsis" Cursor="Hand" MouseLeftButtonUp="ChatHeaderGroupInfo_Click"/>
                         <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
                             <Ellipse x:Name="ChatStatusIndicator" Width="7" Height="7" Fill="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
                             <TextBlock x:Name="ChatStatusText" Text="Offline" FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}"/>
