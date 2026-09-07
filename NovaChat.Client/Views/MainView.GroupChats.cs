@@ -41,6 +41,11 @@ public partial class MainView
         catch { }
     }
 
+    private void ChatHeaderGroupInfo_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (IsCurrentGroupChat) OpenGroupInfo();
+    }
+
     private async void OpenGroupInfo()
     {
         if (!IsCurrentGroupChat || !_currentChatId.HasValue) return;
