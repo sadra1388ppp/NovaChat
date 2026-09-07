@@ -87,7 +87,13 @@ public partial class MainView
                 if (_isCreatingChatSafely) return;
                 ApplyOnlineUsers(onlineUsers);
                 ApplyChatSnapshot(serverChats);
-                UpdateCurrentChatPresence();
+
+                // Group presence is calculated from the group's member list.
+                // Private chats continue to use the normal single-user presence.
+                if (IsCurrentGroupChat)
+                    UpdateGroupOnlineStatusFromCache();
+                else
+                    UpdateCurrentChatPresence();
             }, DispatcherPriority.Background);
         }
         catch
