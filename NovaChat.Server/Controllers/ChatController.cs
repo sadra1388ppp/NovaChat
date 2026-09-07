@@ -5,6 +5,9 @@ using NovaChat.Server.DTOs;
 using NovaChat.Server.Entities;
 using NovaChat.Server.Hubs;
 using NovaChat.Server.Services;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Processing;
 using System.Security.Claims;
 
 namespace NovaChat.Server.Controllers;
@@ -14,17 +17,20 @@ namespace NovaChat.Server.Controllers;
 [Authorize]
 public class ChatController : ControllerBase
 {
+    private const long MaxGroupAvatarBytes = 5 * 1024 * 1024;
     private readonly ChatService _chatService;
     private readonly IConfiguration _configuration;
     private readonly IHubContext<ChatHub> _hub;
     private readonly ILogger<ChatController> _logger;
+    private readonly IWebHostEnvironment _environment;
 
-    public ChatController(ChatService chatService, IConfiguration configuration, IHubContext<ChatHub> hub, ILogger<ChatController> logger)
+    public ChatController(ChatService chatService, IConfiguration configuration, IHubContext<ChatHub> hub, ILogger<ChatController> logger, IWebHostEnvironment environment)
     {
         _chatService = chatService;
         _configuration = configuration;
         _hub = hub;
         _logger = logger;
+        _environment = environment;
     }
 
     [HttpPost]
@@ -43,11 +49,7 @@ public class ChatController : ControllerBase
             await _hub.Clients.Users(new[] { currentUserId.ToString(), otherUser.Id.ToString() }).SendAsync("ChatCreated", mapped);
             return Ok(new { message = "Private chat created successfully.", chat = mapped });
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to create private chat.");
-            return Problem(statusCode: 500, title: "Private chat creation failed");
-        }
+        catch (Exception ex) { _logger.LogError(ex, "Failed to create private chat."); return Problem(statusCode: 500, title: "Private chat creation failed"); }
     }
 
     [HttpPost("group")]
@@ -63,11 +65,7 @@ public class ChatController : ControllerBase
             await _hub.Clients.Users(RecipientIds(chat)).SendAsync("ChatCreated", mapped);
             return Ok(new { message = "Group created successfully.", chat = mapped });
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to create group chat.");
-            return Problem(statusCode: 500, title: "Group creation failed");
-        }
+        catch (Exception ex) { _logger.LogError(ex, "Failed to create group chat."); return Problem(statusCode: 500, title: "Group creation failed"); }
     }
 
     [HttpGet]
@@ -131,12 +129,63 @@ public class ChatController : ControllerBase
         return Ok(mapped);
     }
 
+    [HttpPost("{chatId}/avatar"), RequestSizeLimit(MaxGroupAvatarBytes)]
+    public async Task<IActionResult> UploadGroupAvatar(int chatId, IFormFile file)
+    {
+        if (!TryGetCurrentUserId(out var userId)) return Unauthorized();
+        var chat = await _chatService.GetChatByIdAsync(chatId);
+        if (chat == null || chat.Type != ChatType.Group) return NotFound(new { message = "Group not found." });
+        var member = await _chatService.GetMemberAsync(chatId, userId);
+        if (member == null || member.Role == ChatMemberRole.Member) return Forbid();
+        if (file == null || file.Length == 0) return BadRequest(new { message = "Please select an image." });
+        if (file.Length > MaxGroupAvatarBytes) return BadRequest(new { message = "Group picture must be 5 MB or smaller." });
+        var allowed = new[] { "image/jpeg", "image/png", "image/webp" };
+        if (!allowed.Contains(file.ContentType, StringComparer.OrdinalIgnoreCase)) return BadRequest(new { message = "Only JPG, PNG and WebP images are supported." });
+        try
+        {
+            await using var input = file.OpenReadStream();
+            using var image = await Image.LoadAsync(input);
+            if (image.Width < 64 || image.Height < 64) return BadRequest(new { message = "Image must be at least 64x64 pixels." });
+            var dir = Path.Combine(_environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot"), "uploads", "groups");
+            Directory.CreateDirectory(dir);
+            var fileName = $"{Guid.NewGuid():N}.jpg";
+            var fullPath = Path.Combine(dir, fileName);
+            image.Mutate(x => x.Resize(new ResizeOptions { Size = new Size(512, 512), Mode = ResizeMode.Crop }));
+            await image.SaveAsJpegAsync(fullPath, new JpegEncoder { Quality = 88 });
+            var old = chat.AvatarUrl;
+            chat.AvatarUrl = $"/uploads/groups/{fileName}";
+            await _chatService.SaveChangesAsync();
+            DeleteStoredGroupAvatar(old);
+            var refreshed = await _chatService.GetChatByIdAsync(chatId);
+            if (refreshed == null) return NotFound();
+            var mapped = MapChat(refreshed, null);
+            await _hub.Clients.Users(RecipientIds(refreshed)).SendAsync("GroupUpdated", mapped);
+            return Ok(new { message = "Group picture updated successfully.", chat = mapped });
+        }
+        catch (UnknownImageFormatException) { return BadRequest(new { message = "The uploaded file is not a valid image." }); }
+    }
+
+    [HttpDelete("{chatId}/avatar")]
+    public async Task<IActionResult> DeleteGroupAvatar(int chatId)
+    {
+        if (!TryGetCurrentUserId(out var userId)) return Unauthorized();
+        var chat = await _chatService.GetChatByIdAsync(chatId);
+        if (chat == null || chat.Type != ChatType.Group) return NotFound(new { message = "Group not found." });
+        var member = await _chatService.GetMemberAsync(chatId, userId);
+        if (member == null || member.Role == ChatMemberRole.Member) return Forbid();
+        var old = chat.AvatarUrl;
+        chat.AvatarUrl = null;
+        await _chatService.SaveChangesAsync();
+        DeleteStoredGroupAvatar(old);
+        var refreshed = await _chatService.GetChatByIdAsync(chatId);
+        var mapped = MapChat(refreshed!, null);
+        await _hub.Clients.Users(RecipientIds(refreshed!)).SendAsync("GroupUpdated", mapped);
+        return Ok(new { message = "Group picture removed successfully.", chat = mapped });
+    }
+
     [HttpGet("all")]
     [Authorize(Policy = "OwnerOnly")]
-    public async Task<IActionResult> GetAllChats()
-    {
-        return Ok((await _chatService.GetAllChatsAsync()).Select(c => MapChat(c, c.Messages.FirstOrDefault())).ToList());
-    }
+    public async Task<IActionResult> GetAllChats() => Ok((await _chatService.GetAllChatsAsync()).Select(c => MapChat(c, c.Messages.FirstOrDefault())).ToList());
 
     [HttpGet("{chatId}/messages")]
     public async Task<IActionResult> GetMessages(int chatId, [FromQuery] int? beforeMessageId = null, [FromQuery] int pageSize = 50)
@@ -146,12 +195,7 @@ public class ChatController : ControllerBase
         pageSize = Math.Clamp(pageSize, 1, 100);
         var messages = await _chatService.GetMessagesAsync(chatId, beforeMessageId, pageSize);
         var first = messages.FirstOrDefault();
-        return Ok(new ChatHistoryResponseDto
-        {
-            Messages = messages.Select(message => MessageDtoMapper.Map(message)).ToList(),
-            HasMore = first != null && await _chatService.HasOlderMessagesAsync(chatId, first.Id),
-            NextBeforeMessageId = first?.Id
-        });
+        return Ok(new ChatHistoryResponseDto { Messages = messages.Select(message => MessageDtoMapper.Map(message)).ToList(), HasMore = first != null && await _chatService.HasOlderMessagesAsync(chatId, first.Id), NextBeforeMessageId = first?.Id });
     }
 
     [HttpPost("{chatId}/messages")]
@@ -193,68 +237,21 @@ public class ChatController : ControllerBase
 
     private ChatListDto MapChat(Chat chat, Message? lastMessage) => new()
     {
-        Id = chat.Id,
-        Type = chat.Type.ToString(),
-        Name = chat.Type == ChatType.Group ? chat.Name : string.Empty,
+        Id = chat.Id, Type = chat.Type.ToString(), Name = chat.Type == ChatType.Group ? chat.Name : string.Empty,
+        AvatarUrl = chat.Type == ChatType.Group ? ToAbsoluteChatAvatarUrl(chat.AvatarUrl) : null,
         CreatedByUserId = chat.CreatedByUserId?.ToString() ?? string.Empty,
-        User1Id = chat.User1Id?.ToString() ?? string.Empty,
-        User2Id = chat.User2Id?.ToString() ?? string.Empty,
-        User1Name = chat.User1?.DisplayName ?? string.Empty,
-        User2Name = chat.User2?.DisplayName ?? string.Empty,
-        User1AvatarUrl = ToAbsoluteAvatarUrl(chat.User1?.AvatarUrl),
-        User2AvatarUrl = ToAbsoluteAvatarUrl(chat.User2?.AvatarUrl),
-        CreatedAt = chat.CreatedAt,
-        LastMessage = lastMessage == null ? null : MessageDtoMapper.Map(lastMessage)
+        User1Id = chat.User1Id?.ToString() ?? string.Empty, User2Id = chat.User2Id?.ToString() ?? string.Empty,
+        User1Name = chat.User1?.DisplayName ?? string.Empty, User2Name = chat.User2?.DisplayName ?? string.Empty,
+        User1AvatarUrl = ToAbsoluteAvatarUrl(chat.User1?.AvatarUrl), User2AvatarUrl = ToAbsoluteAvatarUrl(chat.User2?.AvatarUrl),
+        CreatedAt = chat.CreatedAt, LastMessage = lastMessage == null ? null : MessageDtoMapper.Map(lastMessage)
     };
 
-    private GroupMemberDto MapMember(ChatMember m) => new()
-    {
-        UserId = m.UserId.ToString(),
-        Username = m.User.Username,
-        DisplayName = m.User.DisplayName,
-        AvatarUrl = ToAbsoluteAvatarUrl(m.User.AvatarUrl),
-        Role = m.Role.ToString(),
-        JoinedAt = m.JoinedAt
-    };
-
-    private IEnumerable<string> RecipientIds(Chat chat)
-    {
-        if (chat.Type == ChatType.Group)
-        {
-            return chat.Members.Select(member => member.UserId.ToString()).ToList();
-        }
-
-        var recipients = new List<string>();
-
-        if (chat.User1Id.HasValue)
-        {
-            recipients.Add(chat.User1Id.Value.ToString());
-        }
-
-        if (chat.User2Id.HasValue)
-        {
-            recipients.Add(chat.User2Id.Value.ToString());
-        }
-
-        return recipients;
-    }
-
-    private string? ToAbsoluteAvatarUrl(string? avatarUrl)
-    {
-        if (string.IsNullOrWhiteSpace(avatarUrl)) return null;
-        if (Uri.TryCreate(avatarUrl, UriKind.Absolute, out _)) return avatarUrl;
-        return $"{Request.Scheme}://{Request.Host}{(avatarUrl.StartsWith('/') ? avatarUrl : "/" + avatarUrl)}";
-    }
-
+    private GroupMemberDto MapMember(ChatMember m) => new() { UserId = m.UserId.ToString(), Username = m.User.Username, DisplayName = m.User.DisplayName, AvatarUrl = ToAbsoluteAvatarUrl(m.User.AvatarUrl), Role = m.Role.ToString(), JoinedAt = m.JoinedAt };
+    private IEnumerable<string> RecipientIds(Chat chat) => chat.Type == ChatType.Group ? chat.Members.Select(member => member.UserId.ToString()).ToList() : new[] { chat.User1Id?.ToString(), chat.User2Id?.ToString() }.Where(x => !string.IsNullOrWhiteSpace(x))!;
+    private string? ToAbsoluteAvatarUrl(string? avatarUrl) { if (string.IsNullOrWhiteSpace(avatarUrl)) return null; if (Uri.TryCreate(avatarUrl, UriKind.Absolute, out _)) return avatarUrl; return $"{Request.Scheme}://{Request.Host}{(avatarUrl.StartsWith('/') ? avatarUrl : "/" + avatarUrl)}"; }
+    private string? ToAbsoluteChatAvatarUrl(string? avatarUrl) => ToAbsoluteAvatarUrl(avatarUrl);
+    private void DeleteStoredGroupAvatar(string? avatarUrl) { if (string.IsNullOrWhiteSpace(avatarUrl)) return; var fileName = Path.GetFileName(avatarUrl); if (string.IsNullOrWhiteSpace(fileName)) return; var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot"); var path = Path.Combine(root, "uploads", "groups", fileName); if (System.IO.File.Exists(path)) System.IO.File.Delete(path); }
     private bool TryGetCurrentUserId(out long userId) => long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out userId) && userId > 0;
-
-    private bool IsOwner()
-    {
-        var ownerUsername = _configuration["Owner:Username"];
-        var username = User.FindFirst("username")?.Value;
-        if (!string.IsNullOrWhiteSpace(ownerUsername) && string.Equals(ownerUsername, username, StringComparison.OrdinalIgnoreCase)) return true;
-        return long.TryParse(_configuration["Owner:UserId"], out var legacy) && long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var current) && legacy == current;
-    }
-
+    private bool IsOwner() { var ownerUsername = _configuration["Owner:Username"]; var username = User.FindFirst("username")?.Value; if (!string.IsNullOrWhiteSpace(ownerUsername) && string.Equals(ownerUsername, username, StringComparison.OrdinalIgnoreCase)) return true; return long.TryParse(_configuration["Owner:UserId"], out var legacy) && long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var current) && legacy == current; }
     private Task<bool> CanAccessChat(int chatId, long userId) => IsOwner() ? Task.FromResult(true) : _chatService.CanAccessChatAsync(chatId, userId);
 }
