@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.SignalR.Client;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Threading;
 
 namespace NovaChat.Client.Views;
@@ -9,31 +8,6 @@ public partial class MainView
 {
     private DispatcherTimer? _messageDeletionHookTimer;
     private HubConnection? _messageDeletionHookedConnection;
-
-    static MainView()
-    {
-        EventManager.RegisterClassHandler(
-            typeof(MainView),
-            FrameworkElement.LoadedEvent,
-            new RoutedEventHandler(MessageDeletionHookLoaded));
-
-        EventManager.RegisterClassHandler(
-            typeof(MainView),
-            FrameworkElement.UnloadedEvent,
-            new RoutedEventHandler(MessageDeletionHookUnloaded));
-    }
-
-    private static void MessageDeletionHookLoaded(object sender, RoutedEventArgs e)
-    {
-        if (sender is MainView view)
-            view.StartMessageDeletionHook();
-    }
-
-    private static void MessageDeletionHookUnloaded(object sender, RoutedEventArgs e)
-    {
-        if (sender is MainView view)
-            view.StopMessageDeletionHook();
-    }
 
     private void StartMessageDeletionHook()
     {
