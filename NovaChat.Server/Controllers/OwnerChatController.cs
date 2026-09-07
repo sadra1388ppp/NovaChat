@@ -3,9 +3,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using NovaChat.Server.Data;
+using NovaChat.Server.DTOs;
 using NovaChat.Server.Entities;
 using NovaChat.Server.Hubs;
-using NovaChat.Server.Services;
 
 namespace NovaChat.Server.Controllers;
 
@@ -26,10 +26,7 @@ public class OwnerChatController : ControllerBase
     [HttpGet("{chatId:int}/members")]
     public async Task<IActionResult> GetMembers(int chatId)
     {
-        var chat = await _db.Chats
-            .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.Id == chatId);
-
+        var chat = await _db.Chats.AsNoTracking().FirstOrDefaultAsync(c => c.Id == chatId);
         if (chat == null)
             return NotFound(new { message = "Chat not found." });
 
@@ -60,9 +57,6 @@ public class OwnerChatController : ControllerBase
             return Ok(users);
         }
 
-        // Materialize the enum values first. Mapping Role.ToString() directly
-        // inside a PostgreSQL query is provider/version sensitive and was the
-        // source of the All Chats group-details failure.
         var members = await _db.ChatMembers
             .AsNoTracking()
             .Where(m => m.ChatId == chatId)
@@ -131,18 +125,11 @@ public class OwnerChatController : ControllerBase
         if (chat.User2Id.HasValue && chat.User2Id.Value > 0)
             recipients.Add(chat.User2Id.Value.ToString());
 
-        // Explicitly remove dependents before the Chat row. This keeps Owner
-        // deletion reliable even if a local database has older FK rules that
-        // do not match the current EF cascade configuration.
-        var messages = await _db.Messages
-            .Where(m => m.ChatId == chatId)
-            .ToListAsync();
+        var messages = await _db.Messages.Where(m => m.ChatId == chatId).ToListAsync();
         if (messages.Count > 0)
             _db.Messages.RemoveRange(messages);
 
-        var members = await _db.ChatMembers
-            .Where(m => m.ChatId == chatId)
-            .ToListAsync();
+        var members = await _db.ChatMembers.Where(m => m.ChatId == chatId).ToListAsync();
         if (members.Count > 0)
             _db.ChatMembers.RemoveRange(members);
 
@@ -152,8 +139,7 @@ public class OwnerChatController : ControllerBase
         var distinctRecipients = recipients.Distinct().ToList();
         if (distinctRecipients.Count > 0)
         {
-            await _hub.Clients
-                .Users(distinctRecipients)
+            await _hub.Clients.Users(distinctRecipients)
                 .SendAsync("ChatDeleted", new { chatId, deletedBy = "owner" });
         }
 
