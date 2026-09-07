@@ -5,24 +5,14 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using NovaChat.Server.Authorization;
 using NovaChat.Server.Data;
-using NovaChat.Server.Entities;
 using NovaChat.Server.Hubs;
 using NovaChat.Server.Services;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
-
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-if (string.IsNullOrWhiteSpace(connectionString))
-{
-    throw new InvalidOperationException("DefaultConnection is not configured.");
-}
-
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseMySql(
-        connectionString,
-        ServerVersion.AutoDetect(connectionString)));
-
+if (string.IsNullOrWhiteSpace(connectionString)) throw new InvalidOperationException("DefaultConnection is not configured.");
+builder.Services.AddDbContext<AppDbContext>(options => options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<UserService>();
@@ -31,96 +21,32 @@ builder.Services.AddSingleton<PasswordHashService>();
 builder.Services.AddScoped<JwtService>();
 builder.Services.AddScoped<AdminService>();
 builder.Services.AddScoped<ChatService>();
+builder.Services.AddScoped<ChatSchemaInitializer>();
 builder.Services.AddSingleton<PresenceService>();
 builder.Services.AddSingleton<IAuthorizationHandler, OwnerAuthorizationHandler>();
-
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy("OwnerOnly", policy =>
-    {
-        policy.RequireAuthenticatedUser();
-        policy.AddRequirements(new OwnerRequirement());
-    });
-});
-
+builder.Services.AddAuthorization(options => options.AddPolicy("OwnerOnly", policy => { policy.RequireAuthenticatedUser(); policy.AddRequirements(new OwnerRequirement()); }));
 var jwtKey = builder.Configuration["Jwt:Key"];
-if (string.IsNullOrWhiteSpace(jwtKey))
+if (string.IsNullOrWhiteSpace(jwtKey)) throw new InvalidOperationException("JWT Key is not configured.");
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
 {
-    throw new InvalidOperationException("JWT Key is not configured.");
-}
-
-builder.Services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(jwtKey)),
-            ValidateIssuer = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidateAudience = true,
-            ValidAudience = builder.Configuration["Jwt:Audience"],
-            ValidateLifetime = true,
-            ClockSkew = TimeSpan.Zero
-        };
-
-        options.Events = new JwtBearerEvents
-        {
-            OnMessageReceived = context =>
-            {
-                var accessToken = context.Request.Query["access_token"];
-                var path = context.HttpContext.Request.Path;
-                if (!string.IsNullOrEmpty(accessToken) &&
-                    path.StartsWithSegments("/hubs/chat"))
-                {
-                    context.Token = accessToken;
-                }
-
-                return Task.CompletedTask;
-            }
-        };
-    });
-
+    options.TokenValidationParameters = new TokenValidationParameters { ValidateIssuerSigningKey = true, IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)), ValidateIssuer = true, ValidIssuer = builder.Configuration["Jwt:Issuer"], ValidateAudience = true, ValidAudience = builder.Configuration["Jwt:Audience"], ValidateLifetime = true, ClockSkew = TimeSpan.Zero };
+    options.Events = new JwtBearerEvents { OnMessageReceived = context => { var accessToken = context.Request.Query["access_token"]; var path = context.HttpContext.Request.Path; if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/chat")) context.Token = accessToken; return Task.CompletedTask; } };
+});
 builder.Services.AddEndpointsApiExplorer();
-
 builder.Services.AddSwaggerGen(options =>
 {
-    options.AddSecurityDefinition(
-        "Bearer",
-        new OpenApiSecurityScheme
-        {
-            Name = "Authorization",
-            Type = SecuritySchemeType.Http,
-            Scheme = "bearer",
-            BearerFormat = "JWT",
-            In = ParameterLocation.Header,
-            Description = "Enter your JWT token."
-        });
-
-    options.AddSecurityRequirement(document =>
-        new OpenApiSecurityRequirement
-        {
-            [new OpenApiSecuritySchemeReference("Bearer", document)] = []
-        });
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme { Name = "Authorization", Type = SecuritySchemeType.Http, Scheme = "bearer", BearerFormat = "JWT", In = ParameterLocation.Header, Description = "Enter your JWT token." });
+    options.AddSecurityRequirement(document => new OpenApiSecurityRequirement { [new OpenApiSecuritySchemeReference("Bearer", document)] = [] });
 });
 
 var app = builder.Build();
-
-var webRoot =
-    app.Environment.WebRootPath ??
-    Path.Combine(app.Environment.ContentRootPath, "wwwroot");
-
-Directory.CreateDirectory(
-    Path.Combine(webRoot, "uploads", "avatars"));
-
-if (app.Environment.IsDevelopment())
+await using (var scope = app.Services.CreateAsyncScope())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    await scope.ServiceProvider.GetRequiredService<ChatSchemaInitializer>().EnsureAsync();
 }
-
+var webRoot = app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
+Directory.CreateDirectory(Path.Combine(webRoot, "uploads", "avatars"));
+if (app.Environment.IsDevelopment()) { app.UseSwagger(); app.UseSwaggerUI(); }
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseAuthentication();
