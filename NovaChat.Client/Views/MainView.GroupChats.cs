@@ -20,6 +20,7 @@ public partial class MainView
     private static bool _groupUiRegistered;
     private Button? _createGroupButton;
     private DispatcherTimer? _groupEventTimer;
+    private bool _groupEventsHooked;
 
     private bool IsCurrentGroupChat =>
         _currentChatId.HasValue &&
@@ -48,14 +49,12 @@ public partial class MainView
         }
         catch
         {
-            // Keep the existing status if the members endpoint is temporarily unavailable.
         }
     }
 
     private void ChatHeaderGroupInfo_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (!IsCurrentGroupChat) return;
-
         e.Handled = true;
         OpenGroupInfo();
     }
@@ -191,23 +190,23 @@ public partial class MainView
 
     private async void GroupEventTimer_Tick(object? sender, EventArgs e)
     {
-        if (_hubConnection?.State != HubConnectionState.Connected)
+        if (_hubConnection?.State == HubConnectionState.Connected)
         {
-            if (_groupEventTimer != null)
-                _groupEventTimer.Interval = TimeSpan.FromSeconds(2);
-            return;
-        }
+            if (!_groupEventsHooked)
+            {
+                try
+                {
+                    _hubConnection.On<ChatModel>("ChatCreated", OnGroupCreatedFromServer);
+                    _hubConnection.On<ChatModel>("GroupUpdated", OnGroupUpdatedFromServer);
+                    _hubConnection.On<object>("ChatMemberRemoved", OnGroupMemberRemovedFromServer);
+                    _groupEventsHooked = true;
+                }
+                catch
+                {
+                }
+            }
 
-        _groupEventTimer.Stop();
-
-        try
-        {
-            _hubConnection.On<ChatModel>("ChatCreated", OnGroupCreatedFromServer);
-            _hubConnection.On<ChatModel>("GroupUpdated", OnGroupUpdatedFromServer);
-            _hubConnection.On<object>("ChatMemberRemoved", OnGroupMemberRemovedFromServer);
-        }
-        catch
-        {
+            RefreshGroupOnlineStatus();
         }
     }
 
