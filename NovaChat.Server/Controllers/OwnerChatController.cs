@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using NovaChat.Server.Data;
 using NovaChat.Server.Entities;
 using NovaChat.Server.Hubs;
+using NovaChat.Server.Services;
 
 namespace NovaChat.Server.Controllers;
 
@@ -25,13 +26,24 @@ public class OwnerChatController : ControllerBase
     [HttpGet("{chatId:int}/members")]
     public async Task<IActionResult> GetMembers(int chatId)
     {
-        var chat = await _db.Chats.AsNoTracking().FirstOrDefaultAsync(c => c.Id == chatId);
-        if (chat == null) return NotFound(new { message = "Chat not found." });
+        var chat = await _db.Chats
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == chatId);
+
+        if (chat == null)
+            return NotFound(new { message = "Chat not found." });
 
         if (chat.Type != ChatType.Group)
         {
-            var users = await _db.Users.AsNoTracking()
-                .Where(u => u.Id == chat.User1Id || u.Id == chat.User2Id)
+            var userIds = new[] { chat.User1Id, chat.User2Id }
+                .Where(id => id.HasValue && id.Value > 0)
+                .Select(id => id!.Value)
+                .Distinct()
+                .ToList();
+
+            var users = await _db.Users
+                .AsNoTracking()
+                .Where(u => userIds.Contains(u.Id))
                 .Select(u => new OwnerMemberDto
                 {
                     UserId = u.Id.ToString(),
@@ -44,12 +56,22 @@ public class OwnerChatController : ControllerBase
                 })
                 .OrderBy(x => x.DisplayName)
                 .ToListAsync();
+
             return Ok(users);
         }
 
-        var members = await _db.ChatMembers.AsNoTracking()
+        // Materialize the enum values first. Mapping Role.ToString() directly
+        // inside a PostgreSQL query is provider/version sensitive and was the
+        // source of the All Chats group-details failure.
+        var members = await _db.ChatMembers
+            .AsNoTracking()
             .Where(m => m.ChatId == chatId)
             .Include(m => m.User)
+            .OrderBy(m => m.Role)
+            .ThenBy(m => m.User.DisplayName)
+            .ToListAsync();
+
+        var result = members
             .Select(m => new OwnerMemberDto
             {
                 UserId = m.UserId.ToString(),
@@ -60,35 +82,87 @@ public class OwnerChatController : ControllerBase
                 PhoneNumber = m.User.PhoneNumber,
                 AvatarUrl = m.User.AvatarUrl
             })
-            .OrderBy(x => x.Role == "OWNER" ? 0 : x.Role == "ADMIN" ? 1 : 2)
-            .ThenBy(x => x.DisplayName)
+            .OrderBy(m => m.Role == "OWNER" ? 0 : m.Role == "ADMIN" ? 1 : 2)
+            .ThenBy(m => m.DisplayName)
+            .ToList();
+
+        return Ok(result);
+    }
+
+    [HttpGet("{chatId:int}/messages")]
+    public async Task<IActionResult> GetMessages(int chatId, [FromQuery] int pageSize = 100)
+    {
+        var exists = await _db.Chats.AsNoTracking().AnyAsync(c => c.Id == chatId);
+        if (!exists)
+            return NotFound(new { message = "Chat not found." });
+
+        pageSize = Math.Clamp(pageSize, 1, 200);
+        var messages = await _db.Messages
+            .AsNoTracking()
+            .Include(m => m.Sender)
+            .Where(m => m.ChatId == chatId && !m.DeletedForEveryone)
+            .OrderBy(m => m.SentAt)
+            .ThenBy(m => m.Id)
+            .Take(pageSize)
             .ToListAsync();
 
-        return Ok(members);
+        return Ok(new
+        {
+            messages = messages.Select(MessageDtoMapper.Map).ToList(),
+            count = messages.Count
+        });
     }
 
     [HttpDelete("{chatId:int}")]
     public async Task<IActionResult> DeleteChat(int chatId)
     {
         var chat = await _db.Chats.FirstOrDefaultAsync(c => c.Id == chatId);
-        if (chat == null) return NotFound(new { message = "Chat not found." });
+        if (chat == null)
+            return NotFound(new { message = "Chat not found." });
 
-        var recipients = await _db.ChatMembers.AsNoTracking()
+        var recipients = await _db.ChatMembers
+            .AsNoTracking()
             .Where(m => m.ChatId == chatId)
             .Select(m => m.UserId.ToString())
             .ToListAsync();
 
-        if (chat.User1Id > 0) recipients.Add(chat.User1Id.ToString());
-        if (chat.User2Id.HasValue && chat.User2Id.Value > 0) recipients.Add(chat.User2Id.Value.ToString());
+        if (chat.User1Id.HasValue && chat.User1Id.Value > 0)
+            recipients.Add(chat.User1Id.Value.ToString());
+        if (chat.User2Id.HasValue && chat.User2Id.Value > 0)
+            recipients.Add(chat.User2Id.Value.ToString());
+
+        // Explicitly remove dependents before the Chat row. This keeps Owner
+        // deletion reliable even if a local database has older FK rules that
+        // do not match the current EF cascade configuration.
+        var messages = await _db.Messages
+            .Where(m => m.ChatId == chatId)
+            .ToListAsync();
+        if (messages.Count > 0)
+            _db.Messages.RemoveRange(messages);
+
+        var members = await _db.ChatMembers
+            .Where(m => m.ChatId == chatId)
+            .ToListAsync();
+        if (members.Count > 0)
+            _db.ChatMembers.RemoveRange(members);
 
         _db.Chats.Remove(chat);
         await _db.SaveChangesAsync();
 
         var distinctRecipients = recipients.Distinct().ToList();
         if (distinctRecipients.Count > 0)
-            await _hub.Clients.Users(distinctRecipients).SendAsync("ChatDeleted", new { chatId, deletedBy = "owner" });
+        {
+            await _hub.Clients
+                .Users(distinctRecipients)
+                .SendAsync("ChatDeleted", new { chatId, deletedBy = "owner" });
+        }
 
-        return Ok(new { message = chat.Type == ChatType.Group ? "Group deleted successfully." : "Conversation deleted successfully." });
+        return Ok(new
+        {
+            message = chat.Type == ChatType.Group
+                ? "Group deleted successfully."
+                : "Conversation deleted successfully."
+        });
     }
 
     private sealed class OwnerMemberDto
