@@ -9,6 +9,13 @@ namespace NovaChat.Client.Views;
 
 public partial class MainView
 {
+    private sealed class GroupMemberModel
+    {
+        public string UserId { get; set; } = string.Empty;
+        public string Username { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+        public string Role { get; set; } = string.Empty;
+    }
     private static bool _groupUiRegistered;
     private Button? _createGroupButton;
     private DispatcherTimer? _groupEventTimer;
