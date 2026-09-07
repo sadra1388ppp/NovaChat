@@ -148,7 +148,7 @@ public class ChatController : ControllerBase
         var first = messages.FirstOrDefault();
         return Ok(new ChatHistoryResponseDto
         {
-            Messages = messages.Select(MessageDtoMapper.Map).ToList(),
+            Messages = messages.Select(message => MessageDtoMapper.Map(message)).ToList(),
             HasMore = first != null && await _chatService.HasOlderMessagesAsync(chatId, first.Id),
             NextBeforeMessageId = first?.Id
         });
