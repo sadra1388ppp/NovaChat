@@ -56,10 +56,15 @@ public partial class MainView
             catch { }
         }
 
-        // Do not rebuild the entire conversations list every second when nothing changed.
-        // Rebinding the ItemsControl was causing group avatars to visibly disappear/reappear.
+        // Rebind only when something actually changed. Rebinding the ItemsControl
+        // every second was making group avatars visibly disappear and reappear.
         if (changed)
             RefreshChatsList();
+
+        // Ensure the current group's header avatar gets loaded once, but never
+        // repeatedly replace the Image source while the presence timer is running.
+        if (_currentChatId.HasValue && IsCurrentGroupChat && ChatHeaderAvatarImage.Visibility != System.Windows.Visibility.Visible)
+            _ = RefreshCurrentGroupAvatarAsync();
     }
 
     private static async Task<BitmapImage?> LoadConversationAvatarAsync(string endpoint)
