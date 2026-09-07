@@ -269,10 +269,17 @@ public class ChatController : ControllerBase
         JoinedAt = m.JoinedAt
     };
 
-    private IEnumerable<string> RecipientIds(Chat chat) =>
-        chat.Type == ChatType.Group
-            ? chat.Members.Select(member => member.UserId.ToString()).Distinct().ToList()
-            : new[] { chat.User1Id?.ToString(), chat.User2Id?.ToString() }.Where(x => !string.IsNullOrWhiteSpace(x))!;
+    private IEnumerable<string> RecipientIds(Chat chat)
+    {
+        if (chat.Type == ChatType.Group)
+            return chat.Members.Select(member => member.UserId.ToString()).Distinct().ToList();
+
+        return new[] { chat.User1Id, chat.User2Id }
+            .Where(id => id.HasValue && id.Value > 0)
+            .Select(id => id!.Value.ToString())
+            .Distinct()
+            .ToList();
+    }
 
     private string? ToAbsoluteAvatarUrl(string? avatarUrl)
     {
@@ -301,9 +308,9 @@ public class ChatController : ControllerBase
         var ownerUsername = _configuration["Owner:Username"];
         var username = User.FindFirst("username")?.Value;
         if (!string.IsNullOrWhiteSpace(ownerUsername) && string.Equals(ownerUsername, username, StringComparison.OrdinalIgnoreCase)) return true;
-        return long.TryParse(_configuration["Owner:UserId"], out var legacy) && long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var current) && legacy == current;
+        var ownerUserId = _configuration["Owner:UserId"];
+        return !string.IsNullOrWhiteSpace(ownerUserId) && ownerUserId == User.FindFirstValue(ClaimTypes.NameIdentifier);
     }
 
-    private Task<bool> CanAccessChat(int chatId, long userId) =>
-        IsOwner() ? Task.FromResult(true) : _chatService.CanAccessChatAsync(chatId, userId);
+    private async Task<bool> CanAccessChat(int chatId, long userId) => await _chatService.CanAccessChatAsync(chatId, userId);
 }
