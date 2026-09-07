@@ -91,13 +91,7 @@ public partial class MainView
             return;
         }
 
-        if (MessageBox.Show(
-                $"Remove chat with {item.DisplayName} from your chat list?\n\nThe other person will keep the conversation and its messages. You can start the chat again later.",
-                "Remove Chat",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question,
-                MessageBoxResult.No) != MessageBoxResult.Yes)
-            return;
+        if (!await ShowRemovePrivateChatConfirmationAsync(item)) return;
 
         try
         {
@@ -113,6 +107,142 @@ public partial class MainView
         {
             MessageBox.Show($"Could not remove the chat.\n\n{ex.Message}", "Remove Chat", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private async Task<bool> ShowRemovePrivateChatConfirmationAsync(ChatListItem item)
+    {
+        var otherName = string.IsNullOrWhiteSpace(item.DisplayName) ? "this person" : item.DisplayName.Trim();
+        var username = string.IsNullOrWhiteSpace(item.Chat.OtherUserUsername) ? string.Empty : $"@{item.Chat.OtherUserUsername}";
+
+        var dialog = new Window
+        {
+            Title = "Remove conversation",
+            Width = 470,
+            Height = 330,
+            Owner = Window.GetWindow(this),
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.NoResize,
+            ShowInTaskbar = false,
+            Background = GetBrush("AppBackgroundBrush")
+        };
+
+        var root = new Grid { Margin = new Thickness(24) };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var heading = new StackPanel { Orientation = Orientation.Horizontal };
+        var icon = new Border
+        {
+            Width = 48,
+            Height = 48,
+            CornerRadius = new CornerRadius(14),
+            Background = GetBrush("PrimarySoftBrush"),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        icon.Child = new TextBlock
+        {
+            Text = "⌫",
+            FontSize = 23,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = GetBrush("PrimaryBrush"),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        heading.Children.Add(icon);
+
+        var titleStack = new StackPanel { Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        titleStack.Children.Add(new TextBlock
+        {
+            Text = "Remove conversation?",
+            FontSize = 21,
+            FontWeight = FontWeights.Bold,
+            Foreground = GetBrush("TextBrush")
+        });
+        titleStack.Children.Add(new TextBlock
+        {
+            Text = username.Length > 0 ? $"{otherName}  {username}" : otherName,
+            FontSize = 12,
+            Foreground = GetBrush("SecondaryTextBrush"),
+            Margin = new Thickness(0, 3, 0, 0),
+            TextTrimming = TextTrimming.CharacterEllipsis
+        });
+        heading.Children.Add(titleStack);
+        Grid.SetRow(heading, 0);
+        root.Children.Add(heading);
+
+        var separator = new Border
+        {
+            Height = 1,
+            Background = GetBrush("BorderBrush"),
+            Margin = new Thickness(0, 20, 0, 18)
+        };
+        Grid.SetRow(separator, 1);
+        root.Children.Add(separator);
+
+        var explanation = new TextBlock
+        {
+            Text = "This removes the conversation from your chat list.\nYour messages are not deleted for the other person, and you can start a new conversation with them later.",
+            FontSize = 13,
+            LineHeight = 21,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = GetBrush("TextBrush")
+        };
+        Grid.SetRow(explanation, 2);
+        root.Children.Add(explanation);
+
+        var note = new Border
+        {
+            Padding = new Thickness(12, 10, 12, 10),
+            Margin = new Thickness(0, 14, 0, 0),
+            CornerRadius = new CornerRadius(10),
+            Background = GetBrush("InputBackgroundBrush")
+        };
+        note.Child = new TextBlock
+        {
+            Text = "Only your copy of this conversation is being removed.",
+            FontSize = 11,
+            Foreground = GetBrush("SecondaryTextBrush"),
+            TextWrapping = TextWrapping.Wrap
+        };
+        Grid.SetRow(note, 3);
+        root.Children.Add(note);
+
+        var actions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+
+        var cancel = new Button
+        {
+            Content = "Cancel",
+            Width = 100,
+            Height = 40,
+            Margin = new Thickness(0, 0, 9, 0),
+            Style = (Style)FindResource("SecondaryButtonStyle")
+        };
+        cancel.Click += (_, _) => dialog.DialogResult = false;
+
+        var remove = new Button
+        {
+            Content = "Remove chat",
+            Width = 125,
+            Height = 40,
+            Style = (Style)FindResource("DangerButtonStyle")
+        };
+        remove.Click += (_, _) => dialog.DialogResult = true;
+
+        actions.Children.Add(cancel);
+        actions.Children.Add(remove);
+        Grid.SetRow(actions, 4);
+        root.Children.Add(actions);
+
+        dialog.Content = root;
+        dialog.Loaded += (_, _) => cancel.Focus();
+        return dialog.ShowDialog() == true;
     }
 
     private async Task HandleGroupConversationMenuAsync(ChatListItem item)
