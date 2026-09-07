@@ -30,6 +30,7 @@ public sealed class ChatSchemaInitializer
 
         if (!await ColumnExistsAsync("Chats", "Type")) await ExecuteAsync("ALTER TABLE Chats ADD COLUMN Type INT NOT NULL DEFAULT 0");
         if (!await ColumnExistsAsync("Chats", "Name")) await ExecuteAsync("ALTER TABLE Chats ADD COLUMN Name VARCHAR(128) NOT NULL DEFAULT ''");
+        if (!await ColumnExistsAsync("Chats", "AvatarUrl")) await ExecuteAsync("ALTER TABLE Chats ADD COLUMN AvatarUrl VARCHAR(512) NULL");
         if (!await ColumnExistsAsync("Chats", "CreatedByUserId")) await ExecuteAsync("ALTER TABLE Chats ADD COLUMN CreatedByUserId VARCHAR(255) NULL");
 
         await ExecuteAsync("ALTER TABLE Chats MODIFY COLUMN User1Id VARCHAR(255) NULL");
