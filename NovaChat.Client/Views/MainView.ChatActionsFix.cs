@@ -142,12 +142,7 @@ public partial class MainView
 
                 if (result != MessageBoxResult.Yes) return;
 
-                if (!await _apiService.DeleteAsync($"api/GroupManagement/{item.Chat.Id}"))
-                {
-                    MessageBox.Show("The group could not be deleted.", "Delete Group", MessageBoxButton.OK, MessageBoxImage.Error);
-                    return;
-                }
-
+                await _apiService.DeleteAsync($"api/GroupManagement/{item.Chat.Id}");
                 await RemoveChatFromLocalUiAsync(item.Chat.Id);
                 return;
             }
@@ -161,12 +156,7 @@ public partial class MainView
 
             if (leaveResult != MessageBoxResult.Yes) return;
 
-            if (!await _apiService.PostAsync<object, object>($"api/GroupManagement/{item.Chat.Id}/leave", new { }))
-            {
-                MessageBox.Show("The group could not be left.", "Leave Group", MessageBoxButton.OK, MessageBoxImage.Error);
-                return;
-            }
-
+            await _apiService.PostAsync<object, object>($"api/GroupManagement/{item.Chat.Id}/leave", new { });
             await RemoveChatFromLocalUiAsync(item.Chat.Id);
         }
         catch (Exception ex)
