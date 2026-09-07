@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 
 namespace NovaChat.Client.Views;
@@ -58,6 +59,28 @@ public partial class ManageUsersView : UserControl
     private void EmailBox_TextChanged(object sender, TextChangedEventArgs e) => ValidateDuplicates();
     private void PhoneBox_TextChanged(object sender, TextChangedEventArgs e) => ValidateDuplicates();
     private void UserIdBox_TextChanged(object sender, TextChangedEventArgs e) => ValidateDuplicates();
+
+    private void PhoneBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
+    {
+        if (string.IsNullOrEmpty(e.Text) || e.Text.Any(ch => ch < '0' || ch > '9')) { e.Handled = true; return; }
+        string proposed = GetProposedText(PhoneBox, e.Text);
+        if (proposed.Length > 11 || (proposed.Length > 0 && proposed[0] != '0')) e.Handled = true;
+    }
+
+    private void PhoneBox_Pasting(object sender, DataObjectPastingEventArgs e)
+    {
+        if (!e.DataObject.GetDataPresent(DataFormats.Text)) { e.CancelCommand(); return; }
+        string pasted = e.DataObject.GetData(DataFormats.Text) as string ?? string.Empty;
+        string proposed = GetProposedText(PhoneBox, pasted);
+        if (proposed.Length > 11 || (proposed.Length > 0 && proposed[0] != '0') || proposed.Any(ch => ch < '0' || ch > '9')) e.CancelCommand();
+    }
+
+    private static string GetProposedText(TextBox box, string insertedText)
+    {
+        int start = box.SelectionStart; int length = box.SelectionLength;
+        return box.Text.Remove(start, length).Insert(start, insertedText);
+    }
+
     private void ValidateDuplicates()
     {
         if (_selectedUser == null) return;
@@ -74,7 +97,7 @@ public partial class ManageUsersView : UserControl
         var displayName = DisplayNameBox.Text.Trim(); var email = EmailBox.Text.Trim(); var phone = PhoneBox.Text.Trim(); var username = UserIdBox.Text.Trim(); var bio = BioBox.Text.Trim();
         if (displayName.Length < 2 || displayName.Length > 50) { ShowValidation("Display name must be between 2 and 50 characters."); return; }
         if (!IsValidEmail(email)) { ShowValidation("Enter a valid email address."); return; }
-        if (!IsValidPhone(phone)) { ShowValidation("Enter a valid phone number using 7 to 15 digits."); return; }
+        if (!IsValidPhone(phone)) { ShowValidation("Phone number must contain exactly 11 digits and start with 0."); return; }
         if (username.Length < 3 || username.Length > 32 || !Regex.IsMatch(username, "^[a-zA-Z0-9_.-]+$")) { ShowValidation("Username must be 3–32 characters and may contain only letters, numbers, dot, underscore and hyphen."); return; }
         if (bio.Length > 160) { ShowValidation("Bio must be 160 characters or fewer."); return; }
         if (IsOwner(_selectedUser.Id) && !string.Equals(username, _selectedUser.Username, StringComparison.OrdinalIgnoreCase)) { ShowValidation("The Owner Username cannot be changed from this panel."); return; }
@@ -89,11 +112,7 @@ public partial class ManageUsersView : UserControl
         }
         catch (Exception ex)
         {
-            var message = ex.Message;
-            if (message.Contains("Username", StringComparison.OrdinalIgnoreCase)) UsernameDuplicateText.Visibility = Visibility.Visible;
-            if (message.Contains("Email", StringComparison.OrdinalIgnoreCase)) EmailDuplicateText.Visibility = Visibility.Visible;
-            if (message.Contains("Phone", StringComparison.OrdinalIgnoreCase)) PhoneDuplicateText.Visibility = Visibility.Visible;
-            ShowValidation(message);
+            var message = ex.Message; if (message.Contains("Username", StringComparison.OrdinalIgnoreCase)) UsernameDuplicateText.Visibility = Visibility.Visible; if (message.Contains("Email", StringComparison.OrdinalIgnoreCase)) EmailDuplicateText.Visibility = Visibility.Visible; if (message.Contains("Phone", StringComparison.OrdinalIgnoreCase)) PhoneDuplicateText.Visibility = Visibility.Visible; ShowValidation(message);
         }
         finally { _isSaving = false; UpdateActionState(); }
     }
@@ -111,7 +130,7 @@ public partial class ManageUsersView : UserControl
     private static bool IsOwner(string userId) => !string.IsNullOrWhiteSpace(AuthState.UserId) && string.Equals(userId, AuthState.UserId, StringComparison.OrdinalIgnoreCase);
     private static bool IsValidEmail(string email) { try { return !string.IsNullOrWhiteSpace(email) && new System.Net.Mail.MailAddress(email).Address.Equals(email, StringComparison.OrdinalIgnoreCase); } catch { return false; } }
     private static string NormalizePhone(string? value) => string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().Replace(" ", string.Empty).Replace("-", string.Empty).Replace("(", string.Empty).Replace(")", string.Empty);
-    private static bool IsValidPhone(string phone) => Regex.IsMatch(NormalizePhone(phone), "^\\+?[0-9]{7,15}$");
+    private static bool IsValidPhone(string phone) => Regex.IsMatch(NormalizePhone(phone), "^0[0-9]{10}$");
     private void ShowValidation(string message) { ValidationText.Text = message; ValidationText.Visibility = Visibility.Visible; }
     private Brush FindBrush(string key) => TryFindResource(key) as Brush ?? Brushes.Gray;
     private static string BuildInitials(string? name) { if (string.IsNullOrWhiteSpace(name)) return "?"; var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries); if (parts.Length == 1) return parts[0].Length >= 2 ? parts[0][..2].ToUpperInvariant() : parts[0].ToUpperInvariant(); return string.Concat(parts[0][0], parts[^1][0]).ToUpperInvariant(); }
