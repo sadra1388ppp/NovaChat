@@ -11,13 +11,12 @@ public partial class MainView
     private void AddMessageToUi(MessageModel message, bool insertAtTop = false)
     {
         var mine = string.Equals(message.SenderId, AuthState.UserId, StringComparison.OrdinalIgnoreCase);
+        var isGroup = _currentChatId.HasValue && _chats.FirstOrDefault(x => x.Chat.Id == _currentChatId.Value)?.Chat.IsGroup == true;
 
         var border = new Border
         {
             Tag = message.Id,
-            Background = mine
-                ? (Brush)FindResource("PrimaryBrush")
-                : (Brush)FindResource("PanelBackgroundBrush"),
+            Background = mine ? (Brush)FindResource("PrimaryBrush") : (Brush)FindResource("PanelBackgroundBrush"),
             Padding = new Thickness(12),
             CornerRadius = new CornerRadius(12),
             HorizontalAlignment = mine ? HorizontalAlignment.Right : HorizontalAlignment.Left,
@@ -26,6 +25,19 @@ public partial class MainView
         };
 
         var panel = new StackPanel();
+        if (isGroup)
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = mine ? "You" : (string.IsNullOrWhiteSpace(message.SenderName) ? $"User {message.SenderId}" : message.SenderName),
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = mine ? Brushes.White : (Brush)FindResource("PrimaryBrush"),
+                Margin = new Thickness(0, 0, 0, 5),
+                TextTrimming = TextTrimming.CharacterEllipsis
+            });
+        }
+
         panel.Children.Add(new TextBlock
         {
             Text = message.Content,
@@ -55,8 +67,7 @@ public partial class MainView
     private async Task ScrollMessagesToBottomAsync()
     {
         await Task.Delay(50);
-        await Dispatcher.InvokeAsync(() => MessagesScrollViewer.ScrollToEnd(),
-            System.Windows.Threading.DispatcherPriority.Loaded);
+        await Dispatcher.InvokeAsync(() => MessagesScrollViewer.ScrollToEnd(), System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
     private async Task RefreshCurrentUserAvatarAsync()
@@ -71,12 +82,8 @@ public partial class MainView
 
         try
         {
-            var profile = await _apiService.GetAsync<ProfileModel>(
-                $"api/User/profile/{Uri.EscapeDataString(_currentOtherUserId)}");
-
-            if (profile == null)
-                return;
-
+            var profile = await _apiService.GetAsync<ProfileModel>($"api/User/profile/{Uri.EscapeDataString(_currentOtherUserId)}");
+            if (profile == null) return;
             ChatUserNameText.Text = profile.DisplayName;
 
             if (string.IsNullOrWhiteSpace(profile.AvatarUrl))
@@ -88,9 +95,7 @@ public partial class MainView
                 return;
             }
 
-            var avatar = await LoadConversationAvatarAsync(
-                _apiService.BuildAbsoluteUrl(profile.AvatarUrl));
-
+            var avatar = await LoadConversationAvatarAsync(_apiService.BuildAbsoluteUrl(profile.AvatarUrl));
             if (avatar != null)
             {
                 ChatHeaderAvatarImage.Source = avatar;
@@ -105,9 +110,7 @@ public partial class MainView
                 ChatAvatarInitialsText.Visibility = Visibility.Visible;
             }
         }
-        catch
-        {
-        }
+        catch { }
     }
 
     private static string GetInitials(string? displayName)
@@ -118,9 +121,6 @@ public partial class MainView
         return string.Concat(parts[0][0], parts[^1][0]).ToUpperInvariant();
     }
 
-    private void ProfileButton_Click(object sender, RoutedEventArgs e)
-        => ProfileRequested?.Invoke();
-
-    private void SettingsButton_Click(object sender, RoutedEventArgs e)
-        => SettingsRequested?.Invoke();
+    private void ProfileButton_Click(object sender, RoutedEventArgs e) => ProfileRequested?.Invoke();
+    private void SettingsButton_Click(object sender, RoutedEventArgs e) => SettingsRequested?.Invoke();
 }
