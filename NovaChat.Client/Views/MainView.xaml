@@ -91,7 +91,6 @@
                 <!-- Fixed bottom navigation -->
                 <Border Grid.Row="3" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="0,10,0,0">
                     <StackPanel>
-                        <!-- Owner-only controls -->
                         <StackPanel x:Name="OwnerBottomPanel" Visibility="Collapsed">
                             <TextBlock Text="OWNER CONTROL" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PrimaryBrush}" Margin="0,0,0,8"/>
                             <Button Content="👥   Manage Users" Height="36" Margin="0,0,0,3" Style="{StaticResource GhostButtonStyle}" HorizontalContentAlignment="Left" Padding="10,0" Click="ManageUsersButton_Click"/>
@@ -113,13 +112,13 @@
             </Grid.RowDefinitions>
 
             <Border Grid.Row="0" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="18,10">
-                <Grid>
+                <Grid x:Name="ChatHeaderGrid" Cursor="Hand" PreviewMouseLeftButtonUp="ChatHeaderGroupInfo_Click">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="56"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <Grid Width="48" Height="48" Cursor="Hand" MouseLeftButtonUp="ChatHeaderAvatarDirect_Click">
+                    <Grid Grid.Column="0" Width="48" Height="48" MouseLeftButtonUp="ChatHeaderAvatarDirect_Click">
                         <Ellipse x:Name="ChatAvatarBackground" Fill="{DynamicResource SelectedChatBrush}"/>
                         <TextBlock x:Name="ChatAvatarInitialsText" Text="N" Foreground="{DynamicResource PrimaryBrush}" FontSize="19" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         <Image x:Name="ChatHeaderAvatarImage" Width="48" Height="48" Stretch="UniformToFill" Visibility="Collapsed" IsHitTestVisible="False">
@@ -129,16 +128,16 @@
                         </Image>
                         <Ellipse x:Name="ChatAvatarStatusDot" Width="12" Height="12" Fill="{DynamicResource SecondaryTextBrush}" Stroke="{DynamicResource PanelBackgroundBrush}" StrokeThickness="2" HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
                     </Grid>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,12,0">
-                        <TextBlock x:Name="ChatUserNameText" Text="Select a conversation" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" TextTrimming="CharacterEllipsis" Cursor="Hand" MouseLeftButtonUp="ChatHeaderGroupInfo_Click"/>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,12,0" IsHitTestVisible="False">
+                        <TextBlock x:Name="ChatUserNameText" Text="Select a conversation" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" TextTrimming="CharacterEllipsis"/>
                         <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
                             <Ellipse x:Name="ChatStatusIndicator" Width="7" Height="7" Fill="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
                             <TextBlock x:Name="ChatStatusText" Text="Offline" FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}"/>
                         </StackPanel>
                     </StackPanel>
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button Content="⌕" Style="{StaticResource IconButtonStyle}" ToolTip="Search in conversation"/>
-                        <Button Content="•••" Style="{StaticResource IconButtonStyle}" ToolTip="Conversation menu"/>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" IsHitTestVisible="False">
+                        <Button Content="⌕" Style="{StaticResource IconButtonStyle}" ToolTip="Search in conversation" IsHitTestVisible="False"/>
+                        <Button Content="•••" Style="{StaticResource IconButtonStyle}" ToolTip="Conversation menu" IsHitTestVisible="False"/>
                     </StackPanel>
                 </Grid>
             </Border>
