@@ -16,10 +16,14 @@ public partial class MainView
         public string DisplayName { get; set; } = string.Empty;
         public string Role { get; set; } = string.Empty;
     }
+
     private static bool _groupUiRegistered;
     private Button? _createGroupButton;
     private DispatcherTimer? _groupEventTimer;
-    private bool IsCurrentGroupChat => _currentChatId.HasValue && _chats.FirstOrDefault(x => x.Chat.Id == _currentChatId.Value)?.Chat.Type?.Equals("Group", StringComparison.OrdinalIgnoreCase) == true;
+
+    private bool IsCurrentGroupChat =>
+        _currentChatId.HasValue &&
+        _chats.FirstOrDefault(x => x.Chat.Id == _currentChatId.Value)?.Chat.IsGroup == true;
 
     private void RefreshGroupOnlineStatus()
     {
@@ -30,47 +34,122 @@ public partial class MainView
     private async Task RefreshCurrentGroupInfoAsync()
     {
         if (!_currentChatId.HasValue || !IsCurrentGroupChat) return;
+
         try
         {
-            var members = await _apiService.GetAsync<List<GroupMemberModel>>($"api/Chat/{_currentChatId.Value}/members");
-            if (members == null) return;
-            var online = members.Count(m => _onlineUserIds.Contains(m.UserId));
+            var members = await _apiService.GetAsync<List<GroupMemberModel>>(
+                $"api/Chat/{_currentChatId.Value}/members") ?? [];
+
+            var online = members.Count(member => _onlineUserIds.Contains(member.UserId));
             ChatStatusText.Text = $"{online} member{(online == 1 ? "" : "s")} online";
-            ChatStatusIndicator.Fill = online > 0 ? System.Windows.Media.Brushes.LimeGreen : System.Windows.Media.Brushes.Gray;
+            ChatStatusIndicator.Fill = online > 0
+                ? System.Windows.Media.Brushes.LimeGreen
+                : System.Windows.Media.Brushes.Gray;
         }
-        catch { }
+        catch
+        {
+            // Keep the existing status if the members endpoint is temporarily unavailable.
+        }
     }
 
     private void ChatHeaderGroupInfo_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (!IsCurrentGroupChat) return;
+
+        e.Handled = true;
         OpenGroupInfo();
     }
 
     private async void OpenGroupInfo()
     {
         if (!IsCurrentGroupChat || !_currentChatId.HasValue) return;
-        var members = await _apiService.GetAsync<List<GroupMemberModel>>($"api/Chat/{_currentChatId.Value}/members") ?? [];
-        var online = members.Count(m => _onlineUserIds.Contains(m.UserId));
-        var dialog = new Window { Title = "Group Info", Width = 460, Height = 620, Owner = Window.GetWindow(this), WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = (System.Windows.Media.Brush)FindResource("PanelBackgroundBrush") };
-        var panel = new StackPanel { Margin = new Thickness(22) };
-        panel.Children.Add(new TextBlock { Text = ChatUserNameText.Text, FontSize = 24, FontWeight = FontWeights.Bold, Foreground = (System.Windows.Media.Brush)FindResource("TextBrush") });
-        panel.Children.Add(new TextBlock { Text = $"{online} member{(online == 1 ? "" : "s")} online • {members.Count} members", Margin = new Thickness(0,6,0,18), Foreground = (System.Windows.Media.Brush)FindResource("SecondaryTextBrush") });
-        panel.Children.Add(new TextBlock { Text = "MEMBERS", FontWeight = FontWeights.Bold, Foreground = (System.Windows.Media.Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0,0,0,8) });
-        var list = new ListBox { Height = 410, BorderThickness = new Thickness(0), Background = System.Windows.Media.Brushes.Transparent };
-        foreach (var m in members)
+
+        try
         {
-            var isOnline = _onlineUserIds.Contains(m.UserId);
-            list.Items.Add(new TextBlock { Text = $"{(isOnline ? "●" : "○")}  {m.DisplayName}  •  {m.Role}", FontSize = 15, Margin = new Thickness(6,8,6,8), Foreground = (System.Windows.Media.Brush)FindResource("TextBrush") });
+            var members = await _apiService.GetAsync<List<GroupMemberModel>>(
+                $"api/Chat/{_currentChatId.Value}/members") ?? [];
+
+            var online = members.Count(member => _onlineUserIds.Contains(member.UserId));
+
+            var dialog = new Window
+            {
+                Title = "Group Info",
+                Width = 460,
+                Height = 620,
+                Owner = Window.GetWindow(this),
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Background = (System.Windows.Media.Brush)FindResource("PanelBackgroundBrush")
+            };
+
+            var panel = new StackPanel { Margin = new Thickness(22) };
+
+            panel.Children.Add(new TextBlock
+            {
+                Text = ChatUserNameText.Text,
+                FontSize = 24,
+                FontWeight = FontWeights.Bold,
+                Foreground = (System.Windows.Media.Brush)FindResource("TextBrush")
+            });
+
+            panel.Children.Add(new TextBlock
+            {
+                Text = $"{online} member{(online == 1 ? "" : "s")} online • {members.Count} members",
+                Margin = new Thickness(0, 6, 0, 18),
+                Foreground = (System.Windows.Media.Brush)FindResource("SecondaryTextBrush")
+            });
+
+            panel.Children.Add(new TextBlock
+            {
+                Text = "MEMBERS",
+                FontWeight = FontWeights.Bold,
+                Foreground = (System.Windows.Media.Brush)FindResource("SecondaryTextBrush"),
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+
+            var list = new ListBox
+            {
+                Height = 410,
+                BorderThickness = new Thickness(0),
+                Background = System.Windows.Media.Brushes.Transparent
+            };
+
+            foreach (var member in members)
+            {
+                var isOnline = _onlineUserIds.Contains(member.UserId);
+                var status = isOnline ? "Online" : "Offline";
+                var role = string.IsNullOrWhiteSpace(member.Role) ? "Member" : member.Role;
+
+                list.Items.Add(new TextBlock
+                {
+                    Text = $"{(isOnline ? "●" : "○")}  {member.DisplayName}  •  {role}  •  {status}",
+                    FontSize = 15,
+                    Margin = new Thickness(6, 8, 6, 8),
+                    Foreground = (System.Windows.Media.Brush)FindResource("TextBrush")
+                });
+            }
+
+            panel.Children.Add(list);
+            dialog.Content = panel;
+            dialog.ShowDialog();
         }
-        panel.Children.Add(list); dialog.Content = panel; dialog.ShowDialog();
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Could not load group information.\n\n{ex.Message}",
+                "NovaChat",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
     }
 
     static MainView()
     {
         if (_groupUiRegistered) return;
         _groupUiRegistered = true;
-        EventManager.RegisterClassHandler(typeof(MainView), FrameworkElement.LoadedEvent, new RoutedEventHandler(OnGroupUiLoaded));
+        EventManager.RegisterClassHandler(
+            typeof(MainView),
+            FrameworkElement.LoadedEvent,
+            new RoutedEventHandler(OnGroupUiLoaded));
     }
 
     private static void OnGroupUiLoaded(object sender, RoutedEventArgs e)
@@ -83,7 +162,9 @@ public partial class MainView
     private void InstallGroupUi()
     {
         if (_createGroupButton != null) return;
-        if (SearchTextBox.Parent is not Grid searchGrid || searchGrid.Parent is not Border searchBorder || searchBorder.Parent is not StackPanel panel) return;
+        if (SearchTextBox.Parent is not Grid searchGrid ||
+            searchGrid.Parent is not Border searchBorder ||
+            searchBorder.Parent is not StackPanel panel) return;
 
         _createGroupButton = new Button
         {
@@ -94,6 +175,7 @@ public partial class MainView
             Padding = new Thickness(10, 0, 10, 0),
             Style = (Style)FindResource("SecondaryButtonStyle")
         };
+
         _createGroupButton.Click += CreateGroupButton_Click;
         panel.Children.Add(_createGroupButton);
     }
@@ -101,6 +183,7 @@ public partial class MainView
     private void StartGroupEventWatcher()
     {
         if (_groupEventTimer != null) return;
+
         _groupEventTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _groupEventTimer.Tick += GroupEventTimer_Tick;
         _groupEventTimer.Start();
@@ -108,28 +191,30 @@ public partial class MainView
 
     private async void GroupEventTimer_Tick(object? sender, EventArgs e)
     {
-        if (_hubConnection?.State != Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Connected)
+        if (_hubConnection?.State != HubConnectionState.Connected)
         {
-            if (_groupEventTimer != null) _groupEventTimer.Interval = TimeSpan.FromSeconds(2);
+            if (_groupEventTimer != null)
+                _groupEventTimer.Interval = TimeSpan.FromSeconds(2);
             return;
         }
+
         _groupEventTimer.Stop();
+
         try
         {
             _hubConnection.On<ChatModel>("ChatCreated", OnGroupCreatedFromServer);
             _hubConnection.On<ChatModel>("GroupUpdated", OnGroupUpdatedFromServer);
             _hubConnection.On<object>("ChatMemberRemoved", OnGroupMemberRemovedFromServer);
         }
-        catch { }
+        catch
+        {
+        }
     }
 
     private async void OnGroupCreatedFromServer(ChatModel chat)
     {
         if (chat == null || chat.Id <= 0) return;
-        await Dispatcher.InvokeAsync(async () =>
-        {
-            try { await LoadChatsAsync(); } catch { }
-        });
+        await Dispatcher.InvokeAsync(async () => { try { await LoadChatsAsync(); } catch { } });
     }
 
     private async void OnGroupUpdatedFromServer(ChatModel chat)
@@ -171,11 +256,22 @@ public partial class MainView
         createButton.Click += (_, _) =>
         {
             var name = nameBox.Text.Trim();
-            var usernames = membersBox.Text.Split([',', '\n', '\r', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(x => !string.Equals(x, AuthState.Username, StringComparison.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            if (string.IsNullOrWhiteSpace(name)) { MessageBox.Show("Enter a group name.", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Information); return; }
+            var usernames = membersBox.Text
+                .Split([',', '\n', '\r', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(x => !string.Equals(x, AuthState.Username, StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                MessageBox.Show("Enter a group name.", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
             request = new CreateGroupRequest { Name = name, Usernames = usernames };
             dialog.DialogResult = true;
         };
+
         dialog.Loaded += (_, _) => nameBox.Focus();
         dialog.ShowDialog();
         if (request == null) return;
@@ -183,7 +279,9 @@ public partial class MainView
         try
         {
             var result = await _apiService.PostAsync<CreateGroupRequest, CreateGroupResponse>("api/Chat/group", request);
-            if (result?.Chat == null) throw new InvalidOperationException("The server did not return the created group.");
+            if (result?.Chat == null)
+                throw new InvalidOperationException("The server did not return the created group.");
+
             await LoadChatsAsync();
             await OpenChatAsync(result.Chat);
         }
