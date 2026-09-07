@@ -80,7 +80,7 @@ public class ChatController : ControllerBase
     {
         if (!TryGetCurrentUserId(out var userId)) return Unauthorized();
         if (!await CanAccessChat(chatId, userId)) return Forbid();
-        return Ok((await _chatService.GetMembersAsync(chatId)).Select(MapMember).ToList());
+        return Ok((await _chatService.GetMembersAsync(chatId)).Select(m => MapMember(m)).ToList());
     }
 
     [HttpPost("{chatId}/members")]
@@ -192,14 +192,12 @@ public class ChatController : ControllerBase
     {
         if (!TryGetCurrentUserId(out var userId)) return Unauthorized();
         if (!await CanAccessChat(chatId, userId)) return Forbid();
-
         pageSize = Math.Clamp(pageSize, 1, 100);
         var messages = await _chatService.GetMessagesAsync(chatId, userId, beforeMessageId, pageSize);
         var first = messages.FirstOrDefault();
-
         return Ok(new ChatHistoryResponseDto
         {
-            Messages = messages.Select(MessageDtoMapper.Map).ToList(),
+            Messages = messages.Select(m => MessageDtoMapper.Map(m)).ToList(),
             HasMore = first != null && await _chatService.HasOlderMessagesAsync(chatId, userId, first.Id),
             NextBeforeMessageId = first?.Id
         });
@@ -271,14 +269,29 @@ public class ChatController : ControllerBase
 
     private IEnumerable<string> RecipientIds(Chat chat)
     {
-        if (chat.Type == ChatType.Group)
-            return chat.Members.Select(member => member.UserId.ToString()).Distinct().ToList();
+        var recipients = new List<string>();
 
-        return new[] { chat.User1Id, chat.User2Id }
-            .Where(id => id.HasValue && id.Value > 0)
-            .Select(id => id!.Value.ToString())
-            .Distinct()
-            .ToList();
+        if (chat.Type == ChatType.Group)
+        {
+            foreach (var member in chat.Members)
+            {
+                var id = member.UserId.ToString();
+                if (!string.IsNullOrWhiteSpace(id) && !recipients.Contains(id))
+                    recipients.Add(id);
+            }
+        }
+        else
+        {
+            if (chat.User1Id.HasValue && chat.User1Id.Value > 0)
+                recipients.Add(chat.User1Id.Value.ToString());
+            if (chat.User2Id.HasValue && chat.User2Id.Value > 0)
+            {
+                var id = chat.User2Id.Value.ToString();
+                if (!recipients.Contains(id)) recipients.Add(id);
+            }
+        }
+
+        return recipients;
     }
 
     private string? ToAbsoluteAvatarUrl(string? avatarUrl)
