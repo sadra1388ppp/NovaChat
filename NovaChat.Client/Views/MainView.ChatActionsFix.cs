@@ -112,7 +112,6 @@ public partial class MainView
     private async Task<bool> ShowRemovePrivateChatConfirmationAsync(ChatListItem item)
     {
         var otherName = string.IsNullOrWhiteSpace(item.DisplayName) ? "this person" : item.DisplayName.Trim();
-        var username = string.IsNullOrWhiteSpace(item.Chat.OtherUserUsername) ? string.Empty : $"@{item.Chat.OtherUserUsername}";
 
         var dialog = new Window
         {
@@ -163,7 +162,7 @@ public partial class MainView
         });
         titleStack.Children.Add(new TextBlock
         {
-            Text = username.Length > 0 ? $"{otherName}  {username}" : otherName,
+            Text = otherName,
             FontSize = 12,
             Foreground = GetBrush("SecondaryTextBrush"),
             Margin = new Thickness(0, 3, 0, 0),
