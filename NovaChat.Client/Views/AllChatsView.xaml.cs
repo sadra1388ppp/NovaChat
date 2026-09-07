@@ -3,6 +3,7 @@ using NovaChat.Client.Services;
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 
 namespace NovaChat.Client.Views;
 
@@ -37,7 +38,6 @@ public partial class AllChatsView : UserControl
         {
             var chats = await _apiService.GetAsync<List<ChatModel>>("api/Chat/all") ?? [];
             _allChats.Clear();
-
             foreach (var chat in chats)
                 _allChats.Add(new AdminChatItem(chat));
 
@@ -64,12 +64,9 @@ public partial class AllChatsView : UserControl
     private void ApplyFilter()
     {
         var query = SearchBox.Text.Trim();
-
         IEnumerable<AdminChatItem> filtered = _allChats;
         if (!string.IsNullOrWhiteSpace(query))
-        {
             filtered = _allChats.Where(c => c.SearchText.Contains(query, StringComparison.OrdinalIgnoreCase));
-        }
 
         _filteredChats.Clear();
         foreach (var item in filtered)
@@ -107,12 +104,16 @@ public partial class AllChatsView : UserControl
 
     private async Task ShowChatDetailsAsync(AdminChatItem item)
     {
-        SelectedChatIdText.Text = $"Chat #{item.Chat.Id}  •  Created {item.Chat.CreatedAt.ToLocalTime():g}";
-        ParticipantsText.Text = $"{item.Chat.User1Name}  ·  {item.Chat.User1Id}\n{item.Chat.User2Name}  ·  {item.Chat.User2Id}";
+        var kind = item.Chat.IsGroup ? "GROUP" : "PRIVATE CHAT";
+        SelectedChatIdText.Text = $"{kind}  •  Chat #{item.Chat.Id}  •  Created {item.Chat.CreatedAt.ToLocalTime():g}";
+        ParticipantsText.Text = item.Chat.IsGroup
+            ? $"Group: {item.Chat.Name}\nType: Group\nMembers: loaded from the server"
+            : $"{item.Chat.User1Name}  ·  {item.Chat.User1Id}\n{item.Chat.User2Name}  ·  {item.Chat.User2Id}";
         DeleteButton.IsEnabled = true;
+        DeleteButton.Content = item.Chat.IsGroup ? "Delete Group" : "Delete Chat";
         NoMessagesText.Visibility = Visibility.Collapsed;
         MessagesList.ItemsSource = null;
-        StatusText.Text = $"Loading history for Chat #{item.Chat.Id}...";
+        StatusText.Text = $"Loading history for {kind.ToLowerInvariant()} #{item.Chat.Id}...";
 
         try
         {
@@ -120,7 +121,7 @@ public partial class AllChatsView : UserControl
             var messages = history?.Messages ?? [];
             MessagesList.ItemsSource = messages.Select(m => new AdminMessageItem(m)).ToList();
             NoMessagesText.Visibility = messages.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-            StatusText.Text = $"Chat #{item.Chat.Id} • {messages.Count} message{(messages.Count == 1 ? string.Empty : "s")} loaded.";
+            StatusText.Text = $"{kind} #{item.Chat.Id} • {messages.Count} message{(messages.Count == 1 ? string.Empty : "s")} loaded.";
         }
         catch (Exception ex)
         {
@@ -133,23 +134,20 @@ public partial class AllChatsView : UserControl
     private async void DeleteButton_Click(object sender, RoutedEventArgs e)
     {
         if (ChatsList.SelectedItem is not AdminChatItem item) return;
-
-        var result = MessageBox.Show(
-            $"Delete Chat #{item.Chat.Id}?\n\nThis permanently deletes the conversation and all of its messages.\n\nThis action cannot be undone.",
-            "Delete Conversation",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning);
-
-        if (result != MessageBoxResult.Yes) return;
+        if (!await ShowProfessionalDeleteConfirmationAsync(item)) return;
 
         try
         {
             DeleteButton.IsEnabled = false;
-            StatusText.Text = "Deleting conversation...";
+            StatusText.Text = item.Chat.IsGroup ? "Deleting group..." : "Deleting conversation...";
 
-            if (!await _apiService.DeleteAsync($"api/Chat/{item.Chat.Id}"))
+            var endpoint = item.Chat.IsGroup
+                ? $"api/GroupManagement/{item.Chat.Id}"
+                : $"api/Chat/{item.Chat.Id}";
+
+            if (!await _apiService.DeleteAsync(endpoint))
             {
-                MessageBox.Show("The server could not delete this conversation.", "All Chats", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show(item.Chat.IsGroup ? "The server could not delete this group." : "The server could not delete this conversation.", "All Chats", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
@@ -158,17 +156,81 @@ public partial class AllChatsView : UserControl
             TotalChatsText.Text = _allChats.Count.ToString();
             ApplyFilter();
             ClearDetails();
-            StatusText.Text = "Conversation deleted successfully.";
+            StatusText.Text = item.Chat.IsGroup ? "Group deleted successfully." : "Conversation deleted successfully.";
         }
         catch (Exception ex)
         {
             StatusText.Text = "Delete failed.";
-            MessageBox.Show($"Could not delete the conversation.\n\n{ex.Message}", "All Chats", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show($"Could not delete the { (item.Chat.IsGroup ? "group" : "conversation") }.\n\n{ex.Message}", "All Chats", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
             DeleteButton.IsEnabled = ChatsList.SelectedItem is AdminChatItem;
         }
+    }
+
+    private async Task<bool> ShowProfessionalDeleteConfirmationAsync(AdminChatItem item)
+    {
+        var isGroup = item.Chat.IsGroup;
+        var title = isGroup ? "Delete group?" : "Delete conversation?";
+        var name = isGroup ? (string.IsNullOrWhiteSpace(item.Chat.Name) ? "Unnamed group" : item.Chat.Name) : $"{item.Chat.User1Name} ↔ {item.Chat.User2Name}";
+        var description = isGroup
+            ? "This permanently removes the group, its membership and its message history for everyone."
+            : "This permanently removes the private conversation and its message history from the server.";
+        var warning = isGroup
+            ? "Every member will lose access to this group and its messages."
+            : "This action cannot be undone and affects the server-side conversation.";
+
+        var dialog = new Window
+        {
+            Title = isGroup ? "Delete Group" : "Delete Conversation",
+            Width = 500,
+            Height = 360,
+            Owner = Window.GetWindow(this),
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.NoResize,
+            ShowInTaskbar = false,
+            Background = GetBrush("AppBackgroundBrush")
+        };
+
+        var root = new Grid { Margin = new Thickness(24) };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var header = new StackPanel { Orientation = Orientation.Horizontal };
+        var icon = new Border { Width = 52, Height = 52, CornerRadius = new CornerRadius(16), Background = GetBrush("PrimarySoftBrush") };
+        icon.Child = new TextBlock { Text = isGroup ? "♟" : "⌫", FontSize = 24, FontWeight = FontWeights.Bold, Foreground = GetBrush("PrimaryBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        header.Children.Add(icon);
+        var titlePanel = new StackPanel { Margin = new Thickness(15, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        titlePanel.Children.Add(new TextBlock { Text = title, FontSize = 21, FontWeight = FontWeights.Bold, Foreground = GetBrush("TextBrush") });
+        titlePanel.Children.Add(new TextBlock { Text = name, FontSize = 12, Foreground = GetBrush("SecondaryTextBrush"), Margin = new Thickness(0, 3, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis });
+        header.Children.Add(titlePanel);
+        Grid.SetRow(header, 0); root.Children.Add(header);
+
+        var separator = new Border { Height = 1, Background = GetBrush("BorderBrush"), Margin = new Thickness(0, 20, 0, 16) };
+        Grid.SetRow(separator, 1); root.Children.Add(separator);
+
+        var explanation = new TextBlock { Text = description, FontSize = 13, LineHeight = 21, TextWrapping = TextWrapping.Wrap, Foreground = GetBrush("TextBrush") };
+        Grid.SetRow(explanation, 2); root.Children.Add(explanation);
+
+        var warningCard = new Border { Margin = new Thickness(0, 14, 0, 0), Padding = new Thickness(13, 11, 13, 11), CornerRadius = new CornerRadius(10), Background = GetBrush("InputBackgroundBrush"), BorderBrush = GetBrush("BorderBrush"), BorderThickness = new Thickness(1) };
+        warningCard.Child = new TextBlock { Text = warning, FontSize = 11, TextWrapping = TextWrapping.Wrap, Foreground = GetBrush("SecondaryTextBrush") };
+        Grid.SetRow(warningCard, 3); root.Children.Add(warningCard);
+
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var cancel = new Button { Content = "Cancel", Width = 100, Height = 40, Margin = new Thickness(0, 0, 9, 0), Style = (Style)FindResource("SecondaryButtonStyle") };
+        var confirm = new Button { Content = isGroup ? "Delete group" : "Delete chat", Width = 125, Height = 40, Style = (Style)FindResource("DangerButtonStyle") };
+        cancel.Click += (_, _) => dialog.DialogResult = false;
+        confirm.Click += (_, _) => dialog.DialogResult = true;
+        actions.Children.Add(cancel); actions.Children.Add(confirm);
+        Grid.SetRow(actions, 4); root.Children.Add(actions);
+
+        dialog.Content = root;
+        dialog.Loaded += (_, _) => cancel.Focus();
+        return dialog.ShowDialog() == true;
     }
 
     private void ClearDetails()
@@ -179,26 +241,32 @@ public partial class AllChatsView : UserControl
         MessagesList.ItemsSource = null;
         NoMessagesText.Visibility = Visibility.Collapsed;
         DeleteButton.IsEnabled = false;
+        DeleteButton.Content = "Delete Chat";
     }
+
+    private Brush GetBrush(string key) => TryFindResource(key) as Brush ?? Brushes.Gray;
 
     private sealed class AdminChatItem
     {
         public ChatModel Chat { get; }
-        public string Participants => $"{Chat.User1Name}  ↔  {Chat.User2Name}";
+        public string Participants => Chat.IsGroup
+            ? $"GROUP  •  {Chat.Name}"
+            : $"PRIVATE  •  {Chat.User1Name}  ↔  {Chat.User2Name}";
         public string Preview => Chat.LastMessage == null
-            ? "No messages yet"
+            ? (Chat.IsGroup ? "No group messages yet" : "No messages yet")
             : $"{Chat.LastMessage.SenderName}: {Chat.LastMessage.Content}";
         public string LastActivityText => (Chat.LastMessage?.SentAt ?? Chat.CreatedAt).ToLocalTime().ToString("g");
         public string Initials
         {
             get
             {
+                if (Chat.IsGroup) return GetInitials(Chat.Name);
                 var a = GetInitials(Chat.User1Name);
                 var b = GetInitials(Chat.User2Name);
                 return $"{a}{b}";
             }
         }
-        public string SearchText => string.Join(" ", Chat.User1Id, Chat.User2Id, Chat.User1Name, Chat.User2Name, Chat.LastMessage?.Content ?? string.Empty, Chat.LastMessage?.SenderName ?? string.Empty);
+        public string SearchText => string.Join(" ", Chat.IsGroup ? "group" : "private", Chat.Name, Chat.User1Id, Chat.User2Id, Chat.User1Name, Chat.User2Name, Chat.LastMessage?.Content ?? string.Empty, Chat.LastMessage?.SenderName ?? string.Empty);
 
         public AdminChatItem(ChatModel chat) => Chat = chat;
 
@@ -206,7 +274,7 @@ public partial class AllChatsView : UserControl
         {
             if (string.IsNullOrWhiteSpace(value)) return "?";
             var parts = value.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length == 1) return parts[0][..1].ToUpperInvariant();
+            if (parts.Length == 1) return parts[0][..Math.Min(2, parts[0].Length)].ToUpperInvariant();
             return $"{parts[0][..1]}{parts[^1][..1]}".ToUpperInvariant();
         }
     }
