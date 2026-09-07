@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Threading;
 using NovaChat.Client.Models;
 using Microsoft.Win32;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
 namespace NovaChat.Client.Views;
@@ -20,7 +21,7 @@ public partial class MainView
     private bool IsCurrentGroupChat => _currentChatId.HasValue && _chats.FirstOrDefault(x => x.Chat.Id == _currentChatId.Value)?.Chat.IsGroup == true;
 
     private void RefreshGroupOnlineStatus() { if (!IsCurrentGroupChat || !_currentChatId.HasValue) return; _ = RefreshCurrentGroupInfoAsync(); }
-    private void UpdateGroupOnlineStatusFromCache() { if (!IsCurrentGroupChat) return; var online = _currentGroupMembers.Count(member => _onlineUserIds.Contains(member.UserId)); ChatStatusText.Text = $"{online} member{(online == 1 ? "" : "s")} online"; ChatStatusIndicator.Fill = online > 0 ? System.Windows.Media.Brushes.LimeGreen : System.Windows.Media.Brushes.Gray; }
+    private void UpdateGroupOnlineStatusFromCache() { if (!IsCurrentGroupChat) return; var online = _currentGroupMembers.Count(member => _onlineUserIds.Contains(member.UserId)); ChatStatusText.Text = $"{online} member{(online == 1 ? "" : "s")} online"; ChatStatusIndicator.Fill = System.Windows.Media.Brushes.LimeGreen; if (online <= 0) ChatStatusIndicator.Fill = System.Windows.Media.Brushes.Gray; }
     private async Task RefreshCurrentGroupInfoAsync()
     {
         if (!_currentChatId.HasValue || !IsCurrentGroupChat) return;
