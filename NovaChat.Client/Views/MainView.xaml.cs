@@ -26,6 +26,7 @@ public partial class MainView : UserControl
     private bool _hasMoreMessages;
     private bool _isOpeningChat;
     private static bool _messageDeletionHandlerRegistered;
+    private static bool _chatDeletionHandlerRegistered;
 
     public MainView()
     {
@@ -36,7 +37,22 @@ public partial class MainView : UserControl
     private async void MainView_Loaded(object sender, RoutedEventArgs e) { try { await LoadChatsAsync(); } catch (Exception ex) { MessageBox.Show($"Could not load chats.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error); } try { await ConnectSignalRAsync(); } catch (Exception ex) { ChatStatusText.Text = "Offline"; ChatStatusIndicator.Fill = Brushes.Gray; _hubConnection = null; System.Diagnostics.Debug.WriteLine($"SignalR connection failed: {ex}"); } }
     private async void MainView_Unloaded(object sender, RoutedEventArgs e) { try { StopMessageDeletionHook(); await DisconnectSignalRAsync(); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"SignalR disconnect failed during unload: {ex}"); } }
     public void SetOwnerMode(bool isOwner) { _isOwner = isOwner; AccountTypeText.Text = isOwner ? "OWNER • Full Access" : "User Account"; OwnerBottomPanel.Visibility = isOwner ? Visibility.Visible : Visibility.Collapsed; }
-    private async Task ConnectSignalRAsync() { if (!AuthState.IsAuthenticated || _hubConnection != null) return; _hubConnection = new HubConnectionBuilder().WithUrl("http://localhost:5256/hubs/chat", o => o.AccessTokenProvider = () => Task.FromResult(AuthState.Token)!).WithAutomaticReconnect().Build(); _hubConnection.On<MessageModel>("ReceiveMessage", OnMessageReceived); _hubConnection.On<List<string>>("PresenceSnapshot", OnPresenceSnapshot); _hubConnection.On<string>("UserOnline", OnUserOnline); _hubConnection.On<string>("UserOffline", OnUserOffline); _hubConnection.Reconnecting += OnSignalRReconnecting; _hubConnection.Reconnected += OnSignalRReconnected; _hubConnection.Closed += OnSignalRClosed; await _hubConnection.StartAsync(); ChatStatusText.Text = "Connected"; await RefreshCurrentUserPresenceAsync(); }
+    private async Task ConnectSignalRAsync()
+    {
+        if (!AuthState.IsAuthenticated || _hubConnection != null) return;
+        _hubConnection = new HubConnectionBuilder().WithUrl("http://localhost:5256/hubs/chat", o => o.AccessTokenProvider = () => Task.FromResult(AuthState.Token)!).WithAutomaticReconnect().Build();
+        _hubConnection.On<MessageModel>("ReceiveMessage", OnMessageReceived);
+        _hubConnection.On<List<string>>("PresenceSnapshot", OnPresenceSnapshot);
+        _hubConnection.On<string>("UserOnline", OnUserOnline);
+        _hubConnection.On<string>("UserOffline", OnUserOffline);
+        if (!_chatDeletionHandlerRegistered)
+        {
+            _hubConnection.On<ChatDeletedEvent>("ChatDeleted", OnChatDeleted);
+            _chatDeletionHandlerRegistered = true;
+        }
+        _hubConnection.Reconnecting += OnSignalRReconnecting; _hubConnection.Reconnected += OnSignalRReconnected; _hubConnection.Closed += OnSignalRClosed;
+        await _hubConnection.StartAsync(); ChatStatusText.Text = "Connected"; await RefreshCurrentUserPresenceAsync();
+    }
     private Task OnSignalRReconnecting(Exception? _) => Dispatcher.InvokeAsync(() => { ChatStatusText.Text = "Connecting..."; ChatStatusIndicator.Fill = Brushes.Gray; }).Task;
     private async Task OnSignalRReconnected(string? _) { ChatStatusText.Text = "Connected"; await RefreshCurrentUserPresenceAsync(); }
     private Task OnSignalRClosed(Exception? _) => Dispatcher.InvokeAsync(() => { ChatStatusText.Text = "Offline"; ChatStatusIndicator.Fill = Brushes.Gray; _onlineUserIds.Clear(); RefreshPresenceUi(); }).Task;
@@ -45,6 +61,7 @@ public partial class MainView : UserControl
     private async void OnPresenceSnapshot(List<string> ids) => await Dispatcher.InvokeAsync(() => { _onlineUserIds.Clear(); foreach (var id in ids ?? []) if (!string.IsNullOrWhiteSpace(id)) _onlineUserIds.Add(id); RefreshPresenceUi(); });
     private async void OnUserOnline(string id) { if (!string.IsNullOrWhiteSpace(id)) await Dispatcher.InvokeAsync(() => { _onlineUserIds.Add(id); RefreshPresenceUi(); }); }
     private async void OnUserOffline(string id) { if (!string.IsNullOrWhiteSpace(id)) await Dispatcher.InvokeAsync(() => { _onlineUserIds.Remove(id); RefreshPresenceUi(); }); }
+    private async Task OnChatDeleted(ChatDeletedEvent evt) { if (evt == null || evt.ChatId <= 0) return; await Dispatcher.InvokeAsync(async () => { try { await RemoveChatFromLocalUiAsync(evt.ChatId); } catch { } }); }
     private bool IsUserOnline(string id) => !string.IsNullOrWhiteSpace(id) && _onlineUserIds.Contains(id);
     private void RefreshPresenceUi() { foreach (var item in _chats) item.IsOnline = IsUserOnline(item.Chat.OtherUserId(AuthState.UserId)); RefreshChatsList(); UpdateCurrentChatPresence(); }
     private void UpdateCurrentChatPresence() { if (string.IsNullOrWhiteSpace(_currentOtherUserId)) { ChatStatusText.Text = "Offline"; ChatStatusIndicator.Fill = Brushes.Gray; return; } var online = IsUserOnline(_currentOtherUserId); ChatStatusText.Text = online ? "Online" : "Offline"; ChatStatusIndicator.Fill = online ? Brushes.LimeGreen : Brushes.Gray; }
@@ -85,4 +102,10 @@ public partial class MainView : UserControl
     private async void SendButton_Click(object sender, RoutedEventArgs e) => await SendCurrentMessageAsync();
     private async void MessageTextBox_KeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.Enter) { e.Handled = true; await SendCurrentMessageAsync(); } }
     private async Task SendCurrentMessageAsync() { if (!_currentChatId.HasValue) { MessageBox.Show("Please select a chat first.", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Information); return; } var content = MessageTextBox.Text.Trim(); if (string.IsNullOrWhiteSpace(content)) return; if (_hubConnection?.State != HubConnectionState.Connected) { MessageBox.Show("Real-time connection is not available.", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Warning); return; } try { MessageTextBox.Clear(); await _hubConnection.InvokeAsync("SendMessage", _currentChatId.Value, content); } catch (Exception ex) { MessageBox.Show($"Could not send message.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error); } }
+
+    private sealed class ChatDeletedEvent
+    {
+        public int ChatId { get; set; }
+        public string? DeletedBy { get; set; }
+    }
 }
