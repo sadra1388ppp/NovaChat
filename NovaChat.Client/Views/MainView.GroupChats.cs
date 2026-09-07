@@ -22,10 +22,21 @@ public partial class MainView
 
     private void RefreshGroupOnlineStatus() { if (!IsCurrentGroupChat || !_currentChatId.HasValue) return; _ = RefreshCurrentGroupInfoAsync(); }
     private void UpdateGroupOnlineStatusFromCache() { if (!IsCurrentGroupChat) return; var online = _currentGroupMembers.Count(member => _onlineUserIds.Contains(member.UserId)); ChatStatusText.Text = $"{online} member{(online == 1 ? "" : "s")} online"; ChatStatusIndicator.Fill = System.Windows.Media.Brushes.LimeGreen; if (online <= 0) ChatStatusIndicator.Fill = System.Windows.Media.Brushes.Gray; }
+
     private async Task RefreshCurrentGroupInfoAsync()
     {
         if (!_currentChatId.HasValue || !IsCurrentGroupChat) return;
-        try { var members = await _apiService.GetAsync<List<GroupMemberModel>>($"api/Chat/{_currentChatId.Value}/members") ?? []; _currentGroupMembers = members; UpdateGroupOnlineStatusFromCache(); await RefreshCurrentGroupAvatarAsync(); } catch { }
+        try
+        {
+            var members = await _apiService.GetAsync<List<GroupMemberModel>>($"api/Chat/{_currentChatId.Value}/members") ?? [];
+            _currentGroupMembers = members;
+            UpdateGroupOnlineStatusFromCache();
+
+            // Group avatars are intentionally NOT re-downloaded on the presence timer.
+            // Replacing the header Image source every second caused the avatar to blink.
+            // The avatar is refreshed only when the group is opened or its picture changes.
+        }
+        catch { }
     }
 
     private async Task RefreshCurrentGroupAvatarAsync()
@@ -33,8 +44,27 @@ public partial class MainView
         if (!_currentChatId.HasValue || !IsCurrentGroupChat) return;
         var item = _chats.FirstOrDefault(x => x.Chat.Id == _currentChatId.Value);
         if (item == null) return;
-        if (string.IsNullOrWhiteSpace(item.Chat.AvatarUrl)) { ChatHeaderAvatarImage.Source = null; ChatHeaderAvatarImage.Visibility = Visibility.Collapsed; ChatAvatarInitialsText.Visibility = Visibility.Visible; return; }
-        try { var image = await LoadConversationAvatarAsync(_apiService.BuildAbsoluteUrl(item.Chat.AvatarUrl)); if (image == null) return; await Dispatcher.InvokeAsync(() => { ChatHeaderAvatarImage.Source = image; ChatHeaderAvatarImage.Visibility = Visibility.Visible; ChatAvatarInitialsText.Visibility = Visibility.Collapsed; }); } catch { }
+
+        if (string.IsNullOrWhiteSpace(item.Chat.AvatarUrl))
+        {
+            ChatHeaderAvatarImage.Source = null;
+            ChatHeaderAvatarImage.Visibility = Visibility.Collapsed;
+            ChatAvatarInitialsText.Visibility = Visibility.Visible;
+            return;
+        }
+
+        try
+        {
+            var image = await LoadConversationAvatarAsync(_apiService.BuildAbsoluteUrl(item.Chat.AvatarUrl));
+            if (image == null) return;
+            await Dispatcher.InvokeAsync(() =>
+            {
+                ChatHeaderAvatarImage.Source = image;
+                ChatHeaderAvatarImage.Visibility = Visibility.Visible;
+                ChatAvatarInitialsText.Visibility = Visibility.Collapsed;
+            });
+        }
+        catch { }
     }
 
     private void ChatHeaderGroupInfo_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) { if (!IsCurrentGroupChat) return; e.Handled = true; OpenGroupInfo(); }
@@ -103,7 +133,8 @@ public partial class MainView
     {
         if (_hubConnection?.State != HubConnectionState.Connected) return;
         if (!_groupEventsHooked) { try { _hubConnection.On<ChatModel>("ChatCreated", OnGroupCreatedFromServer); _hubConnection.On<ChatModel>("GroupUpdated", OnGroupUpdatedFromServer); _hubConnection.On<object>("ChatMemberRemoved", OnGroupMemberRemovedFromServer); _groupEventsHooked = true; } catch { } }
-        RefreshGroupOnlineStatus(); _ = RefreshConversationAvatarsAsync();
+        RefreshGroupOnlineStatus();
+        // Do not refresh conversation avatars on the one-second presence timer.
     }
     private async void OnGroupCreatedFromServer(ChatModel chat) { if (chat == null || chat.Id <= 0) return; await Dispatcher.InvokeAsync(async () => { try { await LoadChatsAsync(); } catch { } }); }
     private async void OnGroupUpdatedFromServer(ChatModel chat) { if (chat == null || chat.Id <= 0) return; await Dispatcher.InvokeAsync(async () => { try { var item = _chats.FirstOrDefault(x => x.Chat.Id == chat.Id); if (item != null) item.Chat.AvatarUrl = chat.AvatarUrl; await LoadChatsAsync(); if (_currentChatId == chat.Id) await RefreshCurrentGroupAvatarAsync(); } catch { } }); }
