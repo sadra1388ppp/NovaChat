@@ -41,6 +41,7 @@ public partial class MainView : UserControl
         SetOwnerMode(false);
         Loaded += MainView_Loaded;
         Unloaded += MainView_Unloaded;
+        StartMessageDeletionHook();
     }
 
     private async void MainView_Loaded(object sender, RoutedEventArgs e)
@@ -57,7 +58,11 @@ public partial class MainView : UserControl
         }
     }
 
-    private async void MainView_Unloaded(object sender, RoutedEventArgs e) => await DisconnectSignalRAsync();
+    private async void MainView_Unloaded(object sender, RoutedEventArgs e)
+    {
+        StopMessageDeletionHook();
+        await DisconnectSignalRAsync();
+    }
 
     public void SetOwnerMode(bool isOwner)
     {
