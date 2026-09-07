@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Windows;
@@ -14,7 +15,6 @@ namespace NovaChat.Client.Views
         private readonly ApiService _apiService;
         private int _registrationInProgress;
         private CancellationTokenSource? _availabilityCts;
-        private bool _updatingPhoneText;
 
         public event Action? BackToLoginRequested;
 
@@ -29,7 +29,6 @@ namespace NovaChat.Client.Views
 
         private async void PhoneNumberTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            if (_updatingPhoneText) return;
             ValidatePhoneNumber();
             await CheckAvailabilityAsync();
         }
@@ -91,7 +90,10 @@ namespace NovaChat.Client.Views
             PhoneDuplicateText.Visibility = Visibility.Collapsed;
 
             if (string.IsNullOrWhiteSpace(username) && string.IsNullOrWhiteSpace(email) && string.IsNullOrWhiteSpace(phone))
+            {
+                RegisterButton.IsEnabled = true;
                 return;
+            }
 
             try
             {
@@ -110,7 +112,7 @@ namespace NovaChat.Client.Views
             catch (OperationCanceledException) { }
             catch (Exception)
             {
-                // The final registration request still performs authoritative duplicate validation.
+                // The final registration request still performs authoritative validation.
             }
         }
 
@@ -178,7 +180,7 @@ namespace NovaChat.Client.Views
             finally
             {
                 Interlocked.Exchange(ref _registrationInProgress, 0);
-                if (string.IsNullOrWhiteSpace(UsernameDuplicateText.Text) && string.IsNullOrWhiteSpace(EmailDuplicateText.Text) && string.IsNullOrWhiteSpace(PhoneDuplicateText.Text))
+                if (UsernameDuplicateText.Visibility != Visibility.Visible && EmailDuplicateText.Visibility != Visibility.Visible && PhoneDuplicateText.Visibility != Visibility.Visible)
                     RegisterButton.IsEnabled = true;
             }
         }
