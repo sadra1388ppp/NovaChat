@@ -32,7 +32,7 @@ public partial class AllChatsView : UserControl
     private async Task LoadChatsAsync()
     {
         _isLoading = true;
-        StatusText.Text = "Loading conversations...";
+        StatusText.Text = "Loading all conversations...";
 
         try
         {
@@ -106,27 +106,46 @@ public partial class AllChatsView : UserControl
     {
         var kind = item.Chat.IsGroup ? "GROUP" : "PRIVATE CHAT";
         SelectedChatIdText.Text = $"{kind}  •  Chat #{item.Chat.Id}  •  Created {item.Chat.CreatedAt.ToLocalTime():g}";
-        ParticipantsText.Text = item.Chat.IsGroup
-            ? $"Group: {item.Chat.Name}\nType: Group\nMembers: loaded from the server"
-            : $"{item.Chat.User1Name}  ·  {item.Chat.User1Id}\n{item.Chat.User2Name}  ·  {item.Chat.User2Id}";
         DeleteButton.IsEnabled = true;
         DeleteButton.Content = item.Chat.IsGroup ? "Delete Group" : "Delete Chat";
         NoMessagesText.Visibility = Visibility.Collapsed;
         MessagesList.ItemsSource = null;
-        StatusText.Text = $"Loading history for {kind.ToLowerInvariant()} #{item.Chat.Id}...";
+        ParticipantsText.Text = item.Chat.IsGroup
+            ? "Loading group members..."
+            : $"{item.Chat.User1Name}  ·  ID {item.Chat.User1Id}\n{item.Chat.User2Name}  ·  ID {item.Chat.User2Id}";
+        StatusText.Text = $"Loading details for {kind.ToLowerInvariant()} #{item.Chat.Id}...";
 
         try
         {
+            var members = await _apiService.GetAsync<List<OwnerMemberModel>>($"api/OwnerChat/{item.Chat.Id}/members") ?? [];
+            if (item.Chat.IsGroup)
+            {
+                if (members.Count == 0)
+                {
+                    ParticipantsText.Text = "No members found.";
+                }
+                else
+                {
+                    ParticipantsText.Text = string.Join("\n", members.Select((m, i) =>
+                        $"{i + 1}. {m.DisplayName}  •  @{m.Username}  •  {m.Role}  •  ID {m.UserId}"));
+                }
+            }
+            else if (members.Count > 0)
+            {
+                ParticipantsText.Text = string.Join("\n", members.Select(m =>
+                    $"{m.DisplayName}  •  @{m.Username}  •  ID {m.UserId}"));
+            }
+
             var history = await _apiService.GetAsync<ChatHistoryResponse>($"api/Chat/{item.Chat.Id}/messages?pageSize=100");
             var messages = history?.Messages ?? [];
             MessagesList.ItemsSource = messages.Select(m => new AdminMessageItem(m)).ToList();
             NoMessagesText.Visibility = messages.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-            StatusText.Text = $"{kind} #{item.Chat.Id} • {messages.Count} message{(messages.Count == 1 ? string.Empty : "s")} loaded.";
+            StatusText.Text = $"{kind} #{item.Chat.Id} • {members.Count} participant{(members.Count == 1 ? string.Empty : "s")} • {messages.Count} message{(messages.Count == 1 ? string.Empty : "s")} loaded.";
         }
         catch (Exception ex)
         {
             NoMessagesText.Visibility = Visibility.Visible;
-            StatusText.Text = "Could not load message history.";
+            StatusText.Text = "Could not load conversation details.";
             MessageBox.Show($"Could not load this conversation.\n\n{ex.Message}", "All Chats", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -141,11 +160,7 @@ public partial class AllChatsView : UserControl
             DeleteButton.IsEnabled = false;
             StatusText.Text = item.Chat.IsGroup ? "Deleting group..." : "Deleting conversation...";
 
-            var endpoint = item.Chat.IsGroup
-                ? $"api/GroupManagement/{item.Chat.Id}"
-                : $"api/Chat/{item.Chat.Id}";
-
-            if (!await _apiService.DeleteAsync(endpoint))
+            if (!await _apiService.DeleteAsync($"api/OwnerChat/{item.Chat.Id}"))
             {
                 MessageBox.Show(item.Chat.IsGroup ? "The server could not delete this group." : "The server could not delete this conversation.", "All Chats", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
@@ -161,7 +176,7 @@ public partial class AllChatsView : UserControl
         catch (Exception ex)
         {
             StatusText.Text = "Delete failed.";
-            MessageBox.Show($"Could not delete the { (item.Chat.IsGroup ? "group" : "conversation") }.\n\n{ex.Message}", "All Chats", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show($"Could not delete the {(item.Chat.IsGroup ? "group" : "conversation")}.\n\n{ex.Message}", "All Chats", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -175,17 +190,17 @@ public partial class AllChatsView : UserControl
         var title = isGroup ? "Delete group?" : "Delete conversation?";
         var name = isGroup ? (string.IsNullOrWhiteSpace(item.Chat.Name) ? "Unnamed group" : item.Chat.Name) : $"{item.Chat.User1Name} ↔ {item.Chat.User2Name}";
         var description = isGroup
-            ? "This permanently removes the group, its membership and its message history for everyone."
-            : "This permanently removes the private conversation and its message history from the server.";
+            ? "You are about to permanently remove this group, its membership and its message history from NovaChat."
+            : "You are about to permanently remove this private conversation and its message history from NovaChat.";
         var warning = isGroup
-            ? "Every member will lose access to this group and its messages."
-            : "This action cannot be undone and affects the server-side conversation.";
+            ? "Every member will lose access to the group and all messages in it. This action cannot be undone."
+            : "This action affects the server-side conversation and cannot be undone.";
 
         var dialog = new Window
         {
             Title = isGroup ? "Delete Group" : "Delete Conversation",
             Width = 500,
-            Height = 360,
+            Height = 370,
             Owner = Window.GetWindow(this),
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ResizeMode = ResizeMode.NoResize,
@@ -277,6 +292,17 @@ public partial class AllChatsView : UserControl
             if (parts.Length == 1) return parts[0][..Math.Min(2, parts[0].Length)].ToUpperInvariant();
             return $"{parts[0][..1]}{parts[^1][..1]}".ToUpperInvariant();
         }
+    }
+
+    private sealed class OwnerMemberModel
+    {
+        public string UserId { get; set; } = string.Empty;
+        public string Username { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+        public string Role { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string? PhoneNumber { get; set; }
+        public string? AvatarUrl { get; set; }
     }
 
     private sealed class AdminMessageItem
