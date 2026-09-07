@@ -1,4 +1,6 @@
 using System.Windows;
+using Microsoft.AspNetCore.SignalR.Client;
+using NovaChat.Client.Services;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using NovaChat.Client.Models;
