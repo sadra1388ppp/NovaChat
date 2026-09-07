@@ -104,7 +104,7 @@ public partial class MainView
         var card = new Border { Background = GetBrush("InputBackgroundBrush"), BorderBrush = GetBrush("BorderBrush"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(14), Padding = new Thickness(12), Margin = new Thickness(0, 0, 0, 8) };
         var grid = new Grid(); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var avatar = new Grid { Width = 46, Height = 46, Margin = new Thickness(0, 0, 12, 0) }; avatar.Children.Add(new Border { CornerRadius = new CornerRadius(23), Background = GetBrush("PrimarySoftBrush") }); avatar.Children.Add(new TextBlock { Text = BuildInitials(member.DisplayName), FontSize = 14, FontWeight = FontWeights.Bold, Foreground = GetBrush("PrimaryBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
-        if (!string.IsNullOrWhiteSpace(member.AvatarUrl)) { try { var image = await LoadConversationAvatarAsync(_apiService.BuildAbsoluteUrl(member.AvatarUrl)); if (image != null) { var imageControl = new Image { Width = 46, Height = 46, Stretch = Stretch.UniformToFill, Source = image, IsHitTestVisible = false }; imageControl.Clip = new System.Windows.Media.EllipseGeometry(new Point(23, 23), 23, 23); avatar.Children.Add(imageControl); } } catch { } }
+        if (!string.IsNullOrWhiteSpace(member.AvatarUrl)) { try { var image = await LoadConversationAvatarAsync(_apiService.BuildAbsoluteUrl(member.AvatarUrl)); if (image != null) { var imageControl = new Image { Width = 46, Height = 46, Stretch = Stretch.UniformToFill, Source = image, IsHitTestVisible = false }; imageControl.Clip = new EllipseGeometry(new Point(23, 23), 23, 23); avatar.Children.Add(imageControl); } } catch { } }
         Grid.SetColumn(avatar, 0); grid.Children.Add(avatar);
         var info = new StackPanel { VerticalAlignment = VerticalAlignment.Center }; info.Children.Add(new TextBlock { Text = member.DisplayName, FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = GetBrush("TextBrush"), TextTrimming = TextTrimming.CharacterEllipsis }); var subtitle = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 0) }; subtitle.Children.Add(new TextBlock { Text = "@" + member.Username, FontSize = 11, Foreground = GetBrush("SecondaryTextBrush") }); subtitle.Children.Add(CreateRoleBadge(member.Role)); info.Children.Add(subtitle); Grid.SetColumn(info, 1); grid.Children.Add(info);
         if (canManage && !string.Equals(member.Role, "Owner", StringComparison.OrdinalIgnoreCase) && !string.Equals(member.UserId, AuthState.UserId, StringComparison.OrdinalIgnoreCase))
@@ -145,15 +145,52 @@ public partial class MainView
             var result = await _apiService.UploadFileAsync<GroupAvatarResult>($"api/Chat/{state.ChatId}/avatar", picker.FileName);
             if (result?.Chat != null) state.Chat.AvatarUrl = result.Chat.AvatarUrl;
             await LoadChatsAsync(); var refreshed = _chats.FirstOrDefault(x => x.Chat.Id == state.ChatId)?.Chat; if (refreshed != null) state.Chat = refreshed;
-            state.ChatAvatar.Children.Clear(); var newAvatar = await BuildGroupAvatarAsync(state.Chat); foreach (UIElement child in newAvatar.Children) state.ChatAvatar.Children.Add(child);
+            await RefreshGroupAvatarAsync(state);
         }
         catch (Exception ex) { MessageBox.Show(ex.Message, "Group Picture", MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
 
+    private async Task RefreshGroupAvatarAsync(GroupInfoDialogState state)
+    {
+        var avatar = state.ChatAvatar;
+        avatar.Children.Clear();
+        avatar.Children.Add(new Border { CornerRadius = new CornerRadius(46), Background = GetBrush("PrimarySoftBrush") });
+        avatar.Children.Add(new TextBlock { Text = BuildGroupInitials(state.Chat.Name), FontSize = 28, FontWeight = FontWeights.Bold, Foreground = GetBrush("PrimaryBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
+        if (!string.IsNullOrWhiteSpace(state.Chat.AvatarUrl))
+        {
+            try
+            {
+                var image = await LoadConversationAvatarAsync(_apiService.BuildAbsoluteUrl(state.Chat.AvatarUrl));
+                if (image != null)
+                {
+                    var imageControl = new Image { Width = 92, Height = 92, Stretch = Stretch.UniformToFill, Source = image, IsHitTestVisible = false };
+                    imageControl.Clip = new EllipseGeometry(new Point(46, 46), 46, 46);
+                    avatar.Children.Add(imageControl);
+                }
+            }
+            catch { }
+        }
+    }
+
     private async Task<Grid> BuildGroupAvatarAsync(ChatModel chat)
     {
-        var avatar = new Grid { Width = 92, Height = 92, Margin = new Thickness(0, 0, 18, 0) }; avatar.Children.Add(new Border { CornerRadius = new CornerRadius(46), Background = GetBrush("PrimarySoftBrush") }); avatar.Children.Add(new TextBlock { Text = BuildGroupInitials(chat.Name), FontSize = 28, FontWeight = FontWeights.Bold, Foreground = GetBrush("PrimaryBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
-        if (!string.IsNullOrWhiteSpace(chat.AvatarUrl)) { try { var image = await LoadConversationAvatarAsync(_apiService.BuildAbsoluteUrl(chat.AvatarUrl)); if (image != null) { var imageControl = new Image { Width = 92, Height = 92, Stretch = Stretch.UniformToFill, Source = image, IsHitTestVisible = false }; imageControl.Clip = new System.Windows.Media.EllipseGeometry(new Point(46, 46), 46, 46); avatar.Children.Add(imageControl); } } catch { } }
+        var avatar = new Grid { Width = 92, Height = 92, Margin = new Thickness(0, 0, 18, 0) };
+        avatar.Children.Add(new Border { CornerRadius = new CornerRadius(46), Background = GetBrush("PrimarySoftBrush") });
+        avatar.Children.Add(new TextBlock { Text = BuildGroupInitials(chat.Name), FontSize = 28, FontWeight = FontWeights.Bold, Foreground = GetBrush("PrimaryBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
+        if (!string.IsNullOrWhiteSpace(chat.AvatarUrl))
+        {
+            try
+            {
+                var image = await LoadConversationAvatarAsync(_apiService.BuildAbsoluteUrl(chat.AvatarUrl));
+                if (image != null)
+                {
+                    var imageControl = new Image { Width = 92, Height = 92, Stretch = Stretch.UniformToFill, Source = image, IsHitTestVisible = false };
+                    imageControl.Clip = new EllipseGeometry(new Point(46, 46), 46, 46);
+                    avatar.Children.Add(imageControl);
+                }
+            }
+            catch { }
+        }
         return avatar;
     }
 
