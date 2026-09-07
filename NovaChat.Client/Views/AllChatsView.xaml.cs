@@ -117,18 +117,17 @@ public partial class AllChatsView : UserControl
 
         try
         {
+            // OwnerChat has a dedicated owner-only endpoint. This avoids relying
+            // on the normal member-access path and guarantees that the global
+            // Owner can inspect groups even when not a group member.
             var members = await _apiService.GetAsync<List<OwnerMemberModel>>($"api/OwnerChat/{item.Chat.Id}/members") ?? [];
+
             if (item.Chat.IsGroup)
             {
-                if (members.Count == 0)
-                {
-                    ParticipantsText.Text = "No members found.";
-                }
-                else
-                {
-                    ParticipantsText.Text = string.Join("\n", members.Select((m, i) =>
+                ParticipantsText.Text = members.Count == 0
+                    ? "No members found."
+                    : string.Join("\n", members.Select((m, i) =>
                         $"{i + 1}. {m.DisplayName}  •  @{m.Username}  •  {m.Role}  •  ID {m.UserId}"));
-                }
             }
             else if (members.Count > 0)
             {
@@ -136,8 +135,8 @@ public partial class AllChatsView : UserControl
                     $"{m.DisplayName}  •  @{m.Username}  •  ID {m.UserId}"));
             }
 
-            var history = await _apiService.GetAsync<ChatHistoryResponse>($"api/Chat/{item.Chat.Id}/messages?pageSize=100");
-            var messages = history?.Messages ?? [];
+            var ownerHistory = await _apiService.GetAsync<OwnerMessagesResponse>($"api/OwnerChat/{item.Chat.Id}/messages?pageSize=200");
+            var messages = ownerHistory?.Messages ?? [];
             MessagesList.ItemsSource = messages.Select(m => new AdminMessageItem(m)).ToList();
             NoMessagesText.Visibility = messages.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             StatusText.Text = $"{kind} #{item.Chat.Id} • {members.Count} participant{(members.Count == 1 ? string.Empty : "s")} • {messages.Count} message{(messages.Count == 1 ? string.Empty : "s")} loaded.";
@@ -303,6 +302,12 @@ public partial class AllChatsView : UserControl
         public string Email { get; set; } = string.Empty;
         public string? PhoneNumber { get; set; }
         public string? AvatarUrl { get; set; }
+    }
+
+    private sealed class OwnerMessagesResponse
+    {
+        public List<MessageModel> Messages { get; set; } = [];
+        public int Count { get; set; }
     }
 
     private sealed class AdminMessageItem
