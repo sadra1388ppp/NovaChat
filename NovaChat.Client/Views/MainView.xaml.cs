@@ -26,7 +26,6 @@ public partial class MainView : UserControl
     private bool _hasMoreMessages;
     private bool _isOpeningChat;
     private static bool _messageDeletionHandlerRegistered;
-    private static bool _chatDeletionHandlerRegistered;
 
     public MainView()
     {
@@ -45,11 +44,7 @@ public partial class MainView : UserControl
         _hubConnection.On<List<string>>("PresenceSnapshot", OnPresenceSnapshot);
         _hubConnection.On<string>("UserOnline", OnUserOnline);
         _hubConnection.On<string>("UserOffline", OnUserOffline);
-        if (!_chatDeletionHandlerRegistered)
-        {
-            _hubConnection.On<ChatDeletedEvent>("ChatDeleted", OnChatDeleted);
-            _chatDeletionHandlerRegistered = true;
-        }
+        _hubConnection.On<ChatDeletedEvent>("ChatDeleted", OnChatDeleted);
         _hubConnection.Reconnecting += OnSignalRReconnecting; _hubConnection.Reconnected += OnSignalRReconnected; _hubConnection.Closed += OnSignalRClosed;
         await _hubConnection.StartAsync(); ChatStatusText.Text = "Connected"; await RefreshCurrentUserPresenceAsync();
     }
@@ -61,7 +56,7 @@ public partial class MainView : UserControl
     private async void OnPresenceSnapshot(List<string> ids) => await Dispatcher.InvokeAsync(() => { _onlineUserIds.Clear(); foreach (var id in ids ?? []) if (!string.IsNullOrWhiteSpace(id)) _onlineUserIds.Add(id); RefreshPresenceUi(); });
     private async void OnUserOnline(string id) { if (!string.IsNullOrWhiteSpace(id)) await Dispatcher.InvokeAsync(() => { _onlineUserIds.Add(id); RefreshPresenceUi(); }); }
     private async void OnUserOffline(string id) { if (!string.IsNullOrWhiteSpace(id)) await Dispatcher.InvokeAsync(() => { _onlineUserIds.Remove(id); RefreshPresenceUi(); }); }
-    private async Task OnChatDeleted(ChatDeletedEvent evt) { if (evt == null || evt.ChatId <= 0) return; await Dispatcher.InvokeAsync(async () => { try { await RemoveChatFromLocalUiAsync(evt.ChatId); } catch { } }); }
+    private async void OnChatDeleted(ChatDeletedEvent evt) { if (evt == null || evt.ChatId <= 0) return; await Dispatcher.InvokeAsync(async () => { try { await RemoveChatFromLocalUiAsync(evt.ChatId); } catch { } }); }
     private bool IsUserOnline(string id) => !string.IsNullOrWhiteSpace(id) && _onlineUserIds.Contains(id);
     private void RefreshPresenceUi() { foreach (var item in _chats) item.IsOnline = IsUserOnline(item.Chat.OtherUserId(AuthState.UserId)); RefreshChatsList(); UpdateCurrentChatPresence(); }
     private void UpdateCurrentChatPresence() { if (string.IsNullOrWhiteSpace(_currentOtherUserId)) { ChatStatusText.Text = "Offline"; ChatStatusIndicator.Fill = Brushes.Gray; return; } var online = IsUserOnline(_currentOtherUserId); ChatStatusText.Text = online ? "Online" : "Offline"; ChatStatusIndicator.Fill = online ? Brushes.LimeGreen : Brushes.Gray; }
