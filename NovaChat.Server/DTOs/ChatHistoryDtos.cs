@@ -18,12 +18,20 @@ public class MessageDto
     public long? FileSize { get; set; }
     public double? DurationSeconds { get; set; }
 }
-public class ChatHistoryResponseDto { public List<MessageDto> Messages { get; set; } = []; public bool HasMore { get; set; } public int? NextBeforeMessageId { get; set; } }
+
+public class ChatHistoryResponseDto
+{
+    public List<MessageDto> Messages { get; set; } = [];
+    public bool HasMore { get; set; }
+    public int? NextBeforeMessageId { get; set; }
+}
+
 public class ChatListDto
 {
     public int Id { get; set; }
     public string Type { get; set; } = "Private";
     public string Name { get; set; } = string.Empty;
+    public string? AvatarUrl { get; set; }
     public string CreatedByUserId { get; set; } = string.Empty;
     public string User1Id { get; set; } = string.Empty;
     public string User2Id { get; set; } = string.Empty;
@@ -34,15 +42,30 @@ public class ChatListDto
     public DateTime CreatedAt { get; set; }
     public MessageDto? LastMessage { get; set; }
 }
+
 public static class MessageDtoMapper
 {
     public static MessageDto Map(Message message, string? ignoredBaseUrl = null)
     {
-        var dto = new MessageDto { Id = message.Id, ChatId = message.ChatId, SenderId = message.SenderId.ToString(System.Globalization.CultureInfo.InvariantCulture), SenderName = message.Sender?.DisplayName ?? string.Empty, Content = message.Content, SentAt = message.SentAt };
+        var dto = new MessageDto
+        {
+            Id = message.Id,
+            ChatId = message.ChatId,
+            SenderId = message.SenderId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            SenderName = message.Sender?.DisplayName ?? string.Empty,
+            Content = message.Content,
+            SentAt = message.SentAt
+        };
         if (MediaMessageEnvelope.TryParse(message.Content, out var media) && media != null)
         {
-            dto.MessageType = media.Type; dto.FileName = media.FileName; dto.ContentType = media.ContentType; dto.FileSize = media.Size; dto.DurationSeconds = media.DurationSeconds; dto.AttachmentUrl = $"/api/ChatMedia/{message.Id}";
-            var icon = media.Type switch { "image" => "📷", "voice" => "🎙", _ => "📎" }; dto.Content = $"{icon} {media.FileName}\u200B{message.Id}";
+            dto.MessageType = media.Type;
+            dto.FileName = media.FileName;
+            dto.ContentType = media.ContentType;
+            dto.FileSize = media.Size;
+            dto.DurationSeconds = media.DurationSeconds;
+            dto.AttachmentUrl = $"/api/ChatMedia/{message.Id}";
+            var icon = media.Type switch { "image" => "📷", "voice" => "🎙", _ => "📎" };
+            dto.Content = $"{icon} {media.FileName}\u200B{message.Id}";
         }
         return dto;
     }
