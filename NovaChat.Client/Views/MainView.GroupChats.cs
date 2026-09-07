@@ -21,6 +21,7 @@ public partial class MainView
     private Button? _createGroupButton;
     private DispatcherTimer? _groupEventTimer;
     private bool _groupEventsHooked;
+    private List<GroupMemberModel> _currentGroupMembers = [];
 
     private bool IsCurrentGroupChat =>
         _currentChatId.HasValue &&
@@ -32,6 +33,17 @@ public partial class MainView
         _ = RefreshCurrentGroupInfoAsync();
     }
 
+    private void UpdateGroupOnlineStatusFromCache()
+    {
+        if (!IsCurrentGroupChat) return;
+
+        var online = _currentGroupMembers.Count(member => _onlineUserIds.Contains(member.UserId));
+        ChatStatusText.Text = $"{online} member{(online == 1 ? "" : "s")} online";
+        ChatStatusIndicator.Fill = online > 0
+            ? System.Windows.Media.Brushes.LimeGreen
+            : System.Windows.Media.Brushes.Gray;
+    }
+
     private async Task RefreshCurrentGroupInfoAsync()
     {
         if (!_currentChatId.HasValue || !IsCurrentGroupChat) return;
@@ -41,11 +53,8 @@ public partial class MainView
             var members = await _apiService.GetAsync<List<GroupMemberModel>>(
                 $"api/Chat/{_currentChatId.Value}/members") ?? [];
 
-            var online = members.Count(member => _onlineUserIds.Contains(member.UserId));
-            ChatStatusText.Text = $"{online} member{(online == 1 ? "" : "s")} online";
-            ChatStatusIndicator.Fill = online > 0
-                ? System.Windows.Media.Brushes.LimeGreen
-                : System.Windows.Media.Brushes.Gray;
+            _currentGroupMembers = members;
+            UpdateGroupOnlineStatusFromCache();
         }
         catch
         {
@@ -68,6 +77,7 @@ public partial class MainView
             var members = await _apiService.GetAsync<List<GroupMemberModel>>(
                 $"api/Chat/{_currentChatId.Value}/members") ?? [];
 
+            _currentGroupMembers = members;
             var online = members.Count(member => _onlineUserIds.Contains(member.UserId));
 
             var dialog = new Window
@@ -81,7 +91,6 @@ public partial class MainView
             };
 
             var panel = new StackPanel { Margin = new Thickness(22) };
-
             panel.Children.Add(new TextBlock
             {
                 Text = ChatUserNameText.Text,
@@ -89,14 +98,12 @@ public partial class MainView
                 FontWeight = FontWeights.Bold,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextBrush")
             });
-
             panel.Children.Add(new TextBlock
             {
                 Text = $"{online} member{(online == 1 ? "" : "s")} online • {members.Count} members",
                 Margin = new Thickness(0, 6, 0, 18),
                 Foreground = (System.Windows.Media.Brush)FindResource("SecondaryTextBrush")
             });
-
             panel.Children.Add(new TextBlock
             {
                 Text = "MEMBERS",
@@ -117,7 +124,6 @@ public partial class MainView
                 var isOnline = _onlineUserIds.Contains(member.UserId);
                 var status = isOnline ? "Online" : "Offline";
                 var role = string.IsNullOrWhiteSpace(member.Role) ? "Member" : member.Role;
-
                 list.Items.Add(new TextBlock
                 {
                     Text = $"{(isOnline ? "●" : "○")}  {member.DisplayName}  •  {role}  •  {status}",
@@ -174,7 +180,6 @@ public partial class MainView
             Padding = new Thickness(10, 0, 10, 0),
             Style = (Style)FindResource("SecondaryButtonStyle")
         };
-
         _createGroupButton.Click += CreateGroupButton_Click;
         panel.Children.Add(_createGroupButton);
     }
@@ -182,7 +187,6 @@ public partial class MainView
     private void StartGroupEventWatcher()
     {
         if (_groupEventTimer != null) return;
-
         _groupEventTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _groupEventTimer.Tick += GroupEventTimer_Tick;
         _groupEventTimer.Start();
@@ -190,24 +194,23 @@ public partial class MainView
 
     private async void GroupEventTimer_Tick(object? sender, EventArgs e)
     {
-        if (_hubConnection?.State == HubConnectionState.Connected)
-        {
-            if (!_groupEventsHooked)
-            {
-                try
-                {
-                    _hubConnection.On<ChatModel>("ChatCreated", OnGroupCreatedFromServer);
-                    _hubConnection.On<ChatModel>("GroupUpdated", OnGroupUpdatedFromServer);
-                    _hubConnection.On<object>("ChatMemberRemoved", OnGroupMemberRemovedFromServer);
-                    _groupEventsHooked = true;
-                }
-                catch
-                {
-                }
-            }
+        if (_hubConnection?.State != HubConnectionState.Connected) return;
 
-            RefreshGroupOnlineStatus();
+        if (!_groupEventsHooked)
+        {
+            try
+            {
+                _hubConnection.On<ChatModel>("ChatCreated", OnGroupCreatedFromServer);
+                _hubConnection.On<ChatModel>("GroupUpdated", OnGroupUpdatedFromServer);
+                _hubConnection.On<object>("ChatMemberRemoved", OnGroupMemberRemovedFromServer);
+                _groupEventsHooked = true;
+            }
+            catch
+            {
+            }
         }
+
+        RefreshGroupOnlineStatus();
     }
 
     private async void OnGroupCreatedFromServer(ChatModel chat)
