@@ -44,20 +44,32 @@ public partial class MainView
     {
         if (sender is not Button { DataContext: ChatListItem item }) return;
         var chatId = item.Chat.Id; if (chatId <= 0) return;
-        if (MessageBox.Show($"Delete chat with {item.DisplayName}?\n\nAll messages in this chat will also be deleted.", "Delete Chat", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+
+        if (item.Chat.IsGroup)
+        {
+            MessageBox.Show("Group management is available from Group Info.\n\nMembers can use Leave Group there, while the owner can permanently delete the group there.", "Group Info", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (MessageBox.Show($"Remove chat with {item.DisplayName} from your chat list?\n\nThe other person will keep the conversation and its messages. You can start the chat again later.", "Remove Chat", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         try
         {
-            if (!await _apiService.DeleteAsync($"api/Chat/{chatId}")) { MessageBox.Show("The selected chat could not be deleted.", "Delete Chat", MessageBoxButton.OK, MessageBoxImage.Error); return; }
-            _chats.RemoveAll(x => x.Chat.Id == chatId);
-            if (_currentChatId == chatId)
-            {
-                if (_hubConnection?.State == HubConnectionState.Connected) try { await _hubConnection.InvokeAsync("LeaveChat", chatId); } catch { }
-                _currentChatId = null; _currentOtherUserId = string.Empty; _loadedMessageIds.Clear(); _oldestLoadedMessageId = null; _hasMoreMessages = false;
-                ChatUserNameText.Text = "Select a chat"; ChatStatusText.Text = "Offline"; ChatStatusIndicator.Fill = Brushes.Gray; ChatHeaderAvatarImage.Source = null; ChatHeaderAvatarImage.Visibility = Visibility.Collapsed; ChatAvatarInitialsText.Text = "N"; ChatAvatarInitialsText.Visibility = Visibility.Visible; MessagesPanel.Children.Clear(); MessageTextBox.Clear(); UpdateLoadOlderButton();
-            }
-            RefreshChatsList();
+            if (!await _apiService.DeleteAsync($"api/Conversation/{chatId}")) { MessageBox.Show("The selected chat could not be removed.", "Remove Chat", MessageBoxButton.OK, MessageBoxImage.Error); return; }
+            await RemoveChatFromLocalUiAsync(chatId);
         }
-        catch (Exception ex) { MessageBox.Show($"Could not delete chat.\n\n{ex.Message}", "Delete Chat", MessageBoxButton.OK, MessageBoxImage.Error); }
+        catch (Exception ex) { MessageBox.Show($"Could not remove the chat.\n\n{ex.Message}", "Remove Chat", MessageBoxButton.OK, MessageBoxImage.Error); }
+    }
+
+    private async Task RemoveChatFromLocalUiAsync(int chatId)
+    {
+        _chats.RemoveAll(x => x.Chat.Id == chatId);
+        if (_currentChatId == chatId)
+        {
+            if (_hubConnection?.State == HubConnectionState.Connected) try { await _hubConnection.InvokeAsync("LeaveChat", chatId); } catch { }
+            _currentChatId = null; _currentOtherUserId = string.Empty; _loadedMessageIds.Clear(); _oldestLoadedMessageId = null; _hasMoreMessages = false;
+            ChatUserNameText.Text = "Select a chat"; ChatStatusText.Text = "Offline"; ChatStatusIndicator.Fill = Brushes.Gray; ChatHeaderAvatarImage.Source = null; ChatHeaderAvatarImage.Visibility = Visibility.Collapsed; ChatAvatarInitialsText.Text = "N"; ChatAvatarInitialsText.Visibility = Visibility.Visible; MessagesPanel.Children.Clear(); MessageTextBox.Clear(); UpdateLoadOlderButton();
+        }
+        RefreshChatsList();
     }
 
     private async void ChatHeaderProfile_Click(object sender, MouseButtonEventArgs e)
