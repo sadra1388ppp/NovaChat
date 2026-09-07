@@ -19,7 +19,7 @@ public partial class MainView
     private static bool _groupUiRegistered;
     private Button? _createGroupButton;
     private DispatcherTimer? _groupEventTimer;
-    private bool IsCurrentGroupChat => _currentChatId.HasValue && _chats.FirstOrDefault(x => x.Chat.Id == _currentChatId.Value)?.Chat.Type.Equals("Group", StringComparison.OrdinalIgnoreCase) == true;
+    private bool IsCurrentGroupChat => _currentChatId.HasValue && _chats.FirstOrDefault(x => x.Chat.Id == _currentChatId.Value)?.Chat.Type?.Equals("Group", StringComparison.OrdinalIgnoreCase) == true;
 
     private void RefreshGroupOnlineStatus()
     {
@@ -43,7 +43,8 @@ public partial class MainView
 
     private void ChatHeaderGroupInfo_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        if (IsCurrentGroupChat) OpenGroupInfo();
+        if (!IsCurrentGroupChat) return;
+        OpenGroupInfo();
     }
 
     private async void OpenGroupInfo()
