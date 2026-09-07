@@ -60,8 +60,15 @@ public partial class MainView : UserControl
 
     private async void MainView_Unloaded(object sender, RoutedEventArgs e)
     {
-        StopMessageDeletionHook();
-        await DisconnectSignalRAsync();
+        try
+        {
+            StopMessageDeletionHook();
+            await DisconnectSignalRAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"SignalR disconnect failed during unload: {ex}");
+        }
     }
 
     public void SetOwnerMode(bool isOwner)
@@ -93,9 +100,39 @@ public partial class MainView : UserControl
 
     private async Task DisconnectSignalRAsync()
     {
-        if (_hubConnection == null) return;
-        try { await _hubConnection.StopAsync(); await _hubConnection.DisposeAsync(); }
-        finally { _hubConnection = null; _onlineUserIds.Clear(); ChatStatusText.Text = "Offline"; ChatStatusIndicator.Fill = Brushes.Gray; RefreshPresenceUi(); }
+        var connection = _hubConnection;
+        _hubConnection = null;
+
+        if (connection != null)
+        {
+            try
+            {
+                await connection.StopAsync();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"SignalR StopAsync failed: {ex}");
+            }
+
+            try
+            {
+                await connection.DisposeAsync();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"SignalR DisposeAsync failed: {ex}");
+            }
+        }
+
+        _onlineUserIds.Clear();
+
+        // Unloaded can run while WPF is tearing down the visual tree.
+        if (!IsLoaded)
+            return;
+
+        ChatStatusText.Text = "Offline";
+        ChatStatusIndicator.Fill = Brushes.Gray;
+        RefreshPresenceUi();
     }
 
     private async Task RefreshCurrentUserPresenceAsync()
