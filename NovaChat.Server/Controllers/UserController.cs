@@ -22,6 +22,13 @@ public class UserController : ControllerBase
     [AllowAnonymous, HttpPost("register")]
     public async Task<IActionResult> Register(RegisterDto dto) { var result = await _userService.RegisterAsync(dto); if (!result.Success) return Conflict(new { message = result.Message }); return Ok(new { message = result.Message, user = result.User }); }
 
+    [AllowAnonymous, HttpGet("registration-availability")]
+    public async Task<IActionResult> RegistrationAvailability([FromQuery] string? username, [FromQuery] string? email, [FromQuery] string? phoneNumber)
+    {
+        var result = await _userService.CheckRegistrationAvailabilityAsync(username, email, phoneNumber);
+        return Ok(new { usernameTaken = result.UsernameTaken, emailTaken = result.EmailTaken, phoneTaken = result.PhoneTaken });
+    }
+
     [AllowAnonymous, HttpPost("login")]
     public async Task<IActionResult> Login(LoginDto dto)
     {
@@ -32,10 +39,8 @@ public class UserController : ControllerBase
 
     [Authorize, HttpGet("profile/me")]
     public async Task<IActionResult> GetMyProfile() { var id = CurrentUserId(); if (id == null) return Unauthorized(); var user = await _userService.GetUserByIdAsync(id, true); return user == null ? NotFound(new { message = "User not found." }) : Ok(user); }
-
     [Authorize, HttpGet("profile/{id}")]
     public async Task<IActionResult> GetPublicProfile(string id) { var user = await _userService.GetUserByIdAsync(id); return user == null ? NotFound(new { message = "User not found." }) : Ok(user); }
-
     [Authorize, HttpGet("profile/{id}/avatar")]
     public async Task<IActionResult> GetAvatar(string id)
     {
@@ -45,13 +50,10 @@ public class UserController : ControllerBase
         if (!System.IO.File.Exists(path)) return NotFound(); Response.Headers.CacheControl = "no-cache, no-store, must-revalidate"; Response.Headers.Pragma = "no-cache"; Response.Headers.Expires = "0"; Response.Headers.ContentDisposition = "inline";
         return PhysicalFile(path, "image/jpeg", enableRangeProcessing: true);
     }
-
     [Authorize, HttpGet("search")]
     public async Task<IActionResult> Search([FromQuery] string q) { var id = CurrentUserId(); if (id == null) return Unauthorized(); return Ok(string.IsNullOrWhiteSpace(q) ? Array.Empty<UserResponseDto>() : await _userService.SearchUsersAsync(q, id)); }
-
     [Authorize, HttpGet("{id}")]
     public async Task<IActionResult> GetUser(string id) { if (!IsOwner() && !IsCurrentUser(id)) return Forbid(); var user = await _userService.GetUserByIdAsync(id, IsCurrentUser(id) || IsOwner()); return user == null ? NotFound(new { message = "User not found." }) : Ok(user); }
-
     [Authorize, HttpPut("{id}")]
     public async Task<IActionResult> UpdateUser(string id, UpdateUserDto dto)
     {
@@ -60,7 +62,6 @@ public class UserController : ControllerBase
         await _hub.Clients.All.SendAsync("ProfileUpdated", new { userId = id, username = result.User?.Username ?? string.Empty, displayName = result.User?.DisplayName ?? string.Empty, bio = result.User?.Bio ?? string.Empty, avatarUrl = result.User?.AvatarUrl });
         return Ok(new { message = result.Message, user = result.User });
     }
-
     [Authorize, HttpPost("{id}/avatar"), RequestSizeLimit(MaxAvatarBytes)]
     public async Task<IActionResult> UploadAvatar(string id, IFormFile file)
     {
@@ -70,23 +71,19 @@ public class UserController : ControllerBase
         {
             await using var input = file.OpenReadStream(); using var image = await Image.LoadAsync(input); if (image.Width < 64 || image.Height < 64) return BadRequest(new { message = "Image must be at least 64x64 pixels." });
             var dir = Path.Combine(_environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot"), "uploads", "avatars"); Directory.CreateDirectory(dir); var fileName = $"{Guid.NewGuid():N}.jpg"; var fullPath = Path.Combine(dir, fileName);
-            image.Mutate(x => x.Resize(new ResizeOptions { Size = new Size(512, 512), Mode = ResizeMode.Crop })); await image.SaveAsJpegAsync(fullPath, new JpegEncoder { Quality = 88 });
-            var old = await _userService.GetUserByIdAsync(id); var result = await _userService.SetAvatarAsync(id, $"/uploads/avatars/{fileName}"); if (!result.Success) return NotFound(new { message = result.Message }); DeleteStoredAvatar(old?.AvatarUrl);
+            image.Mutate(x => x.Resize(new ResizeOptions { Size = new Size(512, 512), Mode = ResizeMode.Crop })); await image.SaveAsJpegAsync(fullPath, new JpegEncoder { Quality = 88 }); var old = await _userService.GetUserByIdAsync(id); var result = await _userService.SetAvatarAsync(id, $"/uploads/avatars/{fileName}"); if (!result.Success) return NotFound(new { message = result.Message }); DeleteStoredAvatar(old?.AvatarUrl);
             var refreshed = await _userService.GetUserByIdAsync(id, true); await _hub.Clients.All.SendAsync("ProfileUpdated", new { userId = id, username = refreshed?.Username ?? string.Empty, displayName = refreshed?.DisplayName ?? string.Empty, bio = refreshed?.Bio ?? string.Empty, avatarUrl = refreshed?.AvatarUrl }); return Ok(new { message = result.Message, user = refreshed });
         }
         catch (UnknownImageFormatException) { return BadRequest(new { message = "The uploaded file is not a valid image." }); }
     }
-
     [Authorize, HttpDelete("{id}/avatar")]
     public async Task<IActionResult> DeleteAvatar(string id)
     {
         if (!IsCurrentUser(id)) return Forbid(); var result = await _userService.ClearAvatarAsync(id); if (!result.Success) return NotFound(new { message = result.Message }); DeleteStoredAvatar(result.OldAvatarUrl); var user = await _userService.GetUserByIdAsync(id, true);
         await _hub.Clients.All.SendAsync("ProfileUpdated", new { userId = id, username = user?.Username ?? string.Empty, displayName = user?.DisplayName ?? string.Empty, bio = user?.Bio ?? string.Empty, avatarUrl = (string?)null }); return Ok(new { message = result.Message, user });
     }
-
     [Authorize, HttpDelete("{id}")]
     public async Task<IActionResult> DeleteUser(string id) { if (!IsOwner() && !IsCurrentUser(id)) return Forbid(); var deleted = await _userService.DeleteUserAsync(id); return deleted ? Ok(new { message = "User deleted successfully." }) : NotFound(new { message = "User not found." }); }
-
     [Authorize, HttpPut("{id}/password")]
     public async Task<IActionResult> ChangePassword(string id, ChangePasswordDto dto) { if (!IsOwner() && !IsCurrentUser(id)) return Forbid(); var result = await _userService.ChangePasswordAsync(id, dto); if (!result.Success) return result.Message == "User not found." ? NotFound(new { message = result.Message }) : BadRequest(new { message = result.Message }); return Ok(new { message = result.Message }); }
 
