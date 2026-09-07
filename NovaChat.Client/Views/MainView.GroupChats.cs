@@ -12,6 +12,46 @@ public partial class MainView
     private static bool _groupUiRegistered;
     private Button? _createGroupButton;
     private DispatcherTimer? _groupEventTimer;
+    private bool IsCurrentGroupChat => _currentChatId.HasValue && _chats.FirstOrDefault(x => x.Chat.Id == _currentChatId.Value)?.Chat.Type.Equals("Group", StringComparison.OrdinalIgnoreCase) == true;
+
+    private void RefreshGroupOnlineStatus()
+    {
+        if (!IsCurrentGroupChat || !_currentChatId.HasValue) return;
+        _ = RefreshCurrentGroupInfoAsync();
+    }
+
+    private async Task RefreshCurrentGroupInfoAsync()
+    {
+        if (!_currentChatId.HasValue || !IsCurrentGroupChat) return;
+        try
+        {
+            var members = await _apiService.GetAsync<List<GroupMemberModel>>($"api/Chat/{_currentChatId.Value}/members");
+            if (members == null) return;
+            var online = members.Count(m => _onlineUserIds.Contains(m.UserId));
+            ChatStatusText.Text = $"{online} member{(online == 1 ? "" : "s")} online";
+            ChatStatusIndicator.Fill = online > 0 ? System.Windows.Media.Brushes.LimeGreen : System.Windows.Media.Brushes.Gray;
+        }
+        catch { }
+    }
+
+    private async void OpenGroupInfo()
+    {
+        if (!IsCurrentGroupChat || !_currentChatId.HasValue) return;
+        var members = await _apiService.GetAsync<List<GroupMemberModel>>($"api/Chat/{_currentChatId.Value}/members") ?? [];
+        var online = members.Count(m => _onlineUserIds.Contains(m.UserId));
+        var dialog = new Window { Title = "Group Info", Width = 460, Height = 620, Owner = Window.GetWindow(this), WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = (System.Windows.Media.Brush)FindResource("PanelBackgroundBrush") };
+        var panel = new StackPanel { Margin = new Thickness(22) };
+        panel.Children.Add(new TextBlock { Text = ChatUserNameText.Text, FontSize = 24, FontWeight = FontWeights.Bold, Foreground = (System.Windows.Media.Brush)FindResource("TextBrush") });
+        panel.Children.Add(new TextBlock { Text = $"{online} member{(online == 1 ? "" : "s")} online • {members.Count} members", Margin = new Thickness(0,6,0,18), Foreground = (System.Windows.Media.Brush)FindResource("SecondaryTextBrush") });
+        panel.Children.Add(new TextBlock { Text = "MEMBERS", FontWeight = FontWeights.Bold, Foreground = (System.Windows.Media.Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0,0,0,8) });
+        var list = new ListBox { Height = 410, BorderThickness = new Thickness(0), Background = System.Windows.Media.Brushes.Transparent };
+        foreach (var m in members)
+        {
+            var isOnline = _onlineUserIds.Contains(m.UserId);
+            list.Items.Add(new TextBlock { Text = $"{(isOnline ? "●" : "○")}  {m.DisplayName}  •  {m.Role}", FontSize = 15, Margin = new Thickness(6,8,6,8), Foreground = (System.Windows.Media.Brush)FindResource("TextBrush") });
+        }
+        panel.Children.Add(list); dialog.Content = panel; dialog.ShowDialog();
+    }
 
     static MainView()
     {
