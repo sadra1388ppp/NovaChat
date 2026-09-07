@@ -26,18 +26,12 @@ public partial class MainView
             return;
 
         var messageId = messageBorder.Tag is int id ? id : (int?)null;
-        string content = string.Empty;
-        string timeText = string.Empty;
-
-        if (messageBorder.Child is StackPanel panel)
-        {
-            content = panel.Children.OfType<TextBlock>().FirstOrDefault()?.Text ?? string.Empty;
-            timeText = panel.Children.OfType<TextBlock>().Skip(1).FirstOrDefault()?.Text ?? string.Empty;
-        }
+        if (!messageId.HasValue)
+            return;
 
         var menu = new ContextMenu();
         var deleteItem = new MenuItem { Header = "Delete message" };
-        deleteItem.Tag = new MessageBubbleInfo(messageBorder, messageId, content, timeText);
+        deleteItem.Tag = new MessageBubbleInfo(messageBorder, messageId.Value);
         deleteItem.Click += mainView.DeleteMessageMenuItem_Click;
         menu.Items.Add(deleteItem);
 
@@ -48,7 +42,7 @@ public partial class MainView
 
     private static Border? FindMessageRootBorder(DependencyObject element, DependencyObject messagePanel)
     {
-        var current = element;
+        DependencyObject? current = element;
         while (current != null)
         {
             if (current is Border border &&
@@ -69,11 +63,7 @@ public partial class MainView
         if (sender is not MenuItem item || item.Tag is not MessageBubbleInfo info || _currentChatId == null)
             return;
 
-        MessageModel? history = null;
-        if (info.MessageId.HasValue)
-            history = await GetMessageByIdAsync(_currentChatId.Value, info.MessageId.Value);
-
-        history ??= await FindMessageAsync(_currentChatId.Value, info.Content, info.TimeText);
+        var history = await GetMessageByIdAsync(_currentChatId.Value, info.MessageId);
         if (history == null)
         {
             MessageBox.Show("The message could not be located.", "Delete Message", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -88,7 +78,8 @@ public partial class MainView
             var result = MessageBox.Show(
                 "Delete this message for everyone?\n\nChoose No to delete it only for yourself.",
                 "Delete Message", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
-            if (result == MessageBoxResult.Cancel) return;
+            if (result == MessageBoxResult.Cancel)
+                return;
             mode = result == MessageBoxResult.Yes ? "everyone" : "me";
         }
         else
@@ -96,7 +87,8 @@ public partial class MainView
             var result = MessageBox.Show(
                 "Delete this message for yourself?",
                 "Delete Message", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-            if (result != MessageBoxResult.Yes) return;
+            if (result != MessageBoxResult.Yes)
+                return;
         }
 
         try
@@ -109,7 +101,6 @@ public partial class MainView
             }
 
             await Dispatcher.InvokeAsync(() => RemoveMessageBubbleCompletely(info.Border, MessagesPanel));
-
             _loadedMessageIds.Remove(history.Id);
             await LoadChatsAsync();
         }
@@ -122,24 +113,9 @@ public partial class MainView
     private static void RemoveMessageBubbleCompletely(Border clickedOrRoot, Panel messagesPanel)
     {
         var root = FindMessageRootBorder(clickedOrRoot, messagesPanel) ?? clickedOrRoot;
-
         if (messagesPanel.Children.Contains(root))
         {
             messagesPanel.Children.Remove(root);
-            return;
-        }
-
-        DependencyObject current = root;
-        DependencyObject? hosted = null;
-        while (current != null && !ReferenceEquals(current, messagesPanel))
-        {
-            hosted = current;
-            current = VisualTreeHelper.GetParent(current);
-        }
-
-        if (hosted is UIElement ui && messagesPanel.Children.Contains(ui))
-        {
-            messagesPanel.Children.Remove(ui);
             return;
         }
 
@@ -158,39 +134,23 @@ public partial class MainView
         for (var page = 0; page < 20; page++)
         {
             var endpoint = $"api/Chat/{chatId}/messages?pageSize=100";
-            if (beforeId.HasValue) endpoint += $"&beforeMessageId={beforeId.Value}";
+            if (beforeId.HasValue)
+                endpoint += $"&beforeMessageId={beforeId.Value}";
+
             var response = await _apiService.GetAsync<ChatHistoryResponse>(endpoint);
-            if (response == null) return null;
+            if (response == null)
+                return null;
+
             var match = response.Messages.FirstOrDefault(m => m.Id == messageId);
-            if (match != null) return match;
-            if (!response.HasMore || !response.NextBeforeMessageId.HasValue) break;
+            if (match != null)
+                return match;
+
+            if (!response.HasMore || !response.NextBeforeMessageId.HasValue)
+                break;
+
             beforeId = response.NextBeforeMessageId.Value;
         }
-        return null;
-    }
 
-    private async Task<MessageModel?> FindMessageAsync(int chatId, string content, string timeText)
-    {
-        int? beforeId = null;
-        for (var page = 0; page < 20; page++)
-        {
-            var endpoint = $"api/Chat/{chatId}/messages?pageSize=100";
-            if (beforeId.HasValue) endpoint += $"&beforeMessageId={beforeId.Value}";
-            var response = await _apiService.GetAsync<ChatHistoryResponse>(endpoint);
-            if (response == null) return null;
-
-            var candidates = response.Messages
-                .Where(m => string.Equals(m.Content, content, StringComparison.Ordinal))
-                .Where(m => string.Equals(m.SentAt.ToLocalTime().ToString("HH:mm"), timeText, StringComparison.Ordinal))
-                .OrderByDescending(m => m.Id)
-                .ToList();
-
-            var own = candidates.FirstOrDefault(m => string.Equals(m.SenderId, AuthState.UserId, StringComparison.OrdinalIgnoreCase));
-            if (own != null) return own;
-            if (candidates.Count > 0) return candidates[0];
-            if (!response.HasMore || !response.NextBeforeMessageId.HasValue) break;
-            beforeId = response.NextBeforeMessageId.Value;
-        }
         return null;
     }
 
@@ -200,24 +160,27 @@ public partial class MainView
         if (!string.IsNullOrWhiteSpace(AuthState.Token))
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", AuthState.Token);
 
-        using var request = new HttpRequestMessage(HttpMethod.Delete, $"api/message-deletion/private/{messageId}")
+        using var request = new HttpRequestMessage(HttpMethod.Delete, $"api/message-deletion/{messageId}")
         {
             Content = JsonContent.Create(new { Mode = mode })
         };
+
         using var response = await client.SendAsync(request);
         return response.IsSuccessStatusCode;
     }
 
     private static T? FindAncestor<T>(DependencyObject element) where T : DependencyObject
     {
-        var current = VisualTreeHelper.GetParent(element);
+        DependencyObject? current = VisualTreeHelper.GetParent(element);
         while (current != null)
         {
-            if (current is T match) return match;
+            if (current is T match)
+                return match;
             current = VisualTreeHelper.GetParent(current);
         }
+
         return null;
     }
 
-    private sealed record MessageBubbleInfo(Border Border, int? MessageId, string Content, string TimeText);
+    private sealed record MessageBubbleInfo(Border Border, int MessageId);
 }
