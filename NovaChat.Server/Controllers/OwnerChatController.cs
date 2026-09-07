@@ -102,7 +102,7 @@ public class OwnerChatController : ControllerBase
 
         return Ok(new
         {
-            messages = messages.Select(MessageDtoMapper.Map).ToList(),
+            messages = messages.Select(m => MessageDtoMapper.Map(m)).ToList(),
             count = messages.Count
         });
     }
