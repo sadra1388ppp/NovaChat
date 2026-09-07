@@ -11,7 +11,7 @@ namespace NovaChat.Client;
 public partial class App : Application
 {
     private static readonly object LogLock = new();
-    private static string LogPath => Path.Combine(
+    private static string LogPath => System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "NovaChat", "logs", "client-crash.log");
 
@@ -73,7 +73,7 @@ public partial class App : Application
         {
             lock (LogLock)
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
+                Directory.CreateDirectory(System.IO.Path.GetDirectoryName(LogPath)!);
                 File.AppendAllText(LogPath, text + Environment.NewLine);
             }
         }
