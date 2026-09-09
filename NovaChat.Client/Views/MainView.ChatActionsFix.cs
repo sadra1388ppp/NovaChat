@@ -95,7 +95,9 @@ public partial class MainView
 
         try
         {
-            if (!await _apiService.DeleteAsync($"api/Conversation/{chatId}"))
+            // Private chats are deleted by the ChatController endpoint.
+            // The previous client path used api/Conversation, which does not exist.
+            if (!await _apiService.DeleteAsync($"api/Chat/{chatId}"))
             {
                 MessageBox.Show("The selected chat could not be removed.", "Remove Chat", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
