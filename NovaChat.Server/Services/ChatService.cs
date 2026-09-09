@@ -36,6 +36,7 @@ public class ChatService
             var reusable = existing.FirstOrDefault();
             if (reusable != null)
             {
+                reusable.Name = "Private Chat";
                 await EnsurePrivateMembersAsync(reusable, currentUserId, otherUserId);
                 PopulatePrivateProjection(reusable);
                 return reusable;
@@ -44,7 +45,7 @@ public class ChatService
             var newChat = new Chat
             {
                 Type = (int)ChatType.Private,
-                Name = string.Empty,
+                Name = "Private Chat",
                 CreatedByUserId = currentUserId
             };
 
@@ -82,7 +83,7 @@ public class ChatService
 
     public async Task<Chat?> CreateGroupChatAsync(long creatorId, string name, IEnumerable<string> usernames)
     {
-        name = name.Trim();
+        name = NormalizeGroupName(name);
         if (string.IsNullOrWhiteSpace(name) || name.Length > 128) return null;
 
         var normalized = usernames
@@ -352,7 +353,7 @@ public class ChatService
 
     public async Task<bool> RenameGroupAsync(int chatId, long actorId, string name)
     {
-        name = name.Trim();
+        name = NormalizeGroupName(name);
         if (string.IsNullOrWhiteSpace(name) || name.Length > 128) return false;
 
         var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId && c.Type == (int)ChatType.Group);
@@ -370,6 +371,7 @@ public class ChatService
     {
         var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId);
         if (chat == null) return false;
+
         _context.Chats.Remove(chat);
         await _context.SaveChangesAsync();
         return true;
@@ -386,6 +388,17 @@ public class ChatService
 
     public Task<int?> GetMessageChatIdAsync(int messageId) =>
         _context.Messages.Where(m => m.Id == messageId).Select(m => (int?)m.ChatId).FirstOrDefaultAsync();
+
+    private static string NormalizeGroupName(string name)
+    {
+        name = name.Trim();
+        const string prefix = "Group - ";
+
+        if (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            name = name[prefix.Length..].Trim();
+
+        return string.IsNullOrWhiteSpace(name) ? string.Empty : prefix + name;
+    }
 
     private static bool IsDeletedForUser(Message message, long userId)
     {
