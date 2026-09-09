@@ -37,6 +37,7 @@ public class ChatService
             if (reusable != null)
             {
                 await EnsurePrivateMembersAsync(reusable, currentUserId, otherUserId);
+                PopulatePrivateProjection(reusable);
                 return reusable;
             }
 
@@ -51,6 +52,7 @@ public class ChatService
             newChat.ChatMembers.Add(new ChatMember { UserId = otherUserId, Role = (int)ChatMemberRole.Member, JoinedAt = newChat.CreatedAt });
             _context.Chats.Add(newChat);
             await _context.SaveChangesAsync();
+            PopulatePrivateProjection(newChat);
             return newChat;
         }
         finally
@@ -125,6 +127,7 @@ public class ChatService
 
         foreach (var chat in chats)
         {
+            PopulatePrivateProjection(chat);
             var last = await GetLastMessageAsync(chat.Id, userId);
             chat.Messages = last == null ? [] : [last];
         }
@@ -147,6 +150,7 @@ public class ChatService
 
         foreach (var chat in chats)
         {
+            PopulatePrivateProjection(chat);
             var last = await GetLastMessageAsync(chat.Id);
             chat.Messages = last == null ? [] : [last];
         }
@@ -157,10 +161,38 @@ public class ChatService
             .ToList();
     }
 
-    public Task<Chat?> GetChatByIdAsync(int chatId) => _context.Chats
-        .Include(c => c.ChatMembers)
-        .ThenInclude(m => m.User)
-        .FirstOrDefaultAsync(c => c.Id == chatId);
+    public async Task<Chat?> GetChatByIdAsync(int chatId)
+    {
+        var chat = await _context.Chats
+            .Include(c => c.ChatMembers)
+            .ThenInclude(m => m.User)
+            .FirstOrDefaultAsync(c => c.Id == chatId);
+
+        if (chat != null)
+            PopulatePrivateProjection(chat);
+
+        return chat;
+    }
+
+    private static void PopulatePrivateProjection(Chat chat)
+    {
+        if (chat.Type != (int)ChatType.Private)
+            return;
+
+        var members = chat.ChatMembers
+            .OrderBy(m => m.JoinedAt)
+            .ThenBy(m => m.Id)
+            .Take(2)
+            .ToList();
+
+        var first = members.ElementAtOrDefault(0);
+        var second = members.ElementAtOrDefault(1);
+
+        chat.User1Id = first?.UserId;
+        chat.User2Id = second?.UserId;
+        chat.User1 = first?.User;
+        chat.User2 = second?.User;
+    }
 
     public Task<bool> CanAccessChatAsync(int chatId, long userId) =>
         _context.Chats.AnyAsync(c => c.Id == chatId && c.ChatMembers.Any(m => m.UserId == userId));
@@ -214,17 +246,12 @@ public class ChatService
             .Take(pageSize + 1)
             .ToListAsync();
 
-        messages = messages
-            .Where(m => !IsDeletedForUser(m, viewerUserId))
-            .ToList();
+        messages = messages.Where(m => !IsDeletedForUser(m, viewerUserId)).ToList();
 
         if (messages.Count > pageSize)
             messages.RemoveAt(messages.Count - 1);
 
-        return messages
-            .OrderBy(m => m.SentAt)
-            .ThenBy(m => m.Id)
-            .ToList();
+        return messages.OrderBy(m => m.SentAt).ThenBy(m => m.Id).ToList();
     }
 
     public async Task<bool> HasOlderMessagesAsync(int chatId, long viewerUserId, int firstMessageId)
