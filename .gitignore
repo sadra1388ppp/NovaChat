@@ -10,3 +10,8 @@ obj/
 # Build output
 [Bb]in/
 [Oo]bj/
+# Database tooling, local configuration and runtime uploads
+tools/NovaChat.Scaffolding/.generated/
+appsettings.Local.json
+sixlabors.lic
+NovaChat.Server/wwwroot/uploads/
