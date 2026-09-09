@@ -59,11 +59,8 @@ public class UserService
                     ({userId}, {username}, {displayName}, {email}, {phoneNumber}, {passwordHash}, {string.Empty}, {null}, {null}, {createdAt})");
 
             var user = new User
-            {
-<<<<<<< HEAD
-=======
+{
                 Id = userId,
->>>>>>> 66910d11b14be962058df39d0cb916b315b7fb5a
                 Username = username,
                 DisplayName = displayName,
                 Email = email,
