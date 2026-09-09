@@ -99,20 +99,53 @@ public class ChatService
         var creator = await _context.Users.FirstOrDefaultAsync(u => u.Id == creatorId);
         if (creator == null) return null;
 
-        var chat = new Chat
+        // A group must contain at least the creator and one other member.
+        if (users.Count == 0) return null;
+
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+        try
         {
-            Type = (int)ChatType.Group,
-            Name = name,
-            CreatedByUserId = creatorId
-        };
+            var chat = new Chat
+            {
+                Type = (int)ChatType.Group,
+                Name = name,
+                CreatedByUserId = creatorId
+            };
 
-        chat.ChatMembers.Add(new ChatMember { UserId = creatorId, Role = (int)ChatMemberRole.Owner });
-        foreach (var user in users)
-            chat.ChatMembers.Add(new ChatMember { UserId = user.Id, Role = (int)ChatMemberRole.Member });
-        _context.Chats.Add(chat);
-        await _context.SaveChangesAsync();
+            _context.Chats.Add(chat);
+            await _context.SaveChangesAsync();
 
-        return await GetChatByIdAsync(chat.Id);
+            // Save every member explicitly with the generated ChatId.
+            // This makes the group membership relationship directly visible in ChatMembers.
+            _context.ChatMembers.Add(new ChatMember
+            {
+                ChatId = chat.Id,
+                UserId = creatorId,
+                Role = (int)ChatMemberRole.Owner,
+                JoinedAt = chat.CreatedAt
+            });
+
+            foreach (var user in users)
+            {
+                _context.ChatMembers.Add(new ChatMember
+                {
+                    ChatId = chat.Id,
+                    UserId = user.Id,
+                    Role = (int)ChatMemberRole.Member,
+                    JoinedAt = chat.CreatedAt
+                });
+            }
+
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return await GetChatByIdAsync(chat.Id);
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     public async Task<List<Chat>> GetUserChatsAsync(long userId)
