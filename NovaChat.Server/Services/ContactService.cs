@@ -55,8 +55,8 @@ public class ContactService
             .ToListAsync();
 
         var recentChats = await _context.Chats.AsNoTracking()
-            .Where(c => c.Type == ChatType.Private && c.Members.Any(m => m.UserId == ownerId))
-            .SelectMany(c => c.Members
+            .Where(c => c.Type == (int)ChatType.Private && c.ChatMembers.Any(m => m.UserId == ownerId))
+            .SelectMany(c => c.ChatMembers
                 .Where(m => m.UserId != ownerId)
                 .Select(m => new ContactResponseDto
                 {
