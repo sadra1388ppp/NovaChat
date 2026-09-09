@@ -121,14 +121,26 @@ public partial class MainView
     }
     private void StartGroupEventWatcher()
     {
-        if (_groupEventsHooked) return;
-        if (_hubConnection == null) return;
+        if (_groupEventsHooked || _groupEventTimer != null) return;
+        _groupEventTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _groupEventTimer.Tick += GroupEventTimer_Tick;
+        _groupEventTimer.Start();
+    }
+    private void GroupEventTimer_Tick(object? sender, EventArgs e)
+    {
+        if (_groupEventsHooked)
+        {
+            _groupEventTimer?.Stop();
+            return;
+        }
+        if (_hubConnection?.State != HubConnectionState.Connected) return;
         try
         {
             _hubConnection.On<ChatModel>("ChatCreated", OnGroupCreatedFromServer);
             _hubConnection.On<ChatModel>("GroupUpdated", OnGroupUpdatedFromServer);
             _hubConnection.On<object>("ChatMemberRemoved", OnGroupMemberRemovedFromServer);
             _groupEventsHooked = true;
+            _groupEventTimer?.Stop();
         }
         catch { }
     }
