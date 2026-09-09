@@ -409,12 +409,27 @@ public class ChatService
 
     public async Task<bool> DeleteChatAsync(int chatId)
     {
-        var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId);
-        if (chat == null) return false;
+        var exists = await _context.Chats
+            .AsNoTracking()
+            .AnyAsync(c => c.Id == chatId);
 
-        _context.Chats.Remove(chat);
-        await _context.SaveChangesAsync();
-        return true;
+        if (!exists) return false;
+
+        // Explicitly delete dependent rows first. This makes chat deletion reliable
+        // even when the MariaDB database does not have every FK configured with CASCADE.
+        await _context.Messages
+            .Where(m => m.ChatId == chatId)
+            .ExecuteDeleteAsync();
+
+        await _context.ChatMembers
+            .Where(m => m.ChatId == chatId)
+            .ExecuteDeleteAsync();
+
+        var deleted = await _context.Chats
+            .Where(c => c.Id == chatId)
+            .ExecuteDeleteAsync();
+
+        return deleted > 0;
     }
 
     public async Task<bool> DeleteMessageAsync(int messageId)
