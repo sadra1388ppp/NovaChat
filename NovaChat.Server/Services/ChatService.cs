@@ -92,19 +92,28 @@ public class ChatService
             .Distinct()
             .ToList();
 
-        var users = await _context.Users.Where(u => normalized.Contains(u.Username)).ToListAsync();
-        if (users.Count != normalized.Count) return null;
+        if (normalized.Count == 0) return null;
 
-        users.RemoveAll(u => u.Id == creatorId);
         var creator = await _context.Users.FirstOrDefaultAsync(u => u.Id == creatorId);
         if (creator == null) return null;
 
-        // A group must contain at least the creator and one other member.
+        var users = await _context.Users
+            .Where(u => normalized.Contains(u.Username))
+            .ToListAsync();
+
+        if (users.Count != normalized.Count) return null;
+
+        users.RemoveAll(u => u.Id == creatorId);
         if (users.Count == 0) return null;
 
-        await using var transaction = await _context.Database.BeginTransactionAsync();
+        await CreateChatLock.WaitAsync();
         try
         {
+            // Do not use a manually opened transaction here. SaveChangesAsync() already
+            // wraps this single unit of work in a database transaction, and keeping the
+            // whole group creation in one SaveChanges call avoids MariaDB transaction/
+            // connection issues while still guaranteeing that Chat and ChatMembers are
+            // committed together.
             var chat = new Chat
             {
                 Type = (int)ChatType.Group,
@@ -112,14 +121,14 @@ public class ChatService
                 CreatedByUserId = creatorId
             };
 
+            // Set the navigation property instead of assigning ChatId manually.
+            // EF Core will insert Chats first, obtain the generated Id, and then insert
+            // every ChatMember with the correct ChatId in the same SaveChanges operation.
             _context.Chats.Add(chat);
-            await _context.SaveChangesAsync();
 
-            // Save every member explicitly with the generated ChatId.
-            // This makes the group membership relationship directly visible in ChatMembers.
             _context.ChatMembers.Add(new ChatMember
             {
-                ChatId = chat.Id,
+                Chat = chat,
                 UserId = creatorId,
                 Role = (int)ChatMemberRole.Owner,
                 JoinedAt = chat.CreatedAt
@@ -129,7 +138,7 @@ public class ChatService
             {
                 _context.ChatMembers.Add(new ChatMember
                 {
-                    ChatId = chat.Id,
+                    Chat = chat,
                     UserId = user.Id,
                     Role = (int)ChatMemberRole.Member,
                     JoinedAt = chat.CreatedAt
@@ -137,14 +146,12 @@ public class ChatService
             }
 
             await _context.SaveChangesAsync();
-            await transaction.CommitAsync();
 
             return await GetChatByIdAsync(chat.Id);
         }
-        catch
+        finally
         {
-            await transaction.RollbackAsync();
-            throw;
+            CreateChatLock.Release();
         }
     }
 
