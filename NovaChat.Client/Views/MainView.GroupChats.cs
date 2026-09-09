@@ -31,10 +31,6 @@ public partial class MainView
             var members = await _apiService.GetAsync<List<GroupMemberModel>>($"api/Chat/{_currentChatId.Value}/members") ?? [];
             _currentGroupMembers = members;
             UpdateGroupOnlineStatusFromCache();
-
-            // Group avatars are intentionally NOT re-downloaded on the presence timer.
-            // Replacing the header Image source every second caused the avatar to blink.
-            // The avatar is refreshed only when the group is opened or its picture changes.
         }
         catch { }
     }
@@ -134,7 +130,6 @@ public partial class MainView
         if (_hubConnection?.State != HubConnectionState.Connected) return;
         if (!_groupEventsHooked) { try { _hubConnection.On<ChatModel>("ChatCreated", OnGroupCreatedFromServer); _hubConnection.On<ChatModel>("GroupUpdated", OnGroupUpdatedFromServer); _hubConnection.On<object>("ChatMemberRemoved", OnGroupMemberRemovedFromServer); _groupEventsHooked = true; } catch { } }
         RefreshGroupOnlineStatus();
-        // Do not refresh conversation avatars on the one-second presence timer.
     }
     private async void OnGroupCreatedFromServer(ChatModel chat) { if (chat == null || chat.Id <= 0) return; await Dispatcher.InvokeAsync(async () => { try { await LoadChatsAsync(); } catch { } }); }
     private async void OnGroupUpdatedFromServer(ChatModel chat) { if (chat == null || chat.Id <= 0) return; await Dispatcher.InvokeAsync(async () => { try { var item = _chats.FirstOrDefault(x => x.Chat.Id == chat.Id); if (item != null) item.Chat.AvatarUrl = chat.AvatarUrl; await LoadChatsAsync(); if (_currentChatId == chat.Id) await RefreshCurrentGroupAvatarAsync(); } catch { } }); }
@@ -142,10 +137,173 @@ public partial class MainView
 
     private async void CreateGroupButton_Click(object? sender, RoutedEventArgs e)
     {
-        var dialog = new Window { Title = "Create Group", Width = 460, Height = 360, WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = Window.GetWindow(this), ResizeMode = ResizeMode.NoResize, Background = (System.Windows.Media.Brush)FindResource("PanelBackgroundBrush") };
-        var nameBox = new TextBox { Height = 40, Margin = new Thickness(20, 8, 20, 8), Padding = new Thickness(10) }; var membersBox = new TextBox { Height = 110, Margin = new Thickness(20, 8, 20, 8), Padding = new Thickness(10), AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto }; var createButton = new Button { Content = "Create Group", Width = 120, Height = 38, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(20), Style = (Style)FindResource("PrimaryButtonStyle") }; var panel = new StackPanel(); panel.Children.Add(new TextBlock { Text = "Group name", Margin = new Thickness(20, 18, 20, 0), Foreground = (System.Windows.Media.Brush)FindResource("TextBrush") }); panel.Children.Add(nameBox); panel.Children.Add(new TextBlock { Text = "Member usernames (comma or newline separated)", Margin = new Thickness(20, 8, 20, 0), Foreground = (System.Windows.Media.Brush)FindResource("TextBrush") }); panel.Children.Add(membersBox); panel.Children.Add(createButton); dialog.Content = panel;
-        CreateGroupRequest? request = null; createButton.Click += (_, _) => { var name = nameBox.Text.Trim(); var usernames = membersBox.Text.Split([',', '\n', '\r', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(x => !string.Equals(x, AuthState.Username, StringComparison.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase).ToList(); if (string.IsNullOrWhiteSpace(name)) { MessageBox.Show("Enter a group name.", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Information); return; } request = new CreateGroupRequest { Name = name, Usernames = usernames }; dialog.DialogResult = true; };
-        dialog.Loaded += (_, _) => nameBox.Focus(); dialog.ShowDialog(); if (request == null) return;
-        try { var result = await _apiService.PostAsync<CreateGroupRequest, CreateGroupResponse>("api/Chat/group", request); if (result?.Chat == null) throw new InvalidOperationException("The server did not return the created group."); await LoadChatsAsync(); await OpenChatAsync(result.Chat); } catch (Exception ex) { MessageBox.Show($"Could not create group.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error); }
+        List<ContactModel> candidates;
+        try
+        {
+            candidates = await _apiService.GetAsync<List<ContactModel>>("api/Contact/group-candidates") ?? [];
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Could not load contacts and recent chats.\n\n{ex.Message}", "Create Group", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
+        if (candidates.Count == 0)
+        {
+            MessageBox.Show("You do not have any contacts or private chats to add yet. Start a chat or add a contact first.", "Create Group", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new Window
+        {
+            Title = "Create Group",
+            Width = 500,
+            Height = 620,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = Window.GetWindow(this),
+            ResizeMode = ResizeMode.NoResize,
+            Background = (Brush)FindResource("PanelBackgroundBrush")
+        };
+
+        var root = new Grid { Margin = new Thickness(22) };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var nameLabel = new TextBlock
+        {
+            Text = "Group name",
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (Brush)FindResource("TextBrush")
+        };
+        Grid.SetRow(nameLabel, 0);
+        root.Children.Add(nameLabel);
+
+        var nameBox = new TextBox
+        {
+            Height = 40,
+            Margin = new Thickness(0, 8, 0, 16),
+            Padding = new Thickness(10),
+            VerticalContentAlignment = VerticalAlignment.Center
+        };
+        Grid.SetRow(nameBox, 1);
+        root.Children.Add(nameBox);
+
+        var membersHeader = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        membersHeader.ColumnDefinitions.Add(new ColumnDefinition());
+        membersHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        membersHeader.Children.Add(new TextBlock
+        {
+            Text = "Members",
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (Brush)FindResource("TextBrush")
+        });
+        var countText = new TextBlock
+        {
+            Text = "0 selected",
+            Foreground = (Brush)FindResource("SecondaryTextBrush"),
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+        Grid.SetColumn(countText, 1);
+        membersHeader.Children.Add(countText);
+        Grid.SetRow(membersHeader, 2);
+        root.Children.Add(membersHeader);
+
+        var membersList = new ListBox
+        {
+            BorderThickness = new Thickness(1),
+            BorderBrush = (Brush)FindResource("BorderBrush"),
+            Background = (Brush)FindResource("InputBackgroundBrush"),
+            Padding = new Thickness(4)
+        };
+
+        foreach (var candidate in candidates)
+        {
+            var check = new CheckBox
+            {
+                Content = $"{candidate.DisplayName}\n@{candidate.Username}",
+                Tag = candidate,
+                Padding = new Thickness(8, 7, 8, 7),
+                Margin = new Thickness(2),
+                Foreground = (Brush)FindResource("TextBrush"),
+                FontSize = 14,
+                VerticalContentAlignment = VerticalAlignment.Center
+            };
+            check.Checked += (_, _) => UpdateSelectedCount();
+            check.Unchecked += (_, _) => UpdateSelectedCount();
+            membersList.Items.Add(check);
+        }
+
+        Grid.SetRow(membersList, 3);
+        root.Children.Add(membersList);
+
+        var createButton = new Button
+        {
+            Content = "Create Group",
+            Width = 130,
+            Height = 40,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 16, 0, 0),
+            Style = (Style)FindResource("PrimaryButtonStyle")
+        };
+        createButton.Click += (_, _) =>
+        {
+            var name = nameBox.Text.Trim();
+            var selected = membersList.Items.OfType<CheckBox>()
+                .Where(x => x.IsChecked == true)
+                .Select(x => x.Tag as ContactModel)
+                .Where(x => x != null)
+                .Select(x => x!.Username)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                MessageBox.Show("Enter a group name.", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Information);
+                nameBox.Focus();
+                return;
+            }
+
+            if (selected.Count == 0)
+            {
+                MessageBox.Show("Select at least one member.", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            dialog.Tag = new CreateGroupRequest { Name = name, Usernames = selected };
+            dialog.DialogResult = true;
+        };
+
+        Grid.SetRow(createButton, 4);
+        root.Children.Add(createButton);
+        dialog.Content = root;
+
+        void UpdateSelectedCount()
+        {
+            var count = membersList.Items.OfType<CheckBox>().Count(x => x.IsChecked == true);
+            countText.Text = $"{count} selected";
+        }
+
+        dialog.Loaded += (_, _) => nameBox.Focus();
+        dialog.ShowDialog();
+
+        if (dialog.Tag is not CreateGroupRequest request)
+            return;
+
+        try
+        {
+            var result = await _apiService.PostAsync<CreateGroupRequest, CreateGroupResponse>("api/Chat/group", request);
+            if (result?.Chat == null)
+                throw new InvalidOperationException("The server did not return the created group.");
+
+            await LoadChatsAsync();
+            await OpenChatAsync(result.Chat);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Could not create group.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 }
