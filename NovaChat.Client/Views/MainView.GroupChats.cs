@@ -31,10 +31,6 @@ public partial class MainView
             var members = await _apiService.GetAsync<List<GroupMemberModel>>($"api/Chat/{_currentChatId.Value}/members") ?? [];
             _currentGroupMembers = members;
             UpdateGroupOnlineStatusFromCache();
-
-            // Group avatars are intentionally NOT re-downloaded on the presence timer.
-            // Replacing the header Image source every second caused the avatar to blink.
-            // The avatar is refreshed only when the group is opened or its picture changes.
         }
         catch { }
     }
@@ -44,7 +40,6 @@ public partial class MainView
         if (!_currentChatId.HasValue || !IsCurrentGroupChat) return;
         var item = _chats.FirstOrDefault(x => x.Chat.Id == _currentChatId.Value);
         if (item == null) return;
-
         if (string.IsNullOrWhiteSpace(item.Chat.AvatarUrl))
         {
             ChatHeaderAvatarImage.Source = null;
@@ -52,7 +47,6 @@ public partial class MainView
             ChatAvatarInitialsText.Visibility = Visibility.Visible;
             return;
         }
-
         try
         {
             var image = await LoadConversationAvatarAsync(_apiService.BuildAbsoluteUrl(item.Chat.AvatarUrl));
@@ -127,14 +121,16 @@ public partial class MainView
     }
     private void StartGroupEventWatcher()
     {
-        if (_groupEventTimer != null) return; _groupEventTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) }; _groupEventTimer.Tick += GroupEventTimer_Tick; _groupEventTimer.Start();
-    }
-    private async void GroupEventTimer_Tick(object? sender, EventArgs e)
-    {
-        if (_hubConnection?.State != HubConnectionState.Connected) return;
-        if (!_groupEventsHooked) { try { _hubConnection.On<ChatModel>("ChatCreated", OnGroupCreatedFromServer); _hubConnection.On<ChatModel>("GroupUpdated", OnGroupUpdatedFromServer); _hubConnection.On<object>("ChatMemberRemoved", OnGroupMemberRemovedFromServer); _groupEventsHooked = true; } catch { } }
-        RefreshGroupOnlineStatus();
-        // Do not refresh conversation avatars on the one-second presence timer.
+        if (_groupEventsHooked) return;
+        if (_hubConnection == null) return;
+        try
+        {
+            _hubConnection.On<ChatModel>("ChatCreated", OnGroupCreatedFromServer);
+            _hubConnection.On<ChatModel>("GroupUpdated", OnGroupUpdatedFromServer);
+            _hubConnection.On<object>("ChatMemberRemoved", OnGroupMemberRemovedFromServer);
+            _groupEventsHooked = true;
+        }
+        catch { }
     }
     private async void OnGroupCreatedFromServer(ChatModel chat) { if (chat == null || chat.Id <= 0) return; await Dispatcher.InvokeAsync(async () => { try { await LoadChatsAsync(); } catch { } }); }
     private async void OnGroupUpdatedFromServer(ChatModel chat) { if (chat == null || chat.Id <= 0) return; await Dispatcher.InvokeAsync(async () => { try { var item = _chats.FirstOrDefault(x => x.Chat.Id == chat.Id); if (item != null) item.Chat.AvatarUrl = chat.AvatarUrl; await LoadChatsAsync(); if (_currentChatId == chat.Id) await RefreshCurrentGroupAvatarAsync(); } catch { } }); }
