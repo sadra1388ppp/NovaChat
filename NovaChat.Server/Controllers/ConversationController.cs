@@ -29,15 +29,15 @@ public class ConversationController : ControllerBase
         if (!TryGetCurrentUserId(out var userId)) return Unauthorized();
 
         var chat = await _db.Chats
-            .Include(c => c.Members)
+            .Include(c => c.ChatMembers)
             .AsTracking()
             .FirstOrDefaultAsync(c => c.Id == chatId);
 
         if (chat == null) return NotFound(new { message = "Conversation not found." });
-        if (chat.Type != ChatType.Private) return BadRequest(new { message = "Group chats must be left or deleted from Group Info." });
-        if (!chat.Members.Any(m => m.UserId == userId)) return Forbid();
+        if (chat.Type != (int)ChatType.Private) return BadRequest(new { message = "Group chats must be left or deleted from Group Info." });
+        if (!chat.ChatMembers.Any(m => m.UserId == userId)) return Forbid();
 
-        var recipients = chat.Members
+        var recipients = chat.ChatMembers
             .Select(m => m.UserId.ToString())
             .Distinct(StringComparer.Ordinal)
             .ToList();
@@ -54,6 +54,10 @@ public class ConversationController : ControllerBase
         return Ok(new { message = "Private conversation permanently deleted." });
     }
 
-    private bool TryGetCurrentUserId(out long userId) =>
-        long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out userId) && userId > 0;
+    private bool TryGetCurrentUserId(out long userId)
+    {
+        var claim = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                    ?? User.FindFirstValue("sub");
+        return long.TryParse(claim, out userId);
+    }
 }
