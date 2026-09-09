@@ -42,9 +42,6 @@ public class ConversationController : ControllerBase
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
-        // A private conversation is a single shared Chat record. Deleting it
-        // removes the conversation itself, its members and its messages from
-        // the database through the cascade relationships configured in AppDbContext.
         _db.Chats.Remove(chat);
         await _db.SaveChangesAsync();
 
