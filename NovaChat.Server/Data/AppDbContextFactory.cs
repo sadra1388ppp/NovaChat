@@ -4,31 +4,25 @@ using Microsoft.Extensions.Configuration;
 
 namespace NovaChat.Server.Data;
 
-public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
+public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
 {
     public AppDbContext CreateDbContext(string[] args)
     {
-        var basePath = Directory.GetCurrentDirectory();
-
+        var current = Directory.GetCurrentDirectory();
+        var projectDirectory = File.Exists(Path.Combine(current, "NovaChat.Server.csproj"))
+            ? current : Path.Combine(current, "NovaChat.Server");
+        if (!Directory.Exists(projectDirectory)) projectDirectory = AppContext.BaseDirectory;
+        var environment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+            ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
         var configuration = new ConfigurationBuilder()
-            .SetBasePath(basePath)
-            .AddJsonFile("appsettings.json", optional: false)
-            .AddJsonFile("appsettings.Development.json", optional: true)
+            .SetBasePath(projectDirectory)
+            .AddJsonFile("appsettings.json", optional: true)
+            .AddJsonFile($"appsettings.{environment}.json", optional: true)
             .AddEnvironmentVariables()
+            .AddCommandLine(args)
             .Build();
-
-        var connectionString = configuration.GetConnectionString("DefaultConnection");
-
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            throw new InvalidOperationException("DefaultConnection is not configured.");
-        }
-
-        var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
-        optionsBuilder.UseMySql(
-            connectionString,
-            new MariaDbServerVersion(new Version(12, 3, 3)));
-
-        return new AppDbContext(optionsBuilder.Options);
+        var options = new DbContextOptionsBuilder<AppDbContext>();
+        options.UseNovaChatDatabase(configuration);
+        return new AppDbContext(options.Options);
     }
 }

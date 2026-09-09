@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using MySqlConnector;
 using NovaChat.Server.Data;
 using NovaChat.Server.DTOs;
 using NovaChat.Server.Entities;
@@ -46,7 +47,6 @@ public class UserService
 
             var user = new User
             {
-                Id = await GenerateNextUserIdAsync(),
                 Username = username,
                 DisplayName = displayName,
                 Email = email,
@@ -59,6 +59,12 @@ public class UserService
             await _context.SaveChangesAsync();
 
             return new RegisterResult { Success = true, Message = "User registered successfully.", User = ToUserResponse(user) };
+        }
+        catch (DbUpdateException exception) when (exception.InnerException is MySqlException { Number: 1062 })
+        {
+            // Database unique indexes also protect registrations across server instances.
+            _context.ChangeTracker.Clear();
+            return Fail("This username, email, or phone number is already registered.");
         }
         finally { RegisterLock.Release(); }
     }
@@ -161,26 +167,23 @@ public class UserService
     public async Task<bool> DeleteUserAsync(string id)
     {
         if (!long.TryParse(id, out var userId)) return false;
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
-        if (user == null) return false;
+        if (!await _context.Users.AsNoTracking().AnyAsync(u => u.Id == userId)) return false;
+
         await using var transaction = await _context.Database.BeginTransactionAsync();
-        try
-        {
-            await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM `Messages` WHERE `SenderId` = {userId}");
-            await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM `Chats` WHERE `User1Id` = {userId} OR `User2Id` = {userId}");
-            await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM `Contacts` WHERE `OwnerUserId` = {userId} OR `ContactUserId` = {userId}");
-            var groupsExist = await TableExistsAsync("Groups"); var membersExist = await TableExistsAsync("GroupMembers");
-            if (groupsExist && membersExist)
-            {
-                await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM `GroupMembers` WHERE `GroupId` IN (SELECT `Id` FROM `Groups` WHERE `CreatorId` = {userId}) OR `UserId` = {userId}");
-                await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM `Groups` WHERE `CreatorId` = {userId}");
-            }
-            else if (membersExist) await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM `GroupMembers` WHERE `UserId` = {userId}");
-            else if (groupsExist) await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM `Groups` WHERE `CreatorId` = {userId}");
-            await _context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM `Users` WHERE `Id` = {userId}");
-            await transaction.CommitAsync(); _context.ChangeTracker.Clear(); return true;
-        }
-        catch { await transaction.RollbackAsync(); throw; }
+        // Delete conversations involving the user and groups they created first.
+        // Their messages and memberships cascade through real MariaDB foreign keys.
+        await _context.Chats
+            .Where(c => c.CreatedByUserId == userId || c.User1Id == userId || c.User2Id == userId)
+            .ExecuteDeleteAsync();
+        await _context.Messages.Where(m => m.SenderId == userId).ExecuteDeleteAsync();
+        await _context.ChatMembers.Where(m => m.UserId == userId).ExecuteDeleteAsync();
+        await _context.Contacts
+            .Where(c => c.OwnerUserId == userId || c.ContactUserId == userId)
+            .ExecuteDeleteAsync();
+        var deleted = await _context.Users.Where(u => u.Id == userId).ExecuteDeleteAsync();
+        await transaction.CommitAsync();
+        _context.ChangeTracker.Clear();
+        return deleted > 0;
     }
 
     public async Task<(bool Success, string Message)> ChangePasswordAsync(string id, ChangePasswordDto dto)
@@ -193,13 +196,6 @@ public class UserService
         return (true, "Password changed successfully.");
     }
 
-    private async Task<long> GenerateNextUserIdAsync()
-    {
-        var existingIds = await _context.Users.AsNoTracking().Select(u => u.Id).ToListAsync();
-        var usedIds = existingIds.ToHashSet(); long nextId = 1; while (usedIds.Contains(nextId)) nextId++; return nextId;
-    }
-
-    private async Task<bool> TableExistsAsync(string tableName) => await _context.Database.SqlQueryRaw<bool>("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = {0}) AS `Value`", tableName).FirstAsync();
     private static RegisterResult Fail(string message) => new() { Success = false, Message = message };
 
     private UserResponseDto ToUserResponse(User user, bool includePhoneNumber = false) => new()

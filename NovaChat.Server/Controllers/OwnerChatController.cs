@@ -30,7 +30,7 @@ public class OwnerChatController : ControllerBase
         if (chat == null)
             return NotFound(new { message = "Chat not found." });
 
-        if (chat.Type != ChatType.Group)
+        if (chat.Type != (int)ChatType.Group)
         {
             var userIds = new[] { chat.User1Id, chat.User2Id }
                 .Where(id => id.HasValue && id.Value > 0)
@@ -71,7 +71,7 @@ public class OwnerChatController : ControllerBase
                 UserId = m.UserId.ToString(),
                 Username = m.User.Username,
                 DisplayName = m.User.DisplayName,
-                Role = m.Role.ToString().ToUpperInvariant(),
+                Role = ((ChatMemberRole)m.Role).ToString().ToUpperInvariant(),
                 Email = m.User.Email,
                 PhoneNumber = m.User.PhoneNumber,
                 AvatarUrl = m.User.AvatarUrl
@@ -145,7 +145,7 @@ public class OwnerChatController : ControllerBase
 
         return Ok(new
         {
-            message = chat.Type == ChatType.Group
+            message = chat.Type == (int)ChatType.Group
                 ? "Group deleted successfully."
                 : "Conversation deleted successfully."
         });

@@ -6,6 +6,7 @@ using NovaChat.Server.Data;
 using NovaChat.Server.DTOs;
 using NovaChat.Server.Entities;
 using NovaChat.Server.Hubs;
+using NovaChat.Server.Services;
 using System.Security.Claims;
 
 namespace NovaChat.Server.Controllers;
@@ -17,11 +18,13 @@ public class AdminController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly IHubContext<ChatHub> _hub;
+    private readonly UserService _userService;
 
-    public AdminController(AppDbContext db, IHubContext<ChatHub> hub)
+    public AdminController(AppDbContext db, IHubContext<ChatHub> hub, UserService userService)
     {
         _db = db;
         _hub = hub;
+        _userService = userService;
     }
 
     [HttpGet("test")]
@@ -59,8 +62,9 @@ public class AdminController : ControllerBase
     {
         if (!long.TryParse(id, out var userId)) return BadRequest(new { message = "Invalid user ID." });
         if (long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var ownerId) && ownerId == userId) return BadRequest(new { message = "Owner cannot delete the Owner account." });
-        var user = await _db.Users.FindAsync(userId); if (user == null) return NotFound(new { message = "User not found." });
-        _db.Users.Remove(user); await _db.SaveChangesAsync(); return Ok(new { message = "User deleted successfully." });
+        var deleted = await _userService.DeleteUserAsync(id);
+        return deleted ? Ok(new { message = "User deleted successfully." })
+            : NotFound(new { message = "User not found." });
     }
 
     [HttpGet("overview")]

@@ -49,7 +49,7 @@ public class ChatHub : Hub
         await Groups.AddToGroupAsync(Context.ConnectionId, $"chat-{chatId}");
     }
     public Task LeaveChat(int chatId) => Groups.RemoveFromGroupAsync(Context.ConnectionId, $"chat-{chatId}");
-    private IEnumerable<string> Recipients(Chat chat) => chat.Members.Select(m => m.UserId.ToString()).Distinct();
+    private IEnumerable<string> Recipients(Chat chat) => chat.ChatMembers.Select(m => m.UserId.ToString()).Distinct();
     private string? CurrentUserId() => Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
     private bool TryGetCurrentUserId(out long userId) => long.TryParse(CurrentUserId(), out userId) && userId > 0;
     private bool IsOwner() { var ownerUsername = _configuration["Owner:Username"]; var username = Context.User?.FindFirst("username")?.Value; if (!string.IsNullOrWhiteSpace(ownerUsername) && string.Equals(ownerUsername, username, StringComparison.OrdinalIgnoreCase)) return true; return long.TryParse(_configuration["Owner:UserId"], out var ownerId) && long.TryParse(CurrentUserId(), out var currentId) && ownerId == currentId; }

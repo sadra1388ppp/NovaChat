@@ -10,9 +10,8 @@ using NovaChat.Server.Services;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-if (string.IsNullOrWhiteSpace(connectionString)) throw new InvalidOperationException("DefaultConnection is not configured.");
-builder.Services.AddDbContext<AppDbContext>(options => options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+builder.Services.AddDbContext<AppDbContext>(options => options.UseNovaChatDatabase(builder.Configuration));
+builder.Services.AddScoped<DatabaseInitializer>();
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<UserService>();
@@ -21,7 +20,6 @@ builder.Services.AddSingleton<PasswordHashService>();
 builder.Services.AddScoped<JwtService>();
 builder.Services.AddScoped<AdminService>();
 builder.Services.AddScoped<ChatService>();
-builder.Services.AddScoped<ChatSchemaInitializer>();
 builder.Services.AddSingleton<PresenceService>();
 builder.Services.AddSingleton<IAuthorizationHandler, OwnerAuthorizationHandler>();
 builder.Services.AddAuthorization(options => options.AddPolicy("OwnerOnly", policy => { policy.RequireAuthenticatedUser(); policy.AddRequirements(new OwnerRequirement()); }));
@@ -42,7 +40,7 @@ builder.Services.AddSwaggerGen(options =>
 var app = builder.Build();
 await using (var scope = app.Services.CreateAsyncScope())
 {
-    await scope.ServiceProvider.GetRequiredService<ChatSchemaInitializer>().EnsureAsync();
+    await scope.ServiceProvider.GetRequiredService<DatabaseInitializer>().ValidateSchemaAsync();
 }
 var webRoot = app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
 Directory.CreateDirectory(Path.Combine(webRoot, "uploads", "avatars"));

@@ -23,7 +23,7 @@ public class ConversationController : ControllerBase
 
         var chat = await _db.Chats.AsNoTracking().FirstOrDefaultAsync(c => c.Id == chatId);
         if (chat == null) return NotFound(new { message = "Conversation not found." });
-        if (chat.Type != ChatType.Private) return BadRequest(new { message = "Group chats must be left or deleted from Group Info." });
+        if (chat.Type != (int)ChatType.Private) return BadRequest(new { message = "Group chats must be left or deleted from Group Info." });
 
         var member = await _db.ChatMembers.FirstOrDefaultAsync(m => m.ChatId == chatId && m.UserId == userId);
         if (member == null) return Forbid();

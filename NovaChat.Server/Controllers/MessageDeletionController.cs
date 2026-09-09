@@ -60,15 +60,15 @@ public class MessageDeletionController : ControllerBase
 
         var chat = await _db.Chats
             .AsNoTracking()
-            .Include(c => c.Members)
+            .Include(c => c.ChatMembers)
             .FirstOrDefaultAsync(c => c.Id == message.ChatId);
 
         if (chat == null)
             return NotFound(new { message = "Chat not found." });
 
         var owner = IsOwner(userId);
-        var isMember = chat.Type == ChatType.Group
-            ? chat.Members.Any(m => m.UserId == userId)
+        var isMember = chat.Type == (int)ChatType.Group
+            ? chat.ChatMembers.Any(m => m.UserId == userId)
             : chat.User1Id == userId || chat.User2Id == userId;
 
         if (!owner && !isMember)
@@ -140,8 +140,8 @@ public class MessageDeletionController : ControllerBase
 
     private List<string> GetRecipientIds(Chat chat)
     {
-        if (chat.Type == ChatType.Group)
-            return chat.Members.Select(m => m.UserId.ToString()).Distinct().ToList();
+        if (chat.Type == (int)ChatType.Group)
+            return chat.ChatMembers.Select(m => m.UserId.ToString()).Distinct().ToList();
 
         return new[] { chat.User1Id, chat.User2Id }
             .Where(id => id.HasValue && id.Value > 0)

@@ -134,9 +134,9 @@ public class ChatController : ControllerBase
     {
         if (!TryGetCurrentUserId(out var userId)) return Unauthorized();
         var chat = await _chatService.GetChatByIdAsync(chatId);
-        if (chat == null || chat.Type != ChatType.Group) return NotFound(new { message = "Group not found." });
+        if (chat == null || chat.Type != (int)ChatType.Group) return NotFound(new { message = "Group not found." });
         var member = await _chatService.GetMemberAsync(chatId, userId);
-        if (member == null || member.Role == ChatMemberRole.Member) return Forbid();
+        if (member == null || member.Role == (int)ChatMemberRole.Member) return Forbid();
         if (file == null || file.Length == 0) return BadRequest(new { message = "Please select an image." });
         if (file.Length > MaxGroupAvatarBytes) return BadRequest(new { message = "Group picture must be 5 MB or smaller." });
         var allowed = new[] { "image/jpeg", "image/png", "image/webp" };
@@ -170,9 +170,9 @@ public class ChatController : ControllerBase
     {
         if (!TryGetCurrentUserId(out var userId)) return Unauthorized();
         var chat = await _chatService.GetChatByIdAsync(chatId);
-        if (chat == null || chat.Type != ChatType.Group) return NotFound(new { message = "Group not found." });
+        if (chat == null || chat.Type != (int)ChatType.Group) return NotFound(new { message = "Group not found." });
         var member = await _chatService.GetMemberAsync(chatId, userId);
-        if (member == null || member.Role == ChatMemberRole.Member) return Forbid();
+        if (member == null || member.Role == (int)ChatMemberRole.Member) return Forbid();
         var old = chat.AvatarUrl;
         chat.AvatarUrl = null;
         await _chatService.SaveChangesAsync();
@@ -243,9 +243,9 @@ public class ChatController : ControllerBase
     private ChatListDto MapChat(Chat chat, Message? lastMessage) => new()
     {
         Id = chat.Id,
-        Type = chat.Type.ToString(),
-        Name = chat.Type == ChatType.Group ? chat.Name : string.Empty,
-        AvatarUrl = chat.Type == ChatType.Group ? ToAbsoluteChatAvatarUrl(chat.AvatarUrl) : null,
+        Type = ((ChatType)chat.Type).ToString(),
+        Name = chat.Type == (int)ChatType.Group ? chat.Name : string.Empty,
+        AvatarUrl = chat.Type == (int)ChatType.Group ? ToAbsoluteChatAvatarUrl(chat.AvatarUrl) : null,
         CreatedByUserId = chat.CreatedByUserId?.ToString() ?? string.Empty,
         User1Id = chat.User1Id?.ToString() ?? string.Empty,
         User2Id = chat.User2Id?.ToString() ?? string.Empty,
@@ -263,7 +263,7 @@ public class ChatController : ControllerBase
         Username = m.User.Username,
         DisplayName = m.User.DisplayName,
         AvatarUrl = ToAbsoluteAvatarUrl(m.User.AvatarUrl),
-        Role = m.Role.ToString(),
+        Role = ((ChatMemberRole)m.Role).ToString(),
         JoinedAt = m.JoinedAt
     };
 
@@ -271,9 +271,9 @@ public class ChatController : ControllerBase
     {
         var recipients = new List<string>();
 
-        if (chat.Type == ChatType.Group)
+        if (chat.Type == (int)ChatType.Group)
         {
-            foreach (var member in chat.Members)
+            foreach (var member in chat.ChatMembers)
             {
                 var id = member.UserId.ToString();
                 if (!string.IsNullOrWhiteSpace(id) && !recipients.Contains(id))

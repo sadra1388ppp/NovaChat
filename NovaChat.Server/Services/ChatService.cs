@@ -26,14 +26,14 @@ public class ChatService
             var existing = await _context.Chats
                 .Include(c => c.User1)
                 .Include(c => c.User2)
-                .Include(c => c.Members)
-                .Where(c => c.Type == ChatType.Private &&
+                .Include(c => c.ChatMembers)
+                .Where(c => c.Type == (int)ChatType.Private &&
                     ((c.User1Id == currentUserId && c.User2Id == otherUserId) ||
                      (c.User1Id == otherUserId && c.User2Id == currentUserId)))
                 .OrderByDescending(c => c.Id)
                 .ToListAsync();
 
-            var reusable = existing.FirstOrDefault(c => c.Members.Any(m => m.UserId == currentUserId));
+            var reusable = existing.FirstOrDefault(c => c.ChatMembers.Any(m => m.UserId == currentUserId));
             if (reusable != null)
             {
                 await EnsurePrivateMembersAsync(reusable, currentUserId, otherUserId);
@@ -42,16 +42,17 @@ public class ChatService
 
             var newChat = new Chat
             {
-                Type = ChatType.Private,
+                Type = (int)ChatType.Private,
                 Name = string.Empty,
                 CreatedByUserId = currentUserId,
                 User1Id = currentUserId,
                 User2Id = otherUserId
             };
 
+            newChat.ChatMembers.Add(new ChatMember { UserId = currentUserId, Role = (int)ChatMemberRole.Owner, JoinedAt = newChat.CreatedAt });
+            newChat.ChatMembers.Add(new ChatMember { UserId = otherUserId, Role = (int)ChatMemberRole.Member, JoinedAt = newChat.CreatedAt });
             _context.Chats.Add(newChat);
             await _context.SaveChangesAsync();
-            await EnsurePrivateMembersAsync(newChat, currentUserId, otherUserId);
             await _context.Entry(newChat).Reference(c => c.User1).LoadAsync();
             await _context.Entry(newChat).Reference(c => c.User2).LoadAsync();
             return newChat;
@@ -72,7 +73,7 @@ public class ChatService
                 {
                     ChatId = chat.Id,
                     UserId = id,
-                    Role = id == ownerId ? ChatMemberRole.Owner : ChatMemberRole.Member,
+                    Role = id == ownerId ? (int)ChatMemberRole.Owner : (int)ChatMemberRole.Member,
                     JoinedAt = chat.CreatedAt
                 });
             }
@@ -101,18 +102,18 @@ public class ChatService
 
         var chat = new Chat
         {
-            Type = ChatType.Group,
+            Type = (int)ChatType.Group,
             Name = name,
             CreatedByUserId = creatorId,
             User1Id = null,
             User2Id = null
         };
 
-        _context.Chats.Add(chat);
-        await _context.SaveChangesAsync();
-        _context.ChatMembers.Add(new ChatMember { ChatId = chat.Id, UserId = creatorId, Role = ChatMemberRole.Owner });
+        chat.ChatMembers.Add(new ChatMember { UserId = creatorId, Role = (int)ChatMemberRole.Owner });
         foreach (var user in users)
-            _context.ChatMembers.Add(new ChatMember { ChatId = chat.Id, UserId = user.Id, Role = ChatMemberRole.Member });
+            chat.ChatMembers.Add(new ChatMember { UserId = user.Id, Role = (int)ChatMemberRole.Member });
+        _context.Chats.Add(chat);
+        // EF saves the chat and all memberships in one transaction.
         await _context.SaveChangesAsync();
 
         return await GetChatByIdAsync(chat.Id);
@@ -124,7 +125,7 @@ public class ChatService
             .AsNoTracking()
             .Include(c => c.User1)
             .Include(c => c.User2)
-            .Where(c => c.Members.Any(m => m.UserId == userId))
+            .Where(c => c.ChatMembers.Any(m => m.UserId == userId))
             .OrderByDescending(c => c.CreatedAt)
             .ThenByDescending(c => c.Id)
             .ToListAsync();
@@ -166,12 +167,12 @@ public class ChatService
     public Task<Chat?> GetChatByIdAsync(int chatId) => _context.Chats
         .Include(c => c.User1)
         .Include(c => c.User2)
-        .Include(c => c.Members)
+        .Include(c => c.ChatMembers)
         .ThenInclude(m => m.User)
         .FirstOrDefaultAsync(c => c.Id == chatId);
 
     public Task<bool> CanAccessChatAsync(int chatId, long userId) =>
-        _context.Chats.AnyAsync(c => c.Id == chatId && c.Members.Any(m => m.UserId == userId));
+        _context.Chats.AnyAsync(c => c.Id == chatId && c.ChatMembers.Any(m => m.UserId == userId));
 
     public async Task<Message?> SendMessageAsync(int chatId, long senderId, string content)
     {
@@ -297,28 +298,28 @@ public class ChatService
 
     public async Task<bool> AddMemberAsync(int chatId, long actorId, long userId)
     {
-        var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId && c.Type == ChatType.Group);
+        var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId && c.Type == (int)ChatType.Group);
         if (chat == null) return false;
 
         var actor = await GetMemberAsync(chatId, actorId);
-        if (actor == null || actor.Role == ChatMemberRole.Member) return false;
+        if (actor == null || actor.Role == (int)ChatMemberRole.Member) return false;
         if (await GetMemberAsync(chatId, userId) != null) return true;
         if (!await UserExistsAsync(userId)) return false;
 
-        _context.ChatMembers.Add(new ChatMember { ChatId = chatId, UserId = userId, Role = ChatMemberRole.Member });
+        _context.ChatMembers.Add(new ChatMember { ChatId = chatId, UserId = userId, Role = (int)ChatMemberRole.Member });
         await _context.SaveChangesAsync();
         return true;
     }
 
     public async Task<bool> RemoveMemberAsync(int chatId, long actorId, long userId)
     {
-        var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId && c.Type == ChatType.Group);
+        var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId && c.Type == (int)ChatType.Group);
         if (chat == null) return false;
 
         var actor = await GetMemberAsync(chatId, actorId);
         var target = await GetMemberAsync(chatId, userId);
-        if (actor == null || target == null || actor.Role == ChatMemberRole.Member || target.Role == ChatMemberRole.Owner) return false;
-        if (actor.Role == ChatMemberRole.Admin && target.Role != ChatMemberRole.Member) return false;
+        if (actor == null || target == null || actor.Role == (int)ChatMemberRole.Member || target.Role == (int)ChatMemberRole.Owner) return false;
+        if (actor.Role == (int)ChatMemberRole.Admin && target.Role != (int)ChatMemberRole.Member) return false;
 
         _context.ChatMembers.Remove(target);
         await _context.SaveChangesAsync();
@@ -328,7 +329,7 @@ public class ChatService
     public async Task<bool> LeaveGroupAsync(int chatId, long userId)
     {
         var member = await GetMemberAsync(chatId, userId);
-        if (member == null || member.Role == ChatMemberRole.Owner) return false;
+        if (member == null || member.Role == (int)ChatMemberRole.Owner) return false;
         _context.ChatMembers.Remove(member);
         await _context.SaveChangesAsync();
         return true;
@@ -339,11 +340,11 @@ public class ChatService
         name = name.Trim();
         if (string.IsNullOrWhiteSpace(name) || name.Length > 128) return false;
 
-        var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId && c.Type == ChatType.Group);
+        var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId && c.Type == (int)ChatType.Group);
         if (chat == null) return false;
 
         var actor = await GetMemberAsync(chatId, actorId);
-        if (actor == null || actor.Role == ChatMemberRole.Member) return false;
+        if (actor == null || actor.Role == (int)ChatMemberRole.Member) return false;
 
         chat.Name = name;
         await _context.SaveChangesAsync();
