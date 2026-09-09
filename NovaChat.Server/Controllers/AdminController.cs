@@ -45,15 +45,28 @@ public class AdminController : ControllerBase
     public async Task<IActionResult> UpdateUser(string id, UpdateUserDto dto)
     {
         if (!long.TryParse(id, out var userId)) return BadRequest(new { message = "Invalid user ID." });
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId); if (user == null) return NotFound(new { message = "User not found." });
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId);
+        if (user == null) return NotFound(new { message = "User not found." });
+
         var username = string.IsNullOrWhiteSpace(dto.NewUsername) ? user.Username : dto.NewUsername.Trim().ToLowerInvariant();
-        var displayName = dto.DisplayName.Trim(); var email = dto.Email.Trim(); var phone = NormalizePhone(dto.PhoneNumber); var bio = (dto.Bio ?? string.Empty).Trim();
+        var displayName = dto.DisplayName.Trim();
+        var email = dto.Email.Trim();
+        var phone = NormalizePhone(dto.PhoneNumber);
+        var bio = (dto.Bio ?? string.Empty).Trim();
+
         if (string.IsNullOrWhiteSpace(displayName) || string.IsNullOrWhiteSpace(email)) return BadRequest(new { message = "Display Name and Email are required." });
         if (string.IsNullOrWhiteSpace(username)) return BadRequest(new { message = "Username is required." });
         if (await _db.Users.AsNoTracking().AnyAsync(u => u.Username == username && u.Id != userId)) return Conflict(new { message = "This Username is already taken." });
         if (await _db.Users.AsNoTracking().AnyAsync(u => u.Email == email && u.Id != userId)) return Conflict(new { message = "This Email is already registered." });
         if (!string.IsNullOrWhiteSpace(phone) && await _db.Users.AsNoTracking().AnyAsync(u => u.PhoneNumber == phone && u.Id != userId)) return Conflict(new { message = "This Phone Number is already registered." });
-        user.Username = username; user.DisplayName = displayName; user.Email = email; user.PhoneNumber = phone; user.Bio = bio; await _db.SaveChangesAsync();
+
+        user.Username = username;
+        user.DisplayName = displayName;
+        user.Email = email;
+        user.PhoneNumber = phone;
+        user.Bio = bio;
+        await _db.SaveChangesAsync();
+
         return Ok(new { message = "User updated successfully.", user = new { user.Id, user.Username, user.DisplayName, user.Email, user.PhoneNumber, user.Bio, user.AvatarUrl, user.CreatedAt } });
     }
 
@@ -62,9 +75,9 @@ public class AdminController : ControllerBase
     {
         if (!long.TryParse(id, out var userId)) return BadRequest(new { message = "Invalid user ID." });
         if (long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var ownerId) && ownerId == userId) return BadRequest(new { message = "Owner cannot delete the Owner account." });
+
         var deleted = await _userService.DeleteUserAsync(id);
-        return deleted ? Ok(new { message = "User deleted successfully." })
-            : NotFound(new { message = "User not found." });
+        return deleted ? Ok(new { message = "User deleted successfully." }) : NotFound(new { message = "User not found." });
     }
 
     [HttpGet("overview")]
@@ -80,9 +93,9 @@ public class AdminController : ControllerBase
         if (!await _db.Users.AsNoTracking().AnyAsync(u => u.Id == userId)) return NotFound(new { message = "User not found." });
 
         var chats = await _db.Chats.AsNoTracking()
-            .Include(c => c.User1)
-            .Include(c => c.User2)
-            .Where(c => c.User1Id == userId || c.User2Id == userId)
+            .Include(c => c.ChatMembers)
+            .ThenInclude(m => m.User)
+            .Where(c => c.ChatMembers.Any(m => m.UserId == userId))
             .OrderByDescending(c => c.CreatedAt)
             .ThenByDescending(c => c.Id)
             .ToListAsync();
@@ -98,15 +111,17 @@ public class AdminController : ControllerBase
                 .FirstOrDefaultAsync();
 
             var count = await _db.Messages.AsNoTracking().CountAsync(m => m.ChatId == chat.Id && !m.DeletedForEveryone);
-            var other = chat.User1Id == userId ? chat.User2 : chat.User1;
+            var other = chat.ChatMembers.FirstOrDefault(m => m.UserId != userId)?.User;
 
             result.Add(new AdminChatDto
             {
                 Id = chat.Id,
-                OtherUserId = other.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                OtherUsername = other.Username,
-                OtherDisplayName = other.DisplayName,
-                OtherAvatarUrl = other.AvatarUrl,
+                Type = ((ChatType)chat.Type).ToString(),
+                ChatName = chat.Name,
+                OtherUserId = other?.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty,
+                OtherUsername = other?.Username ?? string.Empty,
+                OtherDisplayName = other?.DisplayName ?? string.Empty,
+                OtherAvatarUrl = other?.AvatarUrl,
                 CreatedAt = chat.CreatedAt,
                 MessageCount = count,
                 LastMessage = last == null ? null : MessageDtoMapper.Map(last)
@@ -141,9 +156,9 @@ public class AdminController : ControllerBase
         if (dto.Content.Length > 4000) return BadRequest(new { message = "Message is too long." });
         if (dto.SenderUserId <= 0) return BadRequest(new { message = "Invalid sender user ID." });
 
-        var chat = await _db.Chats.FirstOrDefaultAsync(c => c.Id == chatId);
+        var chat = await _db.Chats.Include(c => c.ChatMembers).FirstOrDefaultAsync(c => c.Id == chatId);
         if (chat == null) return NotFound(new { message = "Chat not found." });
-        if (chat.User1Id != dto.SenderUserId && chat.User2Id != dto.SenderUserId) return BadRequest(new { message = "The selected user is not a member of this chat." });
+        if (!chat.ChatMembers.Any(m => m.UserId == dto.SenderUserId)) return BadRequest(new { message = "The selected user is not a member of this chat." });
 
         var sender = await _db.Users.FirstOrDefaultAsync(u => u.Id == dto.SenderUserId);
         if (sender == null) return NotFound(new { message = "Sender user not found." });
@@ -161,7 +176,7 @@ public class AdminController : ControllerBase
         await _db.Entry(message).Reference(m => m.Sender).LoadAsync();
 
         var mapped = MessageDtoMapper.Map(message);
-        await _hub.Clients.Users(chat.User1Id.ToString(), chat.User2Id.ToString()).SendAsync("ReceiveMessage", mapped);
+        await SendToChatMembersAsync(chat, "ReceiveMessage", mapped);
         return Ok(new { message = "Message sent as the selected user.", data = mapped });
     }
 
@@ -180,9 +195,8 @@ public class AdminController : ControllerBase
         await _db.SaveChangesAsync();
 
         var mapped = MessageDtoMapper.Map(message);
-        var chat = await _db.Chats.AsNoTracking().FirstOrDefaultAsync(c => c.Id == message.ChatId);
-        if (chat != null)
-            await _hub.Clients.Users(chat.User1Id.ToString(), chat.User2Id.ToString()).SendAsync("MessageEdited", mapped);
+        var chat = await _db.Chats.AsNoTracking().Include(c => c.ChatMembers).FirstOrDefaultAsync(c => c.Id == message.ChatId);
+        if (chat != null) await SendToChatMembersAsync(chat, "MessageEdited", mapped);
 
         return Ok(new { message = "Message edited successfully.", data = mapped });
     }
@@ -194,7 +208,7 @@ public class AdminController : ControllerBase
         var message = await _db.Messages.FirstOrDefaultAsync(m => m.Id == messageId);
         if (message == null) return NotFound(new { message = "Message not found." });
 
-        var chat = await _db.Chats.AsNoTracking().FirstOrDefaultAsync(c => c.Id == message.ChatId);
+        var chat = await _db.Chats.AsNoTracking().Include(c => c.ChatMembers).FirstOrDefaultAsync(c => c.Id == message.ChatId);
         if (chat == null) return NotFound(new { message = "Chat not found." });
 
         var payload = new
@@ -208,9 +222,20 @@ public class AdminController : ControllerBase
 
         _db.Messages.Remove(message);
         await _db.SaveChangesAsync();
-        await _hub.Clients.Users(chat.User1Id.ToString(), chat.User2Id.ToString()).SendAsync("MessageDeleted", payload);
+        await SendToChatMembersAsync(chat, "MessageDeleted", payload);
 
         return Ok(new { message = "Message deleted successfully." });
+    }
+
+    private async Task SendToChatMembersAsync(Chat chat, string method, object payload)
+    {
+        var ids = chat.ChatMembers
+            .Select(m => m.UserId.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            .Distinct()
+            .ToArray();
+
+        if (ids.Length > 0)
+            await _hub.Clients.Users(ids).SendAsync(method, payload);
     }
 
     private static string? NormalizePhone(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim().Replace(" ", string.Empty).Replace("-", string.Empty).Replace("(", string.Empty).Replace(")", string.Empty);
@@ -218,6 +243,8 @@ public class AdminController : ControllerBase
     public sealed class AdminChatDto
     {
         public int Id { get; set; }
+        public string Type { get; set; } = string.Empty;
+        public string ChatName { get; set; } = string.Empty;
         public string OtherUserId { get; set; } = string.Empty;
         public string OtherUsername { get; set; } = string.Empty;
         public string OtherDisplayName { get; set; } = string.Empty;
