@@ -99,7 +99,7 @@ public partial class MainView
             // The previous client path used api/Conversation, which does not exist.
             if (!await _apiService.DeleteAsync($"api/Chat/{chatId}"))
             {
-                MessageBox.Show("The selected chat could not be removed.", "Remove Chat", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show("The selected chat could not be deleted.", "Delete Chat", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
 
@@ -107,7 +107,7 @@ public partial class MainView
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Could not remove the chat.\n\n{ex.Message}", "Remove Chat", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show($"Could not delete the chat.\n\n{ex.Message}", "Delete Chat", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -117,7 +117,7 @@ public partial class MainView
 
         var dialog = new Window
         {
-            Title = "Remove conversation",
+            Title = "Delete conversation",
             Width = 470,
             Height = 330,
             Owner = Window.GetWindow(this),
@@ -157,7 +157,7 @@ public partial class MainView
         var titleStack = new StackPanel { Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         titleStack.Children.Add(new TextBlock
         {
-            Text = "Remove conversation?",
+            Text = "Delete conversation?",
             FontSize = 21,
             FontWeight = FontWeights.Bold,
             Foreground = GetBrush("TextBrush")
@@ -185,7 +185,7 @@ public partial class MainView
 
         var explanation = new TextBlock
         {
-            Text = "This removes the conversation from your chat list.\nYour messages are not deleted for the other person, and you can start a new conversation with them later.",
+            Text = "This permanently deletes the private conversation from the database, including its messages and membership records.\nThe conversation will disappear for both participants.",
             FontSize = 13,
             LineHeight = 21,
             TextWrapping = TextWrapping.Wrap,
@@ -203,7 +203,7 @@ public partial class MainView
         };
         note.Child = new TextBlock
         {
-            Text = "Only your copy of this conversation is being removed.",
+            Text = "This action cannot be undone. A new private chat can be created later.",
             FontSize = 11,
             Foreground = GetBrush("SecondaryTextBrush"),
             TextWrapping = TextWrapping.Wrap
@@ -229,7 +229,7 @@ public partial class MainView
 
         var remove = new Button
         {
-            Content = "Remove chat",
+            Content = "Delete chat",
             Width = 125,
             Height = 40,
             Style = (Style)FindResource("DangerButtonStyle")

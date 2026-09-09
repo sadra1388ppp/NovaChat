@@ -28,6 +28,16 @@ public class ContactController : ControllerBase
         return Ok(await _contactService.GetAllAsync(userId));
     }
 
+    [HttpGet("group-candidates")]
+    public async Task<IActionResult> GetGroupCandidates()
+    {
+        var userId = CurrentUserId();
+        if (userId == null)
+            return Unauthorized();
+
+        return Ok(await _contactService.GetGroupCandidatesAsync(userId));
+    }
+
     [HttpPost]
     public async Task<IActionResult> AddContact(AddContactDto dto)
     {
