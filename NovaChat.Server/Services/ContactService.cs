@@ -54,18 +54,20 @@ public class ContactService
             })
             .ToListAsync();
 
-        var recentChats = await _context.Chats.AsNoTracking()
-            .Where(c => c.Type == (int)ChatType.Private && c.ChatMembers.Any(m => m.UserId == ownerId))
-            .SelectMany(c => c.ChatMembers
-                .Where(m => m.UserId != ownerId)
-                .Select(m => new ContactResponseDto
-                {
-                    UserId = m.UserId.ToString(),
-                    Username = m.User.Username,
-                    DisplayName = m.User.DisplayName,
-                    Email = m.User.Email,
-                    AddedAt = c.CreatedAt
-                }))
+        // Query ChatMembers directly to avoid the correlated SelectMany/CROSS APPLY
+        // expression that Pomelo cannot translate for MariaDB.
+        var recentChats = await _context.ChatMembers.AsNoTracking()
+            .Where(m => m.Chat.Type == (int)ChatType.Private
+                        && m.UserId != ownerId
+                        && m.Chat.ChatMembers.Any(ownerMember => ownerMember.UserId == ownerId))
+            .Select(m => new ContactResponseDto
+            {
+                UserId = m.UserId.ToString(),
+                Username = m.User.Username,
+                DisplayName = m.User.DisplayName,
+                Email = m.User.Email,
+                AddedAt = m.Chat.CreatedAt
+            })
             .ToListAsync();
 
         return contacts
