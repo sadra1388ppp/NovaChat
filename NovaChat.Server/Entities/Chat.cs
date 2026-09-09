@@ -6,7 +6,7 @@ public enum ChatType
     Group = 1
 }
 
-public class Chat
+public partial class Chat
 {
     public int Id { get; set; }
     public ChatType Type { get; set; } = ChatType.Private;
