@@ -17,14 +17,64 @@ public class ContactService
         if (!await _context.Users.AnyAsync(u => u.Id == contactId)) return (false, "User not found.");
         if (await _context.Contacts.AnyAsync(c => c.OwnerUserId == ownerId && c.ContactUserId == contactId)) return (false, "This user is already in your contacts.");
         _context.Contacts.Add(new Contact { OwnerUserId = ownerId, ContactUserId = contactId, CreatedAt = DateTime.UtcNow });
-        await _context.SaveChangesAsync(); return (true, "Contact added successfully.");
+        await _context.SaveChangesAsync();
+        return (true, "Contact added successfully.");
     }
 
     public async Task<List<ContactResponseDto>> GetAllAsync(string ownerUserId)
     {
         if (!long.TryParse(ownerUserId, out var ownerId)) return [];
-        return await _context.Contacts.AsNoTracking().Where(c => c.OwnerUserId == ownerId).OrderBy(c => c.ContactUser.DisplayName)
-            .Select(c => new ContactResponseDto { UserId = c.ContactUserId.ToString(), Username = c.ContactUser.Username, DisplayName = c.ContactUser.DisplayName, Email = c.ContactUser.Email, AddedAt = c.CreatedAt }).ToListAsync();
+        return await _context.Contacts.AsNoTracking()
+            .Where(c => c.OwnerUserId == ownerId)
+            .OrderBy(c => c.ContactUser.DisplayName)
+            .Select(c => new ContactResponseDto
+            {
+                UserId = c.ContactUserId.ToString(),
+                Username = c.ContactUser.Username,
+                DisplayName = c.ContactUser.DisplayName,
+                Email = c.ContactUser.Email,
+                AddedAt = c.CreatedAt
+            })
+            .ToListAsync();
+    }
+
+    public async Task<List<ContactResponseDto>> GetGroupCandidatesAsync(string ownerUserId)
+    {
+        if (!long.TryParse(ownerUserId, out var ownerId)) return [];
+
+        var contacts = await _context.Contacts.AsNoTracking()
+            .Where(c => c.OwnerUserId == ownerId)
+            .Select(c => new ContactResponseDto
+            {
+                UserId = c.ContactUserId.ToString(),
+                Username = c.ContactUser.Username,
+                DisplayName = c.ContactUser.DisplayName,
+                Email = c.ContactUser.Email,
+                AddedAt = c.CreatedAt
+            })
+            .ToListAsync();
+
+        var recentChats = await _context.Chats.AsNoTracking()
+            .Where(c => c.Type == ChatType.Private && c.Members.Any(m => m.UserId == ownerId))
+            .SelectMany(c => c.Members
+                .Where(m => m.UserId != ownerId)
+                .Select(m => new ContactResponseDto
+                {
+                    UserId = m.UserId.ToString(),
+                    Username = m.User.Username,
+                    DisplayName = m.User.DisplayName,
+                    Email = m.User.Email,
+                    AddedAt = c.CreatedAt
+                }))
+            .ToListAsync();
+
+        return contacts
+            .Concat(recentChats)
+            .GroupBy(x => x.UserId, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.OrderByDescending(x => x.AddedAt).First())
+            .OrderBy(x => x.DisplayName)
+            .ThenBy(x => x.Username)
+            .ToList();
     }
 
     public async Task<bool> RemoveAsync(string ownerUserId, string contactUserId)
@@ -32,6 +82,8 @@ public class ContactService
         if (!long.TryParse(ownerUserId, out var ownerId) || !long.TryParse(contactUserId, out var contactId)) return false;
         var contact = await _context.Contacts.FirstOrDefaultAsync(c => c.OwnerUserId == ownerId && c.ContactUserId == contactId);
         if (contact == null) return false;
-        _context.Contacts.Remove(contact); await _context.SaveChangesAsync(); return true;
+        _context.Contacts.Remove(contact);
+        await _context.SaveChangesAsync();
+        return true;
     }
 }
