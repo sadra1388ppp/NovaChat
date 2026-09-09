@@ -24,16 +24,16 @@ public class ChatService
         try
         {
             var existing = await _context.Chats
-                .Include(c => c.User1)
-                .Include(c => c.User2)
                 .Include(c => c.ChatMembers)
+                .ThenInclude(m => m.User)
                 .Where(c => c.Type == (int)ChatType.Private &&
-                    ((c.User1Id == currentUserId && c.User2Id == otherUserId) ||
-                     (c.User1Id == otherUserId && c.User2Id == currentUserId)))
+                    c.ChatMembers.Count == 2 &&
+                    c.ChatMembers.Any(m => m.UserId == currentUserId) &&
+                    c.ChatMembers.Any(m => m.UserId == otherUserId))
                 .OrderByDescending(c => c.Id)
                 .ToListAsync();
 
-            var reusable = existing.FirstOrDefault(c => c.ChatMembers.Any(m => m.UserId == currentUserId));
+            var reusable = existing.FirstOrDefault();
             if (reusable != null)
             {
                 await EnsurePrivateMembersAsync(reusable, currentUserId, otherUserId);
@@ -44,17 +44,13 @@ public class ChatService
             {
                 Type = (int)ChatType.Private,
                 Name = string.Empty,
-                CreatedByUserId = currentUserId,
-                User1Id = currentUserId,
-                User2Id = otherUserId
+                CreatedByUserId = currentUserId
             };
 
             newChat.ChatMembers.Add(new ChatMember { UserId = currentUserId, Role = (int)ChatMemberRole.Owner, JoinedAt = newChat.CreatedAt });
             newChat.ChatMembers.Add(new ChatMember { UserId = otherUserId, Role = (int)ChatMemberRole.Member, JoinedAt = newChat.CreatedAt });
             _context.Chats.Add(newChat);
             await _context.SaveChangesAsync();
-            await _context.Entry(newChat).Reference(c => c.User1).LoadAsync();
-            await _context.Entry(newChat).Reference(c => c.User2).LoadAsync();
             return newChat;
         }
         finally
@@ -104,16 +100,13 @@ public class ChatService
         {
             Type = (int)ChatType.Group,
             Name = name,
-            CreatedByUserId = creatorId,
-            User1Id = null,
-            User2Id = null
+            CreatedByUserId = creatorId
         };
 
         chat.ChatMembers.Add(new ChatMember { UserId = creatorId, Role = (int)ChatMemberRole.Owner });
         foreach (var user in users)
             chat.ChatMembers.Add(new ChatMember { UserId = user.Id, Role = (int)ChatMemberRole.Member });
         _context.Chats.Add(chat);
-        // EF saves the chat and all memberships in one transaction.
         await _context.SaveChangesAsync();
 
         return await GetChatByIdAsync(chat.Id);
@@ -123,8 +116,8 @@ public class ChatService
     {
         var chats = await _context.Chats
             .AsNoTracking()
-            .Include(c => c.User1)
-            .Include(c => c.User2)
+            .Include(c => c.ChatMembers)
+            .ThenInclude(m => m.User)
             .Where(c => c.ChatMembers.Any(m => m.UserId == userId))
             .OrderByDescending(c => c.CreatedAt)
             .ThenByDescending(c => c.Id)
@@ -146,8 +139,8 @@ public class ChatService
     {
         var chats = await _context.Chats
             .AsNoTracking()
-            .Include(c => c.User1)
-            .Include(c => c.User2)
+            .Include(c => c.ChatMembers)
+            .ThenInclude(m => m.User)
             .OrderByDescending(c => c.CreatedAt)
             .ThenByDescending(c => c.Id)
             .ToListAsync();
@@ -165,8 +158,6 @@ public class ChatService
     }
 
     public Task<Chat?> GetChatByIdAsync(int chatId) => _context.Chats
-        .Include(c => c.User1)
-        .Include(c => c.User2)
         .Include(c => c.ChatMembers)
         .ThenInclude(m => m.User)
         .FirstOrDefaultAsync(c => c.Id == chatId);
@@ -223,14 +214,11 @@ public class ChatService
             .Take(pageSize + 1)
             .ToListAsync();
 
-        // DeletedForUserIds is intentionally filtered after materialization so
-        // the delimiter format remains provider-independent and reliable.
         messages = messages
             .Where(m => !IsDeletedForUser(m, viewerUserId))
             .ToList();
 
-        var hasExtra = messages.Count > pageSize;
-        if (hasExtra)
+        if (messages.Count > pageSize)
             messages.RemoveAt(messages.Count - 1);
 
         return messages
