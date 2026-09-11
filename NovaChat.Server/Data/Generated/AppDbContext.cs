@@ -73,6 +73,7 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.AvatarUrl).HasMaxLength(512);
             entity.Property(e => e.LastSeenAt).HasMaxLength(6);
             entity.Property(e => e.CreatedAt).HasMaxLength(6);
+            entity.Ignore(e => e.Messages);
         });
 
         OnModelCreatingPartial(modelBuilder);
