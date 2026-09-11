@@ -26,10 +26,11 @@ public class ChatService
         await CreateChatLock.WaitAsync();
         try
         {
-            var chats = await _context.Chats.Where(c => c.Type == (int)ChatType.Private && !c.IsDeleted).OrderByDescending(c => c.Id).ToListAsync();
+            var chats = await _context.Chats.Where(c => c.Type == ChatType.Private && !c.IsDeleted).OrderByDescending(c => c.Id).ToListAsync();
             var existing = chats.FirstOrDefault(c => HasExactlyMembers(c.Members, names));
             if (existing != null)
             {
+                existing.Type = ChatType.Private;
                 existing.Name = "Private Chat";
                 existing.Members = members;
                 await _context.SaveChangesAsync();
@@ -38,7 +39,7 @@ public class ChatService
                 return existing;
             }
 
-            var chat = new Chat { Type = (int)ChatType.Private, Name = "Private Chat", Members = members, CreatedByUserId = currentUserId, IsDeleted = false, DeletedAt = null };
+            var chat = new Chat { Type = ChatType.Private, Name = "Private Chat", Members = members, CreatedByUserId = currentUserId, IsDeleted = false, DeletedAt = null };
             _context.Chats.Add(chat);
             await _context.SaveChangesAsync();
             PopulatePrivateProjection(chat, users);
@@ -60,7 +61,7 @@ public class ChatService
         var users = await _context.Users.Where(u => normalized.Contains(u.Username)).ToListAsync();
         if (users.Count != normalized.Count || users.Count < 2) return null;
 
-        var chat = new Chat { Type = (int)ChatType.Group, Name = name, Members = string.Join(", ", normalized), CreatedByUserId = creatorId, IsDeleted = false, DeletedAt = null };
+        var chat = new Chat { Type = ChatType.Group, Name = name, Members = string.Join(", ", normalized), CreatedByUserId = creatorId, IsDeleted = false, DeletedAt = null };
         _context.Chats.Add(chat);
         await _context.SaveChangesAsync();
         PopulateCompatibilityMembers(chat, users);
@@ -117,7 +118,7 @@ public class ChatService
 
     private static void PopulatePrivateProjection(Chat chat, IEnumerable<User> users)
     {
-        if (chat.Type != (int)ChatType.Private) return;
+        if (chat.Type != ChatType.Private) return;
         var ordered = ParseMembers(chat.Members).Select(n => users.FirstOrDefault(u => u.Username == n)).Where(u => u != null).Cast<User>().Take(2).ToList();
         chat.User1Id = ordered.ElementAtOrDefault(0)?.Id;
         chat.User2Id = ordered.ElementAtOrDefault(1)?.Id;
@@ -162,21 +163,19 @@ public class ChatService
         var message = new Message
         {
             ChatId = chatId,
-            SenderId = senderId,
-            SenderUsername = sender.Username,
+            SenderId = sender.Username,
             Content = content.Trim()
         };
 
         _context.Messages.Add(message);
         await _context.SaveChangesAsync();
-        await _context.Entry(message).Reference(m => m.Sender).LoadAsync();
         return message;
     }
 
     public async Task<List<Message>> GetMessagesAsync(int chatId, long viewerUserId, int? beforeMessageId = null, int pageSize = 50)
     {
         pageSize = Math.Clamp(pageSize, 1, 100);
-        var query = _context.Messages.AsNoTracking().Include(m => m.Sender).Where(m => m.ChatId == chatId && !m.DeletedForEveryone);
+        var query = _context.Messages.AsNoTracking().Where(m => m.ChatId == chatId && !m.DeletedForEveryone);
         if (beforeMessageId.HasValue)
         {
             var before = await _context.Messages.AsNoTracking().FirstOrDefaultAsync(m => m.Id == beforeMessageId.Value && m.ChatId == chatId && !m.DeletedForEveryone);
@@ -196,11 +195,11 @@ public class ChatService
         return older.Any(m => !IsDeletedForUser(m, viewerUserId));
     }
 
-    public Task<Message?> GetLastMessageAsync(int chatId) => _context.Messages.AsNoTracking().Include(m => m.Sender).Where(m => m.ChatId == chatId && !m.DeletedForEveryone).OrderByDescending(m => m.SentAt).ThenByDescending(m => m.Id).FirstOrDefaultAsync();
+    public Task<Message?> GetLastMessageAsync(int chatId) => _context.Messages.AsNoTracking().Where(m => m.ChatId == chatId && !m.DeletedForEveryone).OrderByDescending(m => m.SentAt).ThenByDescending(m => m.Id).FirstOrDefaultAsync();
 
     public async Task<Message?> GetLastMessageAsync(int chatId, long viewerUserId)
     {
-        var messages = await _context.Messages.AsNoTracking().Include(m => m.Sender).Where(m => m.ChatId == chatId && !m.DeletedForEveryone).OrderByDescending(m => m.SentAt).ThenByDescending(m => m.Id).Take(100).ToListAsync();
+        var messages = await _context.Messages.AsNoTracking().Where(m => m.ChatId == chatId && !m.DeletedForEveryone).OrderByDescending(m => m.SentAt).ThenByDescending(m => m.Id).Take(100).ToListAsync();
         return messages.FirstOrDefault(m => !IsDeletedForUser(m, viewerUserId));
     }
 
@@ -265,7 +264,7 @@ public class ChatService
     {
         name = NormalizeGroupName(name);
         if (string.IsNullOrWhiteSpace(name) || name.Length > 128) return false;
-        var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId && c.Type == (int)ChatType.Group && !c.IsDeleted);
+        var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId && c.Type == ChatType.Group && !c.IsDeleted);
         if (chat == null || !await CanAccessChatAsync(chatId, actorId)) return false;
         chat.Name = name;
         await _context.SaveChangesAsync();
@@ -293,7 +292,7 @@ public class ChatService
 
     public Task<int?> GetMessageChatIdAsync(int messageId) => _context.Messages.Where(m => m.Id == messageId).Select(m => (int?)m.ChatId).FirstOrDefaultAsync();
 
-    private Task<bool> IsGroupAsync(int chatId) => _context.Chats.AnyAsync(c => c.Id == chatId && c.Type == (int)ChatType.Group && !c.IsDeleted);
+    private Task<bool> IsGroupAsync(int chatId) => _context.Chats.AnyAsync(c => c.Id == chatId && c.Type == ChatType.Group && !c.IsDeleted);
     private static bool HasExactlyMembers(string stored, IReadOnlyCollection<string> expected) { var actual = ParseMembers(stored).ToHashSet(StringComparer.OrdinalIgnoreCase); return actual.Count == expected.Count && expected.All(actual.Contains); }
     private static IEnumerable<string> ParseMembers(string members) => (members ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase);
     private static string NormalizeGroupName(string name) { name = name.Trim(); const string prefix = "Group - "; if (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) name = name[prefix.Length..].Trim(); return name; }
