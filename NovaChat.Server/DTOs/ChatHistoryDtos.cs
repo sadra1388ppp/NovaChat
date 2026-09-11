@@ -29,7 +29,7 @@ public class ChatHistoryResponseDto
 public class ChatListDto
 {
     public int Id { get; set; }
-    public string Type { get; set; } = "Private";
+    public string Type { get; set; } = "Private Chat";
     public string Name { get; set; } = string.Empty;
     public string? AvatarUrl { get; set; }
     public string CreatedByUserId { get; set; } = string.Empty;
