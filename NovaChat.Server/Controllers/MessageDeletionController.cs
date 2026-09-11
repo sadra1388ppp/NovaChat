@@ -16,7 +16,7 @@ namespace NovaChat.Server.Controllers;
 [Authorize]
 public class MessageDeletionController : ControllerBase
 {
-    private readonly AppDbContext _db;
+    private readonly _db;
     private readonly ChatService _chatService;
     private readonly IConfiguration _configuration;
     private readonly IHubContext<ChatHub> _hub;
@@ -36,15 +36,10 @@ public class MessageDeletionController : ControllerBase
         _environment = environment;
     }
 
-    // Unified endpoint used by private chats and groups.
-    // mode = "me"       -> hide only for the current user.
-    // mode = "everyone" -> permanently mark the message deleted for everyone;
-    //                      only the sender (or the configured Owner) may do this.
     [HttpDelete("{messageId:int}")]
     public Task<IActionResult> Delete(int messageId, DeleteMessageDto dto)
         => DeleteCoreAsync(messageId, dto);
 
-    // Kept for backwards compatibility with older client builds.
     [HttpDelete("private/{messageId:int}")]
     public Task<IActionResult> DeletePrivate(int messageId, DeleteMessageDto dto)
         => DeleteCoreAsync(messageId, dto);
@@ -61,17 +56,12 @@ public class MessageDeletionController : ControllerBase
         if (message == null)
             return NotFound(new { message = "Message not found." });
 
-        // ChatMembers is no longer an EF navigation. ChatService rebuilds the
-        // compatibility members from the Chats.Members username list.
         var chat = await _chatService.GetChatByIdAsync(message.ChatId);
-
         if (chat == null)
             return NotFound(new { message = "Chat not found." });
 
         var owner = IsOwner(userId);
-        var isMember = chat.Type == (int)ChatType.Group
-            ? chat.ChatMembers.Any(m => m.UserId == userId)
-            : chat.User1Id == userId || chat.User2Id == userId;
+        var isMember = chat.ChatMembers.Any(m => m.UserId == userId);
 
         if (!owner && !isMember)
             return Forbid();
@@ -85,43 +75,19 @@ public class MessageDeletionController : ControllerBase
             if (!owner && message.SenderId != userId)
                 return Forbid();
 
+            // SECURITY RULE: this is a logical delete only.
+            // NEVER remove the database row, clear Content, or delete the
+            // stored media. The original record remains available in MariaDB.
+            message.DeletedForEveryone = true;
+            await _db.SaveChangesAsync();
+
             var deletedPayload = new
             {
                 id = message.Id,
                 chatId = message.ChatId,
                 senderId = message.SenderId.ToString(),
-                content = message.Content,
                 sentAt = message.SentAt
             };
-
-            string? mediaPath = null;
-            if (MediaMessageEnvelope.TryParse(message.Content, out var media) && media != null)
-            {
-                var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
-                mediaPath = Path.Combine(
-                    root,
-                    "uploads",
-                    "chat",
-                    media.StorageName.Replace('/', Path.DirectorySeparatorChar));
-            }
-
-            message.DeletedForEveryone = true;
-            message.Content = string.Empty;
-            await _db.SaveChangesAsync();
-
-            if (!string.IsNullOrWhiteSpace(mediaPath))
-            {
-                try
-                {
-                    if (System.IO.File.Exists(mediaPath))
-                        System.IO.File.Delete(mediaPath);
-                }
-                catch
-                {
-                    // The database state is already correct; a stale media file
-                    // must not make the delete request fail.
-                }
-            }
 
             var recipients = GetRecipientIds(chat);
             if (recipients.Count > 0)
@@ -142,12 +108,8 @@ public class MessageDeletionController : ControllerBase
 
     private List<string> GetRecipientIds(Chat chat)
     {
-        if (chat.Type == (int)ChatType.Group)
-            return chat.ChatMembers.Select(m => m.UserId.ToString()).Distinct().ToList();
-
-        return new[] { chat.User1Id, chat.User2Id }
-            .Where(id => id.HasValue && id.Value > 0)
-            .Select(id => id!.Value.ToString())
+        return chat.ChatMembers
+            .Select(m => m.UserId.ToString())
             .Distinct()
             .ToList();
     }
