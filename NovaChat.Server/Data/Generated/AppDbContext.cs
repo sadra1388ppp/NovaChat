@@ -21,7 +21,7 @@ public partial class AppDbContext : DbContext
             entity.HasKey(e => e.Id).HasName("PRIMARY");
             entity.HasIndex(e => e.CreatedByUserId, "IX_Chats_CreatedByUserId");
             entity.Property(e => e.Id).HasColumnType("int(11)");
-            entity.Property(e => e.Type).HasColumnType("int(11)");
+            entity.Property(e => e.Type).HasMaxLength(32).IsRequired();
             entity.Property(e => e.Name).HasMaxLength(128);
             entity.Property(e => e.Members).HasMaxLength(4000);
             entity.Property(e => e.AvatarUrl).HasMaxLength(512);
@@ -52,11 +52,9 @@ public partial class AppDbContext : DbContext
             entity.HasIndex(e => e.SenderId, "IX_Messages_SenderId");
             entity.Property(e => e.Id).HasColumnType("int(11)");
             entity.Property(e => e.ChatId).HasColumnType("int(11)");
-            entity.Property(e => e.SenderId).HasColumnType("bigint(20)");
-            entity.Property(e => e.SenderUsername).HasMaxLength(32).IsRequired();
+            entity.Property(e => e.SenderId).HasMaxLength(32).IsRequired();
             entity.Property(e => e.SentAt).HasMaxLength(6);
             entity.HasOne(d => d.Chat).WithMany(p => p.Messages).HasForeignKey(d => d.ChatId);
-            entity.HasOne(d => d.Sender).WithMany(p => p.Messages).HasForeignKey(d => d.SenderId);
         });
 
         modelBuilder.Entity<User>(entity =>
