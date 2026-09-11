@@ -18,6 +18,8 @@ public partial class Chat
     public long? CreatedByUserId { get; set; }
     public virtual User? CreatedByUser { get; set; }
     public DateTime CreatedAt { get; set; }
+    public bool IsDeleted { get; set; }
+    public DateTime? DeletedAt { get; set; }
 
     public virtual ICollection<Message> Messages { get; set; } = new List<Message>();
 
