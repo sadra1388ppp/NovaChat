@@ -70,7 +70,7 @@ public partial class MainView
             return;
         }
 
-        var isMine = string.Equals(history.SenderId, AuthState.UserId, StringComparison.OrdinalIgnoreCase);
+        var isMine = string.Equals(history.SenderId, AuthState.Username, StringComparison.OrdinalIgnoreCase);
         var mode = "me";
 
         if (isMine)
