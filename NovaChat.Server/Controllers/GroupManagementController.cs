@@ -38,7 +38,7 @@ public class GroupManagementController : ControllerBase
     {
         if (!TryGetCurrentUserId(out var userId)) return Unauthorized();
         var chat = await _chatService.GetChatByIdAsync(chatId);
-        if (chat == null || chat.Type != (int)ChatType.Group) return NotFound(new { message = "Group not found." });
+        if (chat == null || chat.Type != ChatType.Group) return NotFound(new { message = "Group not found." });
         if (chat.CreatedByUserId != userId) return Forbid();
 
         var recipients = chat.ChatMembers.Select(m => m.UserId.ToString()).Distinct().ToList();
