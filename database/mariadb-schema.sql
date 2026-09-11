@@ -1,9 +1,9 @@
 -- Initial NovaChat schema for a NEW, EMPTY MariaDB database (11.4 or newer).
--- Chat participants are stored exclusively in ChatMembers.
+-- Chat participants are stored as comma-separated usernames in Chats.Members.
+-- There is intentionally no ChatMembers table.
 -- Chats has no User1Id/User2Id columns.
--- Select/create the target database separately. This is not an in-place upgrade
--- or a PostgreSQL data import. Existing tables cause an error instead of being erased.
--- All application dates are UTC. All table names are case-sensitive on Linux.
+-- Select/create the target database separately. This is not an in-place upgrade.
+-- All application dates are UTC.
 
 CREATE TABLE `Users` (
     `Id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -26,25 +26,13 @@ CREATE TABLE `Chats` (
     `Id` INT NOT NULL AUTO_INCREMENT,
     `Type` INT NOT NULL,
     `Name` VARCHAR(128) NOT NULL,
+    `Members` VARCHAR(4000) NOT NULL,
     `AvatarUrl` VARCHAR(512) NULL,
     `CreatedByUserId` BIGINT NULL,
     `CreatedAt` DATETIME(6) NOT NULL,
     PRIMARY KEY (`Id`),
     KEY `IX_Chats_CreatedByUserId` (`CreatedByUserId`),
     CONSTRAINT `FK_Chats_Users_CreatedByUserId` FOREIGN KEY (`CreatedByUserId`) REFERENCES `Users` (`Id`) ON DELETE RESTRICT
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE `ChatMembers` (
-    `Id` INT NOT NULL AUTO_INCREMENT,
-    `ChatId` INT NOT NULL,
-    `UserId` BIGINT NOT NULL,
-    `Role` INT NOT NULL,
-    `JoinedAt` DATETIME(6) NOT NULL,
-    PRIMARY KEY (`Id`),
-    UNIQUE KEY `IX_ChatMembers_ChatId_UserId` (`ChatId`, `UserId`),
-    KEY `IX_ChatMembers_UserId` (`UserId`),
-    CONSTRAINT `FK_ChatMembers_Chats_ChatId` FOREIGN KEY (`ChatId`) REFERENCES `Chats` (`Id`) ON DELETE CASCADE,
-    CONSTRAINT `FK_ChatMembers_Users_UserId` FOREIGN KEY (`UserId`) REFERENCES `Users` (`Id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `Messages` (
