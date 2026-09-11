@@ -27,6 +27,8 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.AvatarUrl).HasMaxLength(512);
             entity.Property(e => e.CreatedByUserId).HasColumnType("bigint(20)");
             entity.Property(e => e.CreatedAt).HasMaxLength(6);
+            entity.Property(e => e.IsDeleted).HasColumnType("tinyint(1)");
+            entity.Property(e => e.DeletedAt).HasMaxLength(6);
             entity.HasOne(d => d.CreatedByUser).WithMany(p => p.ChatCreatedByUsers).HasForeignKey(d => d.CreatedByUserId);
         });
 
