@@ -22,15 +22,10 @@ ALTER TABLE `Messages`
 UPDATE `Messages` m
 INNER JOIN `Users` u ON CAST(m.`SenderId` AS UNSIGNED) = u.`Id`
 SET m.`SenderId` = u.`Username`
-WHERE m.`SenderId` IS NOT NULL;
-
-UPDATE `Messages` m
-INNER JOIN `Users` u ON m.`SenderUsername` = u.`Username`
-SET m.`SenderId` = u.`Username`
-WHERE m.`SenderId` IS NULL OR m.`SenderId` = '';
+WHERE m.`SenderId` IS NOT NULL AND m.`SenderId` REGEXP '^[0-9]+$';
 
 ALTER TABLE `Messages`
-    DROP COLUMN `SenderUsername`;
+    DROP COLUMN IF EXISTS `SenderUsername`;
 
 ALTER TABLE `Messages`
     MODIFY COLUMN `SenderId` VARCHAR(32) NOT NULL;
