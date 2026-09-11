@@ -72,18 +72,7 @@ public class ChatService
         var username = await _context.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => u.Username).FirstOrDefaultAsync();
         if (string.IsNullOrWhiteSpace(username)) return [];
 
-        var chats = await _context.Chats
-            .AsNoTracking()
-            .Where(c =>
-                !c.IsDeleted &&
-                (c.Members == username ||
-                 c.Members.StartsWith(username + ", ") ||
-                 c.Members.Contains(", " + username + ", ") ||
-                 c.Members.EndsWith(", " + username)))
-            .OrderByDescending(c => c.CreatedAt)
-            .ThenByDescending(c => c.Id)
-            .ToListAsync();
-
+        var chats = await _context.Chats.AsNoTracking().Where(c => !c.IsDeleted && (c.Members == username || c.Members.StartsWith(username + ", ") || c.Members.Contains(", " + username + ", ") || c.Members.EndsWith(", " + username))).OrderByDescending(c => c.CreatedAt).ThenByDescending(c => c.Id).ToListAsync();
         foreach (var chat in chats)
         {
             await PopulateCompatibilityMembersAsync(chat);
@@ -152,16 +141,7 @@ public class ChatService
         foreach (var username in ParseMembers(chat.Members))
         {
             if (!lookup.TryGetValue(username, out var user)) continue;
-            chat.ChatMembers.Add(new ChatMember
-            {
-                Id = ++index,
-                ChatId = chat.Id,
-                UserId = user.Id,
-                User = user,
-                Chat = chat,
-                Role = user.Id == chat.CreatedByUserId ? (int)ChatMemberRole.Owner : (int)ChatMemberRole.Member,
-                JoinedAt = chat.CreatedAt
-            });
+            chat.ChatMembers.Add(new ChatMember { Id = ++index, ChatId = chat.Id, UserId = user.Id, User = user, Chat = chat, Role = user.Id == chat.CreatedByUserId ? (int)ChatMemberRole.Owner : (int)ChatMemberRole.Member, JoinedAt = chat.CreatedAt });
         }
     }
 
@@ -169,20 +149,24 @@ public class ChatService
     {
         var username = await _context.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => u.Username).FirstOrDefaultAsync();
         if (string.IsNullOrWhiteSpace(username)) return false;
-
-        return await _context.Chats.AnyAsync(c =>
-            c.Id == chatId &&
-            !c.IsDeleted &&
-            (c.Members == username ||
-             c.Members.StartsWith(username + ", ") ||
-             c.Members.Contains(", " + username + ", ") ||
-             c.Members.EndsWith(", " + username)));
+        return await _context.Chats.AnyAsync(c => c.Id == chatId && !c.IsDeleted && (c.Members == username || c.Members.StartsWith(username + ", ") || c.Members.Contains(", " + username + ", ") || c.Members.EndsWith(", " + username)));
     }
 
     public async Task<Message?> SendMessageAsync(int chatId, long senderId, string content)
     {
         if (string.IsNullOrWhiteSpace(content) || !await CanAccessChatAsync(chatId, senderId)) return null;
-        var message = new Message { ChatId = chatId, SenderId = senderId, Content = content.Trim() };
+
+        var sender = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == senderId);
+        if (sender == null) return null;
+
+        var message = new Message
+        {
+            ChatId = chatId,
+            SenderId = senderId,
+            SenderUsername = sender.Username,
+            Content = content.Trim()
+        };
+
         _context.Messages.Add(message);
         await _context.SaveChangesAsync();
         await _context.Entry(message).Reference(m => m.Sender).LoadAsync();
@@ -313,5 +297,5 @@ public class ChatService
     private static bool HasExactlyMembers(string stored, IReadOnlyCollection<string> expected) { var actual = ParseMembers(stored).ToHashSet(StringComparer.OrdinalIgnoreCase); return actual.Count == expected.Count && expected.All(actual.Contains); }
     private static IEnumerable<string> ParseMembers(string members) => (members ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase);
     private static string NormalizeGroupName(string name) { name = name.Trim(); const string prefix = "Group - "; if (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) name = name[prefix.Length..].Trim(); return name; }
-    private static bool IsDeletedForUser(Message message, long userId) => string.IsNullOrWhiteSpace(message.DeletedForUserIds) ? false : message.DeletedForUserIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Any(x => long.TryParse(x, out var id) && id == userId);
+    private static bool IsDeletedForUser(Message message, long userId) => string.IsNullOrWhiteSpace(message.DeletedForUserIds) ? false : message.DeletedForUserIds.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Any(x => long.TryParse(x, out var id) && id == userId);
 }
