@@ -10,7 +10,9 @@ public partial class MainView
 {
     private void AddMessageToUi(MessageModel message, bool insertAtTop = false)
     {
-        var mine = string.Equals(message.SenderId, AuthState.UserId, StringComparison.OrdinalIgnoreCase);
+        // Messages.SenderId now stores the sender username, not the numeric user ID.
+        // Compare it with AuthState.Username so the current user's messages are styled as "mine".
+        var mine = string.Equals(message.SenderId, AuthState.Username, StringComparison.OrdinalIgnoreCase);
         var isGroup = _currentChatId.HasValue && _chats.FirstOrDefault(x => x.Chat.Id == _currentChatId.Value)?.Chat.IsGroup == true;
 
         var border = new Border
@@ -29,7 +31,7 @@ public partial class MainView
         {
             panel.Children.Add(new TextBlock
             {
-                Text = mine ? "You" : (string.IsNullOrWhiteSpace(message.SenderName) ? $"User {message.SenderId}" : message.SenderName),
+                Text = mine ? "You" : (string.IsNullOrWhiteSpace(message.SenderName) ? message.SenderId : message.SenderName),
                 FontSize = 12,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = mine ? Brushes.White : (Brush)FindResource("PrimaryBrush"),
