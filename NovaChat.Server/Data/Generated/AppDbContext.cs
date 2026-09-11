@@ -53,6 +53,7 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.Id).HasColumnType("int(11)");
             entity.Property(e => e.ChatId).HasColumnType("int(11)");
             entity.Property(e => e.SenderId).HasColumnType("bigint(20)");
+            entity.Property(e => e.SenderUsername).HasMaxLength(32).IsRequired();
             entity.Property(e => e.SentAt).HasMaxLength(6);
             entity.HasOne(d => d.Chat).WithMany(p => p.Messages).HasForeignKey(d => d.ChatId);
             entity.HasOne(d => d.Sender).WithMany(p => p.Messages).HasForeignKey(d => d.SenderId);
