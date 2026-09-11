@@ -83,7 +83,6 @@ public class UserService
     {
         username = username?.Trim().ToLowerInvariant();
         email = email?.Trim();
-
         var normalizedPhone = TryNormalizePhoneNumber(phoneNumber, out var phone) ? phone : null;
 
         var usernameTaken = !string.IsNullOrWhiteSpace(username) && await _context.Users.AsNoTracking().AnyAsync(u => u.Username == username);
@@ -127,7 +126,11 @@ public class UserService
         if (query.Length < 1) return [];
         long.TryParse(currentUserId, out var excludedId);
         var pattern = $"%{query}%";
-        var users = await _context.Users.AsNoTracking().Where(u => u.Id != excludedId && (EF.Functions.Like(u.Username, pattern) || EF.Functions.Like(u.DisplayName, pattern) || EF.Functions.Like(u.Email, pattern))).OrderBy(u => u.DisplayName).Take(30).ToListAsync();
+        var users = await _context.Users.AsNoTracking()
+            .Where(u => u.Id != excludedId && (EF.Functions.Like(u.Username, pattern) || EF.Functions.Like(u.DisplayName, pattern) || EF.Functions.Like(u.Email, pattern)))
+            .OrderBy(u => u.DisplayName)
+            .Take(30)
+            .ToListAsync();
         return users.Select(u => ToUserResponse(u)).ToList();
     }
 
@@ -145,8 +148,38 @@ public class UserService
         if (await _context.Users.AsNoTracking().AnyAsync(u => u.Email == dto.Email && u.Id != userId)) return Fail("This Email is already registered.");
         if (await _context.Users.AsNoTracking().AnyAsync(u => u.PhoneNumber == phoneNumber && u.Id != userId)) return Fail("This phone number is already registered.");
 
-        user.Username = newUsername; user.DisplayName = dto.DisplayName; user.Email = dto.Email; user.PhoneNumber = phoneNumber; user.Bio = dto.Bio;
+        var oldUsername = user.Username;
+        user.Username = newUsername;
+        user.DisplayName = dto.DisplayName;
+        user.Email = dto.Email;
+        user.PhoneNumber = phoneNumber;
+        user.Bio = dto.Bio;
         await _context.SaveChangesAsync();
+
+        // Keep the denormalized Chats.Members field synchronized after a username change.
+        if (!string.Equals(oldUsername, newUsername, StringComparison.Ordinal))
+        {
+            var chats = await _context.Chats.ToListAsync();
+            foreach (var chat in chats)
+            {
+                var members = ParseMembers(chat.Members);
+                var changed = false;
+                for (var i = 0; i < members.Count; i++)
+                {
+                    if (string.Equals(members[i], oldUsername, StringComparison.OrdinalIgnoreCase))
+                    {
+                        members[i] = newUsername;
+                        changed = true;
+                    }
+                }
+
+                if (changed)
+                    chat.Members = string.Join(", ", members.Distinct(StringComparer.OrdinalIgnoreCase));
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
         return new RegisterResult { Success = true, Message = "User updated successfully.", User = ToUserResponse(user, true) };
     }
 
@@ -177,17 +210,39 @@ public class UserService
     public async Task<bool> DeleteUserAsync(string id)
     {
         if (!long.TryParse(id, out var userId)) return false;
-        if (!await _context.Users.AsNoTracking().AnyAsync(u => u.Id == userId)) return false;
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+        if (user == null) return false;
 
         await using var transaction = await _context.Database.BeginTransactionAsync();
-        await _context.Chats
-            .Where(c => c.CreatedByUserId == userId || c.User1Id == userId || c.User2Id == userId)
-            .ExecuteDeleteAsync();
+
+        var chats = await _context.Chats.ToListAsync();
+        foreach (var chat in chats)
+        {
+            var members = ParseMembers(chat.Members);
+            var containsUser = members.Any(m => string.Equals(m, user.Username, StringComparison.OrdinalIgnoreCase));
+
+            if (!containsUser && chat.CreatedByUserId != userId)
+                continue;
+
+            if (chat.CreatedByUserId == userId)
+            {
+                var messages = await _context.Messages.Where(m => m.ChatId == chat.Id).ToListAsync();
+                if (messages.Count > 0)
+                    _context.Messages.RemoveRange(messages);
+                _context.Chats.Remove(chat);
+                continue;
+            }
+
+            members.RemoveAll(m => string.Equals(m, user.Username, StringComparison.OrdinalIgnoreCase));
+            chat.Members = string.Join(", ", members.Distinct(StringComparer.OrdinalIgnoreCase));
+        }
+
         await _context.Messages.Where(m => m.SenderId == userId).ExecuteDeleteAsync();
-        await _context.ChatMembers.Where(m => m.UserId == userId).ExecuteDeleteAsync();
         await _context.Contacts
             .Where(c => c.OwnerUserId == userId || c.ContactUserId == userId)
             .ExecuteDeleteAsync();
+
+        await _context.SaveChangesAsync();
         var deleted = await _context.Users.Where(u => u.Id == userId).ExecuteDeleteAsync();
         await transaction.CommitAsync();
         _context.ChangeTracker.Clear();
@@ -206,15 +261,17 @@ public class UserService
 
     private async Task<long> GenerateNextUserIdAsync()
     {
-        var maxId = await _context.Users
-            .AsNoTracking()
-            .MaxAsync(u => (long?)u.Id) ?? 0L;
-
-        if (maxId == long.MaxValue)
-            throw new InvalidOperationException("No more user IDs are available.");
-
+        var maxId = await _context.Users.AsNoTracking().MaxAsync(u => (long?)u.Id) ?? 0L;
+        if (maxId == long.MaxValue) throw new InvalidOperationException("No more user IDs are available.");
         return maxId + 1;
     }
+
+    private static List<string> ParseMembers(string? members) =>
+        string.IsNullOrWhiteSpace(members)
+            ? []
+            : members.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .ToList();
 
     private static RegisterResult Fail(string message) => new() { Success = false, Message = message };
 
