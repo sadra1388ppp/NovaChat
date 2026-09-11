@@ -9,7 +9,11 @@ public partial class Message
 
     public int ChatId { get; set; }
 
+    // Kept as the immutable relational/audit identifier for the sender.
     public long SenderId { get; set; }
+
+    // Human-readable sender username stored with the message for audit/history display.
+    public string SenderUsername { get; set; } = string.Empty;
 
     public string Content { get; set; } = null!;
 
