@@ -2,16 +2,16 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace NovaChat.Server.Entities;
 
-public enum ChatType
+public static class ChatType
 {
-    Private = 0,
-    Group = 1
+    public const string Private = "Private Chat";
+    public const string Group = "Group";
 }
 
 public partial class Chat
 {
     public int Id { get; set; }
-    public int Type { get; set; }
+    public string Type { get; set; } = ChatType.Private;
     public string Name { get; set; } = string.Empty;
     public string Members { get; set; } = string.Empty;
     public string? AvatarUrl { get; set; }
