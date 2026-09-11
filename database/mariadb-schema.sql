@@ -3,7 +3,7 @@
 -- There is intentionally no ChatMembers table.
 -- Chats has no User1Id/User2Id columns.
 -- Chat deletion is a soft delete: IsDeleted/DeletedAt preserve records for security and auditability.
--- Messages preserve both SenderId (relational audit identity) and SenderUsername (human-readable audit identity).
+-- Messages store SenderId as the sender username for human-readable audit/history display.
 -- Select/create the target database separately. This is not an in-place upgrade.
 -- All application dates are UTC.
 
@@ -26,7 +26,7 @@ CREATE TABLE `Users` (
 
 CREATE TABLE `Chats` (
     `Id` INT NOT NULL AUTO_INCREMENT,
-    `Type` INT NOT NULL,
+    `Type` VARCHAR(32) NOT NULL,
     `Name` VARCHAR(128) NOT NULL,
     `Members` VARCHAR(4000) NOT NULL,
     `AvatarUrl` VARCHAR(512) NULL,
@@ -43,8 +43,7 @@ CREATE TABLE `Chats` (
 CREATE TABLE `Messages` (
     `Id` INT NOT NULL AUTO_INCREMENT,
     `ChatId` INT NOT NULL,
-    `SenderId` BIGINT NOT NULL,
-    `SenderUsername` VARCHAR(32) NOT NULL,
+    `SenderId` VARCHAR(32) NOT NULL,
     `Content` LONGTEXT NOT NULL,
     `SentAt` DATETIME(6) NOT NULL,
     `DeletedForEveryone` TINYINT(1) NOT NULL,
@@ -52,9 +51,7 @@ CREATE TABLE `Messages` (
     PRIMARY KEY (`Id`),
     KEY `IX_Messages_ChatId_SentAt_Id` (`ChatId`, `SentAt`, `Id`),
     KEY `IX_Messages_SenderId` (`SenderId`),
-    KEY `IX_Messages_SenderUsername` (`SenderUsername`),
-    CONSTRAINT `FK_Messages_Chats_ChatId` FOREIGN KEY (`ChatId`) REFERENCES `Chats` (`Id`) ON DELETE CASCADE,
-    CONSTRAINT `FK_Messages_Users_SenderId` FOREIGN KEY (`SenderId`) REFERENCES `Users` (`Id`) ON DELETE CASCADE
+    CONSTRAINT `FK_Messages_Chats_ChatId` FOREIGN KEY (`ChatId`) REFERENCES `Chats` (`Id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `Contacts` (
