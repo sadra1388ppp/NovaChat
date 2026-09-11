@@ -21,7 +21,7 @@ public partial class Chat
 
     public virtual ICollection<Message> Messages { get; set; } = new List<Message>();
 
-    // Compatibility-only in-memory projections. ChatMembers is no longer stored in MariaDB.
+    // Compatibility-only in-memory collection. It is not persisted as a database table.
     [NotMapped]
     public ICollection<ChatMember> ChatMembers { get; set; } = new List<ChatMember>();
 
@@ -36,7 +36,4 @@ public partial class Chat
 
     [NotMapped]
     public User? User2 { get; set; }
-
-    [NotMapped]
-    public ICollection<ChatMember> Members => ChatMembers;
 }
