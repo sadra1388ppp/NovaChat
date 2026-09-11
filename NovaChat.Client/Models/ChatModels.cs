@@ -5,7 +5,7 @@ namespace NovaChat.Client.Models;
 public class ChatModel
 {
     public int Id { get; set; }
-    public string Type { get; set; } = "Private";
+    public string Type { get; set; } = "Private Chat";
     public string Name { get; set; } = string.Empty;
     public string? AvatarUrl { get; set; }
     public string CreatedByUserId { get; set; } = string.Empty;
@@ -25,8 +25,20 @@ public class ChatModel
 
 public class MessageModel
 {
-    public int Id { get; set; } public int ChatId { get; set; } public string SenderId { get; set; } = string.Empty; public string SenderName { get; set; } = string.Empty; public string Content { get; set; } = string.Empty; public DateTime SentAt { get; set; } public string MessageType { get; set; } = "text"; public string? AttachmentUrl { get; set; } public string? FileName { get; set; } public string? ContentType { get; set; } public long? FileSize { get; set; } public double? DurationSeconds { get; set; }
+    public int Id { get; set; }
+    public int ChatId { get; set; }
+    public string SenderId { get; set; } = string.Empty;
+    public string SenderName { get; set; } = string.Empty;
+    public string Content { get; set; } = string.Empty;
+    public DateTime SentAt { get; set; }
+    public string MessageType { get; set; } = "text";
+    public string? AttachmentUrl { get; set; }
+    public string? FileName { get; set; }
+    public string? ContentType { get; set; }
+    public long? FileSize { get; set; }
+    public double? DurationSeconds { get; set; }
 }
+
 public class ChatHistoryResponse { public List<MessageModel> Messages { get; set; } = []; public bool HasMore { get; set; } public int? NextBeforeMessageId { get; set; } }
 public class CreateChatRequest { public string Username { get; set; } = string.Empty; }
 public class CreateChatResponse { public string Message { get; set; } = string.Empty; public ChatModel? Chat { get; set; } }
