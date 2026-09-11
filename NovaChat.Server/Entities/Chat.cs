@@ -11,25 +11,20 @@ public enum ChatType
 public partial class Chat
 {
     public int Id { get; set; }
-
     public int Type { get; set; }
-
     public string Name { get; set; } = string.Empty;
-
     public string Members { get; set; } = string.Empty;
-
     public string? AvatarUrl { get; set; }
-
     public long? CreatedByUserId { get; set; }
-
     public virtual User? CreatedByUser { get; set; }
-
     public DateTime CreatedAt { get; set; }
 
     public virtual ICollection<Message> Messages { get; set; } = new List<Message>();
 
-    // Compatibility projections for existing private-chat UI/API code.
-    // Private chats are persisted through the Members username list.
+    // Compatibility-only in-memory projections. ChatMembers is no longer stored in MariaDB.
+    [NotMapped]
+    public ICollection<ChatMember> ChatMembers { get; set; } = new List<ChatMember>();
+
     [NotMapped]
     public long? User1Id { get; set; }
 
@@ -41,4 +36,7 @@ public partial class Chat
 
     [NotMapped]
     public User? User2 { get; set; }
+
+    [NotMapped]
+    public ICollection<ChatMember> Members => ChatMembers;
 }
