@@ -26,7 +26,7 @@ public class ChatService
         await CreateChatLock.WaitAsync();
         try
         {
-            var chats = await _context.Chats.Where(c => c.Type == (int)ChatType.Private).OrderByDescending(c => c.Id).ToListAsync();
+            var chats = await _context.Chats.Where(c => c.Type == (int)ChatType.Private && !c.IsDeleted).OrderByDescending(c => c.Id).ToListAsync();
             var existing = chats.FirstOrDefault(c => HasExactlyMembers(c.Members, names));
             if (existing != null)
             {
@@ -38,7 +38,7 @@ public class ChatService
                 return existing;
             }
 
-            var chat = new Chat { Type = (int)ChatType.Private, Name = "Private Chat", Members = members, CreatedByUserId = currentUserId };
+            var chat = new Chat { Type = (int)ChatType.Private, Name = "Private Chat", Members = members, CreatedByUserId = currentUserId, IsDeleted = false, DeletedAt = null };
             _context.Chats.Add(chat);
             await _context.SaveChangesAsync();
             PopulatePrivateProjection(chat, users);
@@ -60,7 +60,7 @@ public class ChatService
         var users = await _context.Users.Where(u => normalized.Contains(u.Username)).ToListAsync();
         if (users.Count != normalized.Count || users.Count < 2) return null;
 
-        var chat = new Chat { Type = (int)ChatType.Group, Name = name, Members = string.Join(", ", normalized), CreatedByUserId = creatorId };
+        var chat = new Chat { Type = (int)ChatType.Group, Name = name, Members = string.Join(", ", normalized), CreatedByUserId = creatorId, IsDeleted = false, DeletedAt = null };
         _context.Chats.Add(chat);
         await _context.SaveChangesAsync();
         PopulateCompatibilityMembers(chat, users);
@@ -72,15 +72,14 @@ public class ChatService
         var username = await _context.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => u.Username).FirstOrDefaultAsync();
         if (string.IsNullOrWhiteSpace(username)) return [];
 
-        // Keep the member lookup inside SQL so EF Core can translate it.
-        // Members are stored as: "user1, user2, user3".
         var chats = await _context.Chats
             .AsNoTracking()
             .Where(c =>
-                c.Members == username ||
-                c.Members.StartsWith(username + ", ") ||
-                c.Members.Contains(", " + username + ", ") ||
-                c.Members.EndsWith(", " + username))
+                !c.IsDeleted &&
+                (c.Members == username ||
+                 c.Members.StartsWith(username + ", ") ||
+                 c.Members.Contains(", " + username + ", ") ||
+                 c.Members.EndsWith(", " + username)))
             .OrderByDescending(c => c.CreatedAt)
             .ThenByDescending(c => c.Id)
             .ToListAsync();
@@ -97,7 +96,7 @@ public class ChatService
 
     public async Task<List<Chat>> GetAllChatsAsync()
     {
-        var chats = await _context.Chats.AsNoTracking().OrderByDescending(c => c.CreatedAt).ThenByDescending(c => c.Id).ToListAsync();
+        var chats = await _context.Chats.AsNoTracking().Where(c => !c.IsDeleted).OrderByDescending(c => c.CreatedAt).ThenByDescending(c => c.Id).ToListAsync();
         foreach (var chat in chats)
         {
             await PopulateCompatibilityMembersAsync(chat);
@@ -110,7 +109,7 @@ public class ChatService
 
     public async Task<Chat?> GetChatByIdAsync(int chatId)
     {
-        var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId);
+        var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId && !c.IsDeleted);
         if (chat != null)
         {
             await PopulateCompatibilityMembersAsync(chat);
@@ -173,6 +172,7 @@ public class ChatService
 
         return await _context.Chats.AnyAsync(c =>
             c.Id == chatId &&
+            !c.IsDeleted &&
             (c.Members == username ||
              c.Members.StartsWith(username + ", ") ||
              c.Members.Contains(", " + username + ", ") ||
@@ -238,7 +238,7 @@ public class ChatService
     {
         if (!await IsGroupAsync(chatId) || !await CanAccessChatAsync(chatId, actorId) || !await UserExistsAsync(userId)) return false;
         var target = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
-        var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId);
+        var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId && !c.IsDeleted);
         if (target == null || chat == null) return false;
         var members = ParseMembers(chat.Members).ToList();
         if (!members.Contains(target.Username, StringComparer.OrdinalIgnoreCase))
@@ -254,7 +254,7 @@ public class ChatService
     {
         if (!await IsGroupAsync(chatId) || !await CanAccessChatAsync(chatId, actorId)) return false;
         var target = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
-        var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId);
+        var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId && !c.IsDeleted);
         if (target == null || chat == null || chat.CreatedByUserId == userId) return false;
         var currentMembers = ParseMembers(chat.Members).ToList();
         var members = currentMembers.Where(x => !string.Equals(x, target.Username, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -268,7 +268,7 @@ public class ChatService
     {
         if (!await IsGroupAsync(chatId)) return false;
         var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
-        var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId);
+        var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId && !c.IsDeleted);
         if (user == null || chat == null || chat.CreatedByUserId == userId) return false;
         var members = ParseMembers(chat.Members).ToList();
         if (members.RemoveAll(x => string.Equals(x, user.Username, StringComparison.OrdinalIgnoreCase)) == 0) return false;
@@ -281,7 +281,7 @@ public class ChatService
     {
         name = NormalizeGroupName(name);
         if (string.IsNullOrWhiteSpace(name) || name.Length > 128) return false;
-        var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId && c.Type == (int)ChatType.Group);
+        var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId && c.Type == (int)ChatType.Group && !c.IsDeleted);
         if (chat == null || !await CanAccessChatAsync(chatId, actorId)) return false;
         chat.Name = name;
         await _context.SaveChangesAsync();
@@ -290,9 +290,12 @@ public class ChatService
 
     public async Task<bool> DeleteChatAsync(int chatId)
     {
-        if (!await _context.Chats.AsNoTracking().AnyAsync(c => c.Id == chatId)) return false;
-        await _context.Messages.Where(m => m.ChatId == chatId).ExecuteDeleteAsync();
-        return await _context.Chats.Where(c => c.Id == chatId).ExecuteDeleteAsync() > 0;
+        var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId && !c.IsDeleted);
+        if (chat == null) return false;
+        chat.IsDeleted = true;
+        chat.DeletedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        return true;
     }
 
     public async Task<bool> DeleteMessageAsync(int messageId)
@@ -306,9 +309,8 @@ public class ChatService
 
     public Task<int?> GetMessageChatIdAsync(int messageId) => _context.Messages.Where(m => m.Id == messageId).Select(m => (int?)m.ChatId).FirstOrDefaultAsync();
 
-    private Task<bool> IsGroupAsync(int chatId) => _context.Chats.AnyAsync(c => c.Id == chatId && c.Type == (int)ChatType.Group);
+    private Task<bool> IsGroupAsync(int chatId) => _context.Chats.AnyAsync(c => c.Id == chatId && c.Type == (int)ChatType.Group && !c.IsDeleted);
     private static bool HasExactlyMembers(string stored, IReadOnlyCollection<string> expected) { var actual = ParseMembers(stored).ToHashSet(StringComparer.OrdinalIgnoreCase); return actual.Count == expected.Count && expected.All(actual.Contains); }
-    private static bool ContainsUsername(string members, string username) => ParseMembers(members).Any(x => string.Equals(x, username, StringComparison.OrdinalIgnoreCase));
     private static IEnumerable<string> ParseMembers(string members) => (members ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase);
     private static string NormalizeGroupName(string name) { name = name.Trim(); const string prefix = "Group - "; if (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) name = name[prefix.Length..].Trim(); return name; }
     private static bool IsDeletedForUser(Message message, long userId) => string.IsNullOrWhiteSpace(message.DeletedForUserIds) ? false : message.DeletedForUserIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Any(x => long.TryParse(x, out var id) && id == userId);

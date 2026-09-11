@@ -2,6 +2,7 @@
 -- Chat participants are stored as comma-separated usernames in Chats.Members.
 -- There is intentionally no ChatMembers table.
 -- Chats has no User1Id/User2Id columns.
+-- Chat deletion is a soft delete: IsDeleted/DeletedAt preserve records for security and auditability.
 -- Select/create the target database separately. This is not an in-place upgrade.
 -- All application dates are UTC.
 
@@ -30,8 +31,11 @@ CREATE TABLE `Chats` (
     `AvatarUrl` VARCHAR(512) NULL,
     `CreatedByUserId` BIGINT NULL,
     `CreatedAt` DATETIME(6) NOT NULL,
+    `IsDeleted` TINYINT(1) NOT NULL DEFAULT 0,
+    `DeletedAt` DATETIME(6) NULL,
     PRIMARY KEY (`Id`),
     KEY `IX_Chats_CreatedByUserId` (`CreatedByUserId`),
+    KEY `IX_Chats_IsDeleted` (`IsDeleted`),
     CONSTRAINT `FK_Chats_Users_CreatedByUserId` FOREIGN KEY (`CreatedByUserId`) REFERENCES `Users` (`Id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
