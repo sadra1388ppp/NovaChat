@@ -28,47 +28,22 @@ public class UserService
         var username = dto.Username.Trim().ToLowerInvariant();
         var email = dto.Email.Trim();
         var displayName = dto.DisplayName.Trim();
-
-        if (!UsernameRegex.IsMatch(username))
-            return Fail("Username must be 3 to 32 characters and may contain only letters, numbers, dot, underscore and hyphen.");
-
-        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(displayName) || string.IsNullOrWhiteSpace(dto.Password))
-            return Fail("All registration fields are required.");
-
-        if (!TryNormalizePhoneNumber(dto.PhoneNumber, out var phoneNumber))
-            return Fail("Phone number must contain exactly 11 digits and start with 0.");
-
+        if (!UsernameRegex.IsMatch(username)) return Fail("Username must be 3 to 32 characters and may contain only letters, numbers, dot, underscore and hyphen.");
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(displayName) || string.IsNullOrWhiteSpace(dto.Password)) return Fail("All registration fields are required.");
+        if (!TryNormalizePhoneNumber(dto.PhoneNumber, out var phoneNumber)) return Fail("Phone number must contain exactly 11 digits and start with 0.");
         await RegisterLock.WaitAsync();
         try
         {
             if (await _context.Users.AnyAsync(u => u.Username == username)) return Fail("This username is already taken.");
             if (await _context.Users.AnyAsync(u => u.Email == email)) return Fail("This Email is already registered.");
             if (await _context.Users.AnyAsync(u => u.PhoneNumber == phoneNumber)) return Fail("This phone number is already registered.");
-
             var userId = await GenerateNextUserIdAsync();
             var createdAt = DateTime.UtcNow;
             var passwordHash = _passwordHashService.HashPassword(dto.Password);
-
             await _context.Database.ExecuteSqlInterpolatedAsync($@"
-                INSERT INTO `Users`
-                    (`Id`, `Username`, `DisplayName`, `Email`, `PhoneNumber`, `PasswordHash`, `Bio`, `AvatarUrl`, `LastSeenAt`, `CreatedAt`)
-                VALUES
-                    ({userId}, {username}, {displayName}, {email}, {phoneNumber}, {passwordHash}, {string.Empty}, {null}, {null}, {createdAt})");
-
-            var user = new User
-            {
-                Id = userId,
-                Username = username,
-                DisplayName = displayName,
-                Email = email,
-                PhoneNumber = phoneNumber,
-                PasswordHash = passwordHash,
-                Bio = string.Empty,
-                AvatarUrl = null,
-                LastSeenAt = null,
-                CreatedAt = createdAt
-            };
-
+                INSERT INTO `Users` (`Id`, `Username`, `DisplayName`, `Email`, `PhoneNumber`, `PasswordHash`, `Bio`, `AvatarUrl`, `LastSeenAt`, `CreatedAt`)
+                VALUES ({userId}, {username}, {displayName}, {email}, {phoneNumber}, {passwordHash}, {string.Empty}, {null}, {null}, {createdAt})");
+            var user = new User { Id = userId, Username = username, DisplayName = displayName, Email = email, PhoneNumber = phoneNumber, PasswordHash = passwordHash, Bio = string.Empty, AvatarUrl = null, LastSeenAt = null, CreatedAt = createdAt };
             return new RegisterResult { Success = true, Message = "User registered successfully.", User = ToUserResponse(user) };
         }
         catch (DbUpdateException exception) when (exception.InnerException is MySqlException { Number: 1062 })
@@ -81,35 +56,23 @@ public class UserService
 
     public async Task<(bool UsernameTaken, bool EmailTaken, bool PhoneTaken)> CheckRegistrationAvailabilityAsync(string? username, string? email, string? phoneNumber)
     {
-        username = username?.Trim().ToLowerInvariant();
-        email = email?.Trim();
+        username = username?.Trim().ToLowerInvariant(); email = email?.Trim();
         var normalizedPhone = TryNormalizePhoneNumber(phoneNumber, out var phone) ? phone : null;
-
         var usernameTaken = !string.IsNullOrWhiteSpace(username) && await _context.Users.AsNoTracking().AnyAsync(u => u.Username == username);
         var emailTaken = !string.IsNullOrWhiteSpace(email) && await _context.Users.AsNoTracking().AnyAsync(u => u.Email == email);
         var phoneTaken = normalizedPhone != null && await _context.Users.AsNoTracking().AnyAsync(u => u.PhoneNumber == normalizedPhone);
-
         return (usernameTaken, emailTaken, phoneTaken);
     }
 
     public async Task<User?> LoginAsync(LoginDto dto)
     {
-        var login = dto.Login.Trim();
-        if (string.IsNullOrWhiteSpace(login)) return null;
-
+        var login = dto.Login.Trim(); if (string.IsNullOrWhiteSpace(login)) return null;
         User? user = null;
-        if (TryNormalizePhoneNumber(login, out var phoneNumber))
-            user = await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber);
-        if (user == null)
-            user = await _context.Users.FirstOrDefaultAsync(u => u.Username == login.ToLowerInvariant());
+        if (TryNormalizePhoneNumber(login, out var phoneNumber)) user = await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber);
+        if (user == null) user = await _context.Users.FirstOrDefaultAsync(u => u.Username == login.ToLowerInvariant());
         if (user == null) return null;
-
         if (!_passwordHashService.VerifyPassword(user, user.PasswordHash, dto.Password, out var needsRehash)) return null;
-        if (needsRehash)
-        {
-            user.PasswordHash = _passwordHashService.HashPassword(dto.Password);
-            await _context.SaveChangesAsync();
-        }
+        if (needsRehash) { user.PasswordHash = _passwordHashService.HashPassword(dto.Password); await _context.SaveChangesAsync(); }
         return user;
     }
 
@@ -122,24 +85,17 @@ public class UserService
 
     public async Task<List<UserResponseDto>> SearchUsersAsync(string query, string currentUserId)
     {
-        query = query.Trim();
-        if (query.Length < 1) return [];
+        query = query.Trim(); if (query.Length < 1) return [];
         long.TryParse(currentUserId, out var excludedId);
         var pattern = $"%{query}%";
-        var users = await _context.Users.AsNoTracking()
-            .Where(u => u.Id != excludedId && (EF.Functions.Like(u.Username, pattern) || EF.Functions.Like(u.DisplayName, pattern) || EF.Functions.Like(u.Email, pattern)))
-            .OrderBy(u => u.DisplayName)
-            .Take(30)
-            .ToListAsync();
+        var users = await _context.Users.AsNoTracking().Where(u => u.Id != excludedId && (EF.Functions.Like(u.Username, pattern) || EF.Functions.Like(u.DisplayName, pattern) || EF.Functions.Like(u.Email, pattern))).OrderBy(u => u.DisplayName).Take(30).ToListAsync();
         return users.Select(u => ToUserResponse(u)).ToList();
     }
 
     public async Task<RegisterResult> UpdateUserAsync(string id, UpdateUserDto dto)
     {
         if (!long.TryParse(id, out var userId)) return Fail("User not found.");
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
-        if (user == null) return Fail("User not found.");
-
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId); if (user == null) return Fail("User not found.");
         var newUsername = string.IsNullOrWhiteSpace(dto.NewUsername) ? user.Username : dto.NewUsername.Trim().ToLowerInvariant();
         if (!UsernameRegex.IsMatch(newUsername)) return Fail("Username must be 3 to 32 characters and may contain only letters, numbers, dot, underscore and hyphen.");
         dto.DisplayName = dto.DisplayName.Trim(); dto.Email = dto.Email.Trim(); dto.Bio = (dto.Bio ?? string.Empty).Trim();
@@ -147,58 +103,33 @@ public class UserService
         if (await _context.Users.AsNoTracking().AnyAsync(u => u.Username == newUsername && u.Id != userId)) return Fail("This username is already taken.");
         if (await _context.Users.AsNoTracking().AnyAsync(u => u.Email == dto.Email && u.Id != userId)) return Fail("This Email is already registered.");
         if (await _context.Users.AsNoTracking().AnyAsync(u => u.PhoneNumber == phoneNumber && u.Id != userId)) return Fail("This phone number is already registered.");
-
-        var oldUsername = user.Username;
-        user.Username = newUsername;
-        user.DisplayName = dto.DisplayName;
-        user.Email = dto.Email;
-        user.PhoneNumber = phoneNumber;
-        user.Bio = dto.Bio;
-        await _context.SaveChangesAsync();
-
-        // Keep the denormalized Chats.Members field synchronized after a username change.
+        var oldUsername = user.Username; user.Username = newUsername; user.DisplayName = dto.DisplayName; user.Email = dto.Email; user.PhoneNumber = phoneNumber; user.Bio = dto.Bio; await _context.SaveChangesAsync();
         if (!string.Equals(oldUsername, newUsername, StringComparison.Ordinal))
         {
             var chats = await _context.Chats.ToListAsync();
             foreach (var chat in chats)
             {
-                var members = ParseMembers(chat.Members);
-                var changed = false;
-                for (var i = 0; i < members.Count; i++)
-                {
-                    if (string.Equals(members[i], oldUsername, StringComparison.OrdinalIgnoreCase))
-                    {
-                        members[i] = newUsername;
-                        changed = true;
-                    }
-                }
-
-                if (changed)
-                    chat.Members = string.Join(", ", members.Distinct(StringComparer.OrdinalIgnoreCase));
+                var members = ParseMembers(chat.Members); var changed = false;
+                for (var i = 0; i < members.Count; i++) if (string.Equals(members[i], oldUsername, StringComparison.OrdinalIgnoreCase)) { members[i] = newUsername; changed = true; }
+                if (changed) chat.Members = string.Join(", ", members.Distinct(StringComparer.OrdinalIgnoreCase));
             }
-
             await _context.SaveChangesAsync();
         }
-
         return new RegisterResult { Success = true, Message = "User updated successfully.", User = ToUserResponse(user, true) };
     }
 
     public async Task<(bool Success, string Message, UserResponseDto? User)> SetAvatarAsync(string id, string avatarUrl)
     {
         if (!long.TryParse(id, out var userId)) return (false, "User not found.", null);
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
-        if (user == null) return (false, "User not found.", null);
-        user.AvatarUrl = avatarUrl; await _context.SaveChangesAsync();
-        return (true, "Profile picture updated successfully.", ToUserResponse(user, true));
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId); if (user == null) return (false, "User not found.", null);
+        user.AvatarUrl = avatarUrl; await _context.SaveChangesAsync(); return (true, "Profile picture updated successfully.", ToUserResponse(user, true));
     }
 
     public async Task<(bool Success, string Message, string? OldAvatarUrl)> ClearAvatarAsync(string id)
     {
         if (!long.TryParse(id, out var userId)) return (false, "User not found.", null);
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
-        if (user == null) return (false, "User not found.", null);
-        var old = user.AvatarUrl; user.AvatarUrl = null; await _context.SaveChangesAsync();
-        return (true, "Profile picture removed successfully.", old);
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId); if (user == null) return (false, "User not found.", null);
+        var old = user.AvatarUrl; user.AvatarUrl = null; await _context.SaveChangesAsync(); return (true, "Profile picture removed successfully.", old);
     }
 
     public async Task MarkLastSeenAsync(string id)
@@ -210,83 +141,50 @@ public class UserService
     public async Task<bool> DeleteUserAsync(string id)
     {
         if (!long.TryParse(id, out var userId)) return false;
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
-        if (user == null) return false;
-
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId); if (user == null) return false;
         await using var transaction = await _context.Database.BeginTransactionAsync();
-
         var chats = await _context.Chats.ToListAsync();
         foreach (var chat in chats)
         {
             var members = ParseMembers(chat.Members);
             var containsUser = members.Any(m => string.Equals(m, user.Username, StringComparison.OrdinalIgnoreCase));
-
-            if (!containsUser && chat.CreatedByUserId != userId)
-                continue;
-
+            if (!containsUser && chat.CreatedByUserId != userId) continue;
             if (chat.CreatedByUserId == userId)
             {
                 var messages = await _context.Messages.Where(m => m.ChatId == chat.Id).ToListAsync();
-                if (messages.Count > 0)
-                    _context.Messages.RemoveRange(messages);
-                _context.Chats.Remove(chat);
-                continue;
+                if (messages.Count > 0) _context.Messages.RemoveRange(messages);
+                _context.Chats.Remove(chat); continue;
             }
-
             members.RemoveAll(m => string.Equals(m, user.Username, StringComparison.OrdinalIgnoreCase));
             chat.Members = string.Join(", ", members.Distinct(StringComparer.OrdinalIgnoreCase));
         }
-
-        await _context.Messages.Where(m => m.SenderId == userId).ExecuteDeleteAsync();
-        await _context.Contacts
-            .Where(c => c.OwnerUserId == userId || c.ContactUserId == userId)
-            .ExecuteDeleteAsync();
-
+        await _context.Messages.Where(m => m.SenderId == userId.ToString(System.Globalization.CultureInfo.InvariantCulture)).ExecuteDeleteAsync();
+        await _context.Contacts.Where(c => c.OwnerUserId == userId || c.ContactUserId == userId).ExecuteDeleteAsync();
         await _context.SaveChangesAsync();
         var deleted = await _context.Users.Where(u => u.Id == userId).ExecuteDeleteAsync();
-        await transaction.CommitAsync();
-        _context.ChangeTracker.Clear();
-        return deleted > 0;
+        await transaction.CommitAsync(); _context.ChangeTracker.Clear(); return deleted > 0;
     }
 
     public async Task<(bool Success, string Message)> ChangePasswordAsync(string id, ChangePasswordDto dto)
     {
         if (!long.TryParse(id, out var userId)) return (false, "User not found.");
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
-        if (user == null) return (false, "User not found.");
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId); if (user == null) return (false, "User not found.");
         if (!_passwordHashService.VerifyPassword(user, user.PasswordHash, dto.CurrentPassword, out _)) return (false, "Current password is incorrect.");
-        user.PasswordHash = _passwordHashService.HashPassword(dto.NewPassword); await _context.SaveChangesAsync();
-        return (true, "Password changed successfully.");
+        user.PasswordHash = _passwordHashService.HashPassword(dto.NewPassword); await _context.SaveChangesAsync(); return (true, "Password changed successfully.");
     }
 
     private async Task<long> GenerateNextUserIdAsync()
     {
         var maxId = await _context.Users.AsNoTracking().MaxAsync(u => (long?)u.Id) ?? 0L;
-        if (maxId == long.MaxValue) throw new InvalidOperationException("No more user IDs are available.");
-        return maxId + 1;
+        if (maxId == long.MaxValue) throw new InvalidOperationException("No more user IDs are available."); return maxId + 1;
     }
 
-    private static List<string> ParseMembers(string? members) =>
-        string.IsNullOrWhiteSpace(members)
-            ? []
-            : members.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .ToList();
-
+    private static List<string> ParseMembers(string? members) => string.IsNullOrWhiteSpace(members) ? [] : members.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
     private static RegisterResult Fail(string message) => new() { Success = false, Message = message };
-
-    private UserResponseDto ToUserResponse(User user, bool includePhoneNumber = false) => new()
-    {
-        Id = user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), Username = user.Username, DisplayName = user.DisplayName,
-        Email = user.Email, PhoneNumber = includePhoneNumber ? user.PhoneNumber : null, Bio = user.Bio, AvatarUrl = user.AvatarUrl,
-        IsOnline = _presenceService.IsOnline(user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)), LastSeenAt = user.LastSeenAt, CreatedAt = user.CreatedAt
-    };
-
+    private UserResponseDto ToUserResponse(User user, bool includePhoneNumber = false) => new() { Id = user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), Username = user.Username, DisplayName = user.DisplayName, Email = user.Email, PhoneNumber = includePhoneNumber ? user.PhoneNumber : null, Bio = user.Bio, AvatarUrl = user.AvatarUrl, IsOnline = _presenceService.IsOnline(user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)), LastSeenAt = user.LastSeenAt, CreatedAt = user.CreatedAt };
     private static bool TryNormalizePhoneNumber(string? input, out string normalized)
     {
-        normalized = string.Empty;
-        if (string.IsNullOrWhiteSpace(input)) return false;
-        normalized = input.Trim().Replace(" ", string.Empty).Replace("-", string.Empty).Replace("(", string.Empty).Replace(")", string.Empty);
-        return PhoneRegex.IsMatch(normalized);
+        normalized = string.Empty; if (string.IsNullOrWhiteSpace(input)) return false;
+        normalized = input.Trim().Replace(" ", string.Empty).Replace("-", string.Empty).Replace("(", string.Empty).Replace(")", string.Empty); return PhoneRegex.IsMatch(normalized);
     }
 }
