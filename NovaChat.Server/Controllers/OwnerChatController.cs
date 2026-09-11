@@ -30,53 +30,36 @@ public class OwnerChatController : ControllerBase
         if (chat == null)
             return NotFound(new { message = "Chat not found." });
 
-        if (chat.Type != (int)ChatType.Group)
-        {
-            var userIds = new[] { chat.User1Id, chat.User2Id }
-                .Where(id => id.HasValue && id.Value > 0)
-                .Select(id => id!.Value)
-                .Distinct()
-                .ToList();
+        var usernames = ParseMembers(chat.Members);
+        if (usernames.Count == 0)
+            return Ok(Array.Empty<OwnerMemberDto>());
 
-            var users = await _db.Users
-                .AsNoTracking()
-                .Where(u => userIds.Contains(u.Id))
-                .Select(u => new OwnerMemberDto
-                {
-                    UserId = u.Id.ToString(),
-                    Username = u.Username,
-                    DisplayName = u.DisplayName,
-                    Role = "MEMBER",
-                    Email = u.Email,
-                    PhoneNumber = u.PhoneNumber,
-                    AvatarUrl = u.AvatarUrl
-                })
-                .OrderBy(x => x.DisplayName)
-                .ToListAsync();
-
-            return Ok(users);
-        }
-
-        var members = await _db.ChatMembers
+        var users = await _db.Users
             .AsNoTracking()
-            .Where(m => m.ChatId == chatId)
-            .Include(m => m.User)
-            .OrderBy(m => m.Role)
-            .ThenBy(m => m.User.DisplayName)
+            .Where(u => usernames.Contains(u.Username))
             .ToListAsync();
 
-        var result = members
-            .Select(m => new OwnerMemberDto
+        var creatorUsername = chat.CreatedByUserId.HasValue
+            ? await _db.Users.AsNoTracking()
+                .Where(u => u.Id == chat.CreatedByUserId.Value)
+                .Select(u => u.Username)
+                .FirstOrDefaultAsync()
+            : null;
+
+        var result = users
+            .Select(user => new OwnerMemberDto
             {
-                UserId = m.UserId.ToString(),
-                Username = m.User.Username,
-                DisplayName = m.User.DisplayName,
-                Role = ((ChatMemberRole)m.Role).ToString().ToUpperInvariant(),
-                Email = m.User.Email,
-                PhoneNumber = m.User.PhoneNumber,
-                AvatarUrl = m.User.AvatarUrl
+                UserId = user.Id.ToString(),
+                Username = user.Username,
+                DisplayName = user.DisplayName,
+                Role = string.Equals(user.Username, creatorUsername, StringComparison.OrdinalIgnoreCase)
+                    ? "OWNER"
+                    : "MEMBER",
+                Email = user.Email,
+                PhoneNumber = user.PhoneNumber,
+                AvatarUrl = user.AvatarUrl
             })
-            .OrderBy(m => m.Role == "OWNER" ? 0 : m.Role == "ADMIN" ? 1 : 2)
+            .OrderBy(m => m.Role == "OWNER" ? 0 : 1)
             .ThenBy(m => m.DisplayName)
             .ToList();
 
@@ -114,24 +97,16 @@ public class OwnerChatController : ControllerBase
         if (chat == null)
             return NotFound(new { message = "Chat not found." });
 
-        var recipients = await _db.ChatMembers
+        var usernames = ParseMembers(chat.Members);
+        var recipients = await _db.Users
             .AsNoTracking()
-            .Where(m => m.ChatId == chatId)
-            .Select(m => m.UserId.ToString())
+            .Where(u => usernames.Contains(u.Username))
+            .Select(u => u.Id.ToString())
             .ToListAsync();
-
-        if (chat.User1Id.HasValue && chat.User1Id.Value > 0)
-            recipients.Add(chat.User1Id.Value.ToString());
-        if (chat.User2Id.HasValue && chat.User2Id.Value > 0)
-            recipients.Add(chat.User2Id.Value.ToString());
 
         var messages = await _db.Messages.Where(m => m.ChatId == chatId).ToListAsync();
         if (messages.Count > 0)
             _db.Messages.RemoveRange(messages);
-
-        var members = await _db.ChatMembers.Where(m => m.ChatId == chatId).ToListAsync();
-        if (members.Count > 0)
-            _db.ChatMembers.RemoveRange(members);
 
         _db.Chats.Remove(chat);
         await _db.SaveChangesAsync();
@@ -150,6 +125,14 @@ public class OwnerChatController : ControllerBase
                 : "Conversation deleted successfully."
         });
     }
+
+    private static List<string> ParseMembers(string? members) =>
+        string.IsNullOrWhiteSpace(members)
+            ? []
+            : members.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
     private sealed class OwnerMemberDto
     {
