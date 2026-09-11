@@ -51,8 +51,8 @@ public static class MessageDtoMapper
         {
             Id = message.Id,
             ChatId = message.ChatId,
-            SenderId = message.SenderId.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            SenderName = message.Sender?.DisplayName ?? string.Empty,
+            SenderId = message.SenderId,
+            SenderName = message.SenderId,
             Content = message.Content,
             SentAt = message.SentAt
         };
