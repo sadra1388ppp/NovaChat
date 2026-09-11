@@ -240,22 +240,32 @@ public class ChatController : ControllerBase
         return Ok(new { message = "Message deleted successfully." });
     }
 
-    private ChatListDto MapChat(Chat chat, Message? lastMessage) => new()
+    private ChatListDto MapChat(Chat chat, Message? lastMessage)
     {
-        Id = chat.Id,
-        Type = chat.Type.ToString(),
-        Name = chat.Type == ChatType.Group ? chat.Name : string.Empty,
-        AvatarUrl = chat.Type == ChatType.Group ? ToAbsoluteChatAvatarUrl(chat.AvatarUrl) : null,
-        CreatedByUserId = chat.CreatedByUserId?.ToString() ?? string.Empty,
-        User1Id = chat.User1Id?.ToString() ?? string.Empty,
-        User2Id = chat.User2Id?.ToString() ?? string.Empty,
-        User1Name = chat.User1?.DisplayName ?? string.Empty,
-        User2Name = chat.User2?.DisplayName ?? string.Empty,
-        User1AvatarUrl = ToAbsoluteAvatarUrl(chat.User1?.AvatarUrl),
-        User2AvatarUrl = ToAbsoluteAvatarUrl(chat.User2?.AvatarUrl),
-        CreatedAt = chat.CreatedAt,
-        LastMessage = lastMessage == null ? null : MessageDtoMapper.Map(lastMessage)
-    };
+        var privateMembers = chat.Type == ChatType.Private
+            ? chat.Members.OrderBy(m => m.JoinedAt).ThenBy(m => m.Id).Take(2).ToList()
+            : [];
+
+        var first = privateMembers.ElementAtOrDefault(0)?.User;
+        var second = privateMembers.ElementAtOrDefault(1)?.User;
+
+        return new ChatListDto
+        {
+            Id = chat.Id,
+            Type = chat.Type.ToString(),
+            Name = chat.Type == ChatType.Group ? chat.Name : string.Empty,
+            AvatarUrl = chat.Type == ChatType.Group ? ToAbsoluteChatAvatarUrl(chat.AvatarUrl) : null,
+            CreatedByUserId = chat.CreatedByUserId?.ToString() ?? string.Empty,
+            User1Id = first?.Id.ToString() ?? string.Empty,
+            User2Id = second?.Id.ToString() ?? string.Empty,
+            User1Name = first?.DisplayName ?? string.Empty,
+            User2Name = second?.DisplayName ?? string.Empty,
+            User1AvatarUrl = ToAbsoluteAvatarUrl(first?.AvatarUrl),
+            User2AvatarUrl = ToAbsoluteAvatarUrl(second?.AvatarUrl),
+            CreatedAt = chat.CreatedAt,
+            LastMessage = lastMessage == null ? null : MessageDtoMapper.Map(lastMessage)
+        };
+    }
 
     private GroupMemberDto MapMember(ChatMember m) => new()
     {
@@ -267,32 +277,11 @@ public class ChatController : ControllerBase
         JoinedAt = m.JoinedAt
     };
 
-    private IEnumerable<string> RecipientIds(Chat chat)
-    {
-        var recipients = new List<string>();
-
-        if (chat.Type == ChatType.Group)
-        {
-            foreach (var member in chat.Members)
-            {
-                var id = member.UserId.ToString();
-                if (!string.IsNullOrWhiteSpace(id) && !recipients.Contains(id))
-                    recipients.Add(id);
-            }
-        }
-        else
-        {
-            if (chat.User1Id.HasValue && chat.User1Id.Value > 0)
-                recipients.Add(chat.User1Id.Value.ToString());
-            if (chat.User2Id.HasValue && chat.User2Id.Value > 0)
-            {
-                var id = chat.User2Id.Value.ToString();
-                if (!recipients.Contains(id)) recipients.Add(id);
-            }
-        }
-
-        return recipients;
-    }
+    private IEnumerable<string> RecipientIds(Chat chat) => chat.Members
+        .Select(m => m.UserId.ToString())
+        .Where(id => !string.IsNullOrWhiteSpace(id))
+        .Distinct(StringComparer.Ordinal)
+        .ToList();
 
     private string? ToAbsoluteAvatarUrl(string? avatarUrl)
     {
