@@ -71,7 +71,20 @@ public class ChatService
     {
         var username = await _context.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => u.Username).FirstOrDefaultAsync();
         if (string.IsNullOrWhiteSpace(username)) return [];
-        var chats = await _context.Chats.AsNoTracking().Where(c => ContainsUsername(c.Members, username)).OrderByDescending(c => c.CreatedAt).ThenByDescending(c => c.Id).ToListAsync();
+
+        // Keep the member lookup inside SQL so EF Core can translate it.
+        // Members are stored as: "user1, user2, user3".
+        var chats = await _context.Chats
+            .AsNoTracking()
+            .Where(c =>
+                c.Members == username ||
+                c.Members.StartsWith(username + ", ") ||
+                c.Members.Contains(", " + username + ", ") ||
+                c.Members.EndsWith(", " + username))
+            .OrderByDescending(c => c.CreatedAt)
+            .ThenByDescending(c => c.Id)
+            .ToListAsync();
+
         foreach (var chat in chats)
         {
             await PopulateCompatibilityMembersAsync(chat);
@@ -156,7 +169,14 @@ public class ChatService
     public async Task<bool> CanAccessChatAsync(int chatId, long userId)
     {
         var username = await _context.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => u.Username).FirstOrDefaultAsync();
-        return !string.IsNullOrWhiteSpace(username) && await _context.Chats.AnyAsync(c => c.Id == chatId && ContainsUsername(c.Members, username));
+        if (string.IsNullOrWhiteSpace(username)) return false;
+
+        return await _context.Chats.AnyAsync(c =>
+            c.Id == chatId &&
+            (c.Members == username ||
+             c.Members.StartsWith(username + ", ") ||
+             c.Members.Contains(", " + username + ", ") ||
+             c.Members.EndsWith(", " + username)));
     }
 
     public async Task<Message?> SendMessageAsync(int chatId, long senderId, string content)
@@ -236,8 +256,9 @@ public class ChatService
         var target = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
         var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId);
         if (target == null || chat == null || chat.CreatedByUserId == userId) return false;
-        var members = ParseMembers(chat.Members).Where(x => !string.Equals(x, target.Username, StringComparison.OrdinalIgnoreCase)).ToList();
-        if (members.Count == ParseMembers(chat.Members).Count()) return false;
+        var currentMembers = ParseMembers(chat.Members).ToList();
+        var members = currentMembers.Where(x => !string.Equals(x, target.Username, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (members.Count == currentMembers.Count) return false;
         chat.Members = string.Join(", ", members);
         await _context.SaveChangesAsync();
         return true;
