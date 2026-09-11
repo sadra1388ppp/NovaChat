@@ -24,61 +24,50 @@ public class ChatService
         try
         {
             var existing = await _context.Chats
-                .Include(c => c.User1)
-                .Include(c => c.User2)
                 .Include(c => c.Members)
+                    .ThenInclude(m => m.User)
                 .Where(c => c.Type == ChatType.Private &&
-                    ((c.User1Id == currentUserId && c.User2Id == otherUserId) ||
-                     (c.User1Id == otherUserId && c.User2Id == currentUserId)))
+                    c.Members.Any(m => m.UserId == currentUserId) &&
+                    c.Members.Any(m => m.UserId == otherUserId))
                 .OrderByDescending(c => c.Id)
-                .ToListAsync();
+                .FirstOrDefaultAsync();
 
-            var reusable = existing.FirstOrDefault(c => c.Members.Any(m => m.UserId == currentUserId));
-            if (reusable != null)
-            {
-                await EnsurePrivateMembersAsync(reusable, currentUserId, otherUserId);
-                return reusable;
-            }
+            if (existing != null)
+                return existing;
 
             var newChat = new Chat
             {
                 Type = ChatType.Private,
                 Name = string.Empty,
-                CreatedByUserId = currentUserId,
-                User1Id = currentUserId,
-                User2Id = otherUserId
+                CreatedByUserId = currentUserId
             };
 
             _context.Chats.Add(newChat);
             await _context.SaveChangesAsync();
-            await EnsurePrivateMembersAsync(newChat, currentUserId, otherUserId);
-            await _context.Entry(newChat).Reference(c => c.User1).LoadAsync();
-            await _context.Entry(newChat).Reference(c => c.User2).LoadAsync();
-            return newChat;
+
+            _context.ChatMembers.AddRange(
+                new ChatMember
+                {
+                    ChatId = newChat.Id,
+                    UserId = currentUserId,
+                    Role = ChatMemberRole.Owner,
+                    JoinedAt = newChat.CreatedAt
+                },
+                new ChatMember
+                {
+                    ChatId = newChat.Id,
+                    UserId = otherUserId,
+                    Role = ChatMemberRole.Member,
+                    JoinedAt = newChat.CreatedAt
+                });
+
+            await _context.SaveChangesAsync();
+            return await GetChatByIdAsync(newChat.Id);
         }
         finally
         {
             CreateChatLock.Release();
         }
-    }
-
-    private async Task EnsurePrivateMembersAsync(Chat chat, long ownerId, long otherId)
-    {
-        foreach (var id in new[] { ownerId, otherId })
-        {
-            if (!await _context.ChatMembers.AnyAsync(m => m.ChatId == chat.Id && m.UserId == id))
-            {
-                _context.ChatMembers.Add(new ChatMember
-                {
-                    ChatId = chat.Id,
-                    UserId = id,
-                    Role = id == ownerId ? ChatMemberRole.Owner : ChatMemberRole.Member,
-                    JoinedAt = chat.CreatedAt
-                });
-            }
-        }
-
-        await _context.SaveChangesAsync();
     }
 
     public async Task<Chat?> CreateGroupChatAsync(long creatorId, string name, IEnumerable<string> usernames)
@@ -103,18 +92,32 @@ public class ChatService
         {
             Type = ChatType.Group,
             Name = name,
-            CreatedByUserId = creatorId,
-            User1Id = null,
-            User2Id = null
+            CreatedByUserId = creatorId
         };
 
         _context.Chats.Add(chat);
         await _context.SaveChangesAsync();
-        _context.ChatMembers.Add(new ChatMember { ChatId = chat.Id, UserId = creatorId, Role = ChatMemberRole.Owner });
-        foreach (var user in users)
-            _context.ChatMembers.Add(new ChatMember { ChatId = chat.Id, UserId = user.Id, Role = ChatMemberRole.Member });
-        await _context.SaveChangesAsync();
 
+        _context.ChatMembers.Add(new ChatMember
+        {
+            ChatId = chat.Id,
+            UserId = creatorId,
+            Role = ChatMemberRole.Owner,
+            JoinedAt = chat.CreatedAt
+        });
+
+        foreach (var user in users)
+        {
+            _context.ChatMembers.Add(new ChatMember
+            {
+                ChatId = chat.Id,
+                UserId = user.Id,
+                Role = ChatMemberRole.Member,
+                JoinedAt = chat.CreatedAt
+            });
+        }
+
+        await _context.SaveChangesAsync();
         return await GetChatByIdAsync(chat.Id);
     }
 
@@ -122,8 +125,8 @@ public class ChatService
     {
         var chats = await _context.Chats
             .AsNoTracking()
-            .Include(c => c.User1)
-            .Include(c => c.User2)
+            .Include(c => c.Members)
+                .ThenInclude(m => m.User)
             .Where(c => c.Members.Any(m => m.UserId == userId))
             .OrderByDescending(c => c.CreatedAt)
             .ThenByDescending(c => c.Id)
@@ -145,8 +148,8 @@ public class ChatService
     {
         var chats = await _context.Chats
             .AsNoTracking()
-            .Include(c => c.User1)
-            .Include(c => c.User2)
+            .Include(c => c.Members)
+                .ThenInclude(m => m.User)
             .OrderByDescending(c => c.CreatedAt)
             .ThenByDescending(c => c.Id)
             .ToListAsync();
@@ -164,10 +167,8 @@ public class ChatService
     }
 
     public Task<Chat?> GetChatByIdAsync(int chatId) => _context.Chats
-        .Include(c => c.User1)
-        .Include(c => c.User2)
         .Include(c => c.Members)
-        .ThenInclude(m => m.User)
+            .ThenInclude(m => m.User)
         .FirstOrDefaultAsync(c => c.Id == chatId);
 
     public Task<bool> CanAccessChatAsync(int chatId, long userId) =>
@@ -222,8 +223,6 @@ public class ChatService
             .Take(pageSize + 1)
             .ToListAsync();
 
-        // DeletedForUserIds is intentionally filtered after materialization so
-        // the delimiter format remains provider-independent and reliable.
         messages = messages
             .Where(m => !IsDeletedForUser(m, viewerUserId))
             .ToList();
