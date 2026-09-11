@@ -21,18 +21,12 @@ public partial class MainView
     private bool IsCurrentGroupChat => _currentChatId.HasValue && _chats.FirstOrDefault(x => x.Chat.Id == _currentChatId.Value)?.Chat.IsGroup == true;
 
     private void RefreshGroupOnlineStatus() { if (!IsCurrentGroupChat || !_currentChatId.HasValue) return; _ = RefreshCurrentGroupInfoAsync(); }
-    private void UpdateGroupOnlineStatusFromCache() { if (!IsCurrentGroupChat) return; var online = _currentGroupMembers.Count(member => _onlineUserIds.Contains(member.UserId)); ChatStatusText.Text = $"{online} member{(online == 1 ? "" : "s")} online"; ChatStatusIndicator.Fill = System.Windows.Media.Brushes.LimeGreen; if (online <= 0) ChatStatusIndicator.Fill = System.Windows.Media.Brushes.Gray; }
+    private void UpdateGroupOnlineStatusFromCache() { if (!IsCurrentGroupChat) return; var online = _currentGroupMembers.Count(member => _onlineUserIds.Contains(member.UserId)); ChatStatusText.Text = $"{online} member{(online == 1 ? "" : "s")} online"; ChatStatusIndicator.Fill = Brushes.LimeGreen; if (online <= 0) ChatStatusIndicator.Fill = Brushes.Gray; }
 
     private async Task RefreshCurrentGroupInfoAsync()
     {
         if (!_currentChatId.HasValue || !IsCurrentGroupChat) return;
-        try
-        {
-            var members = await _apiService.GetAsync<List<GroupMemberModel>>($"api/Chat/{_currentChatId.Value}/members") ?? [];
-            _currentGroupMembers = members;
-            UpdateGroupOnlineStatusFromCache();
-        }
-        catch { }
+        try { _currentGroupMembers = await _apiService.GetAsync<List<GroupMemberModel>>($"api/Chat/{_currentChatId.Value}/members") ?? []; UpdateGroupOnlineStatusFromCache(); } catch { }
     }
 
     private async Task RefreshCurrentGroupAvatarAsync()
@@ -40,23 +34,12 @@ public partial class MainView
         if (!_currentChatId.HasValue || !IsCurrentGroupChat) return;
         var item = _chats.FirstOrDefault(x => x.Chat.Id == _currentChatId.Value);
         if (item == null) return;
-        if (string.IsNullOrWhiteSpace(item.Chat.AvatarUrl))
-        {
-            ChatHeaderAvatarImage.Source = null;
-            ChatHeaderAvatarImage.Visibility = Visibility.Collapsed;
-            ChatAvatarInitialsText.Visibility = Visibility.Visible;
-            return;
-        }
+        if (string.IsNullOrWhiteSpace(item.Chat.AvatarUrl)) { ChatHeaderAvatarImage.Source = null; ChatHeaderAvatarImage.Visibility = Visibility.Collapsed; ChatAvatarInitialsText.Visibility = Visibility.Visible; return; }
         try
         {
             var image = await LoadConversationAvatarAsync(_apiService.BuildAbsoluteUrl(item.Chat.AvatarUrl));
             if (image == null) return;
-            await Dispatcher.InvokeAsync(() =>
-            {
-                ChatHeaderAvatarImage.Source = image;
-                ChatHeaderAvatarImage.Visibility = Visibility.Visible;
-                ChatAvatarInitialsText.Visibility = Visibility.Collapsed;
-            });
+            await Dispatcher.InvokeAsync(() => { ChatHeaderAvatarImage.Source = image; ChatHeaderAvatarImage.Visibility = Visibility.Visible; ChatAvatarInitialsText.Visibility = Visibility.Collapsed; });
         }
         catch { }
     }
@@ -75,16 +58,15 @@ public partial class MainView
             var currentMember = members.FirstOrDefault(m => string.Equals(m.UserId, AuthState.UserId, StringComparison.OrdinalIgnoreCase));
             var canEdit = string.Equals(currentMember?.Role, "Owner", StringComparison.OrdinalIgnoreCase) || string.Equals(currentMember?.Role, "Admin", StringComparison.OrdinalIgnoreCase);
             var chat = _chats.FirstOrDefault(x => x.Chat.Id == chatId)?.Chat;
-            var dialog = new Window { Title = "Group Info", Width = 460, Height = 700, Owner = Window.GetWindow(this), WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = (System.Windows.Media.Brush)FindResource("PanelBackgroundBrush") };
+            var dialog = new Window { Title = "Group Info", Width = 460, Height = 700, Owner = Window.GetWindow(this), WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = (Brush)FindResource("PanelBackgroundBrush") };
             var panel = new StackPanel { Margin = new Thickness(22) };
             var avatarGrid = new Grid { Width = 96, Height = 96, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 12) };
-            avatarGrid.Children.Add(new Border { CornerRadius = new CornerRadius(48), Background = (System.Windows.Media.Brush)FindResource("PrimarySoftBrush") });
-            var avatarInitials = new TextBlock { Text = BuildGroupInitials(chat?.Name), FontSize = 28, FontWeight = FontWeights.Bold, Foreground = (System.Windows.Media.Brush)FindResource("PrimaryBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            avatarGrid.Children.Add(avatarInitials);
-            if (!string.IsNullOrWhiteSpace(chat?.AvatarUrl)) { var img = new Image { Width = 96, Height = 96, Stretch = System.Windows.Media.Stretch.UniformToFill, Source = await LoadConversationAvatarAsync(_apiService.BuildAbsoluteUrl(chat.AvatarUrl)) }; img.Clip = new EllipseGeometry(new System.Windows.Point(48, 48), 48, 48); avatarGrid.Children.Add(img); }
+            avatarGrid.Children.Add(new Border { CornerRadius = new CornerRadius(48), Background = (Brush)FindResource("PrimarySoftBrush") });
+            avatarGrid.Children.Add(new TextBlock { Text = BuildGroupInitials(chat?.Name), FontSize = 28, FontWeight = FontWeights.Bold, Foreground = (Brush)FindResource("PrimaryBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
+            if (!string.IsNullOrWhiteSpace(chat?.AvatarUrl)) { var img = new Image { Width = 96, Height = 96, Stretch = Stretch.UniformToFill, Source = await LoadConversationAvatarAsync(_apiService.BuildAbsoluteUrl(chat.AvatarUrl)) }; img.Clip = new EllipseGeometry(new Point(48, 48), 48, 48); avatarGrid.Children.Add(img); }
             panel.Children.Add(avatarGrid);
-            panel.Children.Add(new TextBlock { Text = chat?.Name ?? ChatUserNameText.Text, FontSize = 24, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, Foreground = (System.Windows.Media.Brush)FindResource("TextBrush") });
-            panel.Children.Add(new TextBlock { Text = $"{online} member{(online == 1 ? "" : "s")} online • {members.Count} members", HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 14), Foreground = (System.Windows.Media.Brush)FindResource("SecondaryTextBrush") });
+            panel.Children.Add(new TextBlock { Text = chat?.Name ?? ChatUserNameText.Text, FontSize = 24, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, Foreground = (Brush)FindResource("TextBrush") });
+            panel.Children.Add(new TextBlock { Text = $"{online} member{(online == 1 ? "" : "s")} online • {members.Count} members", HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 14), Foreground = (Brush)FindResource("SecondaryTextBrush") });
             if (canEdit)
             {
                 var avatarButtons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 16) };
@@ -95,9 +77,9 @@ public partial class MainView
                 removeButton.Click += async (_, _) => { try { var ok = await _apiService.DeleteAsync($"api/Chat/{chatId}/avatar"); if (ok) { var item = _chats.FirstOrDefault(x => x.Chat.Id == chatId); if (item != null) item.Chat.AvatarUrl = null; await RefreshConversationAvatarsAsync(); await RefreshCurrentGroupAvatarAsync(); dialog.Close(); OpenGroupInfo(); } } catch (Exception ex) { MessageBox.Show(ex.Message, "Group Picture", MessageBoxButton.OK, MessageBoxImage.Warning); } };
                 avatarButtons.Children.Add(removeButton); panel.Children.Add(avatarButtons);
             }
-            panel.Children.Add(new TextBlock { Text = "MEMBERS", FontWeight = FontWeights.Bold, Foreground = (System.Windows.Media.Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 0, 0, 8) });
-            var list = new ListBox { Height = 390, BorderThickness = new Thickness(0), Background = System.Windows.Media.Brushes.Transparent };
-            foreach (var member in members) { var isOnline = _onlineUserIds.Contains(member.UserId); var role = string.IsNullOrWhiteSpace(member.Role) ? "Member" : member.Role; list.Items.Add(new TextBlock { Text = $"{(isOnline ? "●" : "○")}  {member.DisplayName}  •  {role}  •  {(isOnline ? "Online" : "Offline")}", FontSize = 15, Margin = new Thickness(6, 8, 6, 8), Foreground = (System.Windows.Media.Brush)FindResource("TextBrush") }); }
+            panel.Children.Add(new TextBlock { Text = "MEMBERS", FontWeight = FontWeights.Bold, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 0, 0, 8) });
+            var list = new ListBox { Height = 390, BorderThickness = new Thickness(0), Background = Brushes.Transparent };
+            foreach (var member in members) { var isOnline = _onlineUserIds.Contains(member.UserId); var role = string.IsNullOrWhiteSpace(member.Role) ? "Member" : member.Role; list.Items.Add(new TextBlock { Text = $"{(isOnline ? "●" : "○")}  {member.DisplayName}  •  {role}  •  {(isOnline ? "Online" : "Offline")}", FontSize = 15, Margin = new Thickness(6, 8, 6, 8), Foreground = (Brush)FindResource("TextBrush") }); }
             panel.Children.Add(list); dialog.Content = panel; dialog.ShowDialog();
         }
         catch (Exception ex) { MessageBox.Show($"Could not load group information.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error); }
@@ -116,10 +98,7 @@ public partial class MainView
         if (_createGroupButton != null) return; if (SearchTextBox.Parent is not Grid searchGrid || searchGrid.Parent is not Border searchBorder || searchBorder.Parent is not StackPanel panel) return;
         _createGroupButton = new Button { Content = "👥   New group", Height = 40, Margin = new Thickness(0, 6, 0, 0), HorizontalContentAlignment = HorizontalAlignment.Left, Padding = new Thickness(10, 0, 10, 0), Style = (Style)FindResource("SecondaryButtonStyle") }; _createGroupButton.Click += CreateGroupButton_Click; panel.Children.Add(_createGroupButton);
     }
-    private void StartGroupEventWatcher()
-    {
-        if (_groupEventTimer != null) return; _groupEventTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) }; _groupEventTimer.Tick += GroupEventTimer_Tick; _groupEventTimer.Start();
-    }
+    private void StartGroupEventWatcher() { if (_groupEventTimer != null) return; _groupEventTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) }; _groupEventTimer.Tick += GroupEventTimer_Tick; _groupEventTimer.Start(); }
     private async void GroupEventTimer_Tick(object? sender, EventArgs e)
     {
         if (_hubConnection?.State != HubConnectionState.Connected) return;
@@ -132,91 +111,50 @@ public partial class MainView
 
     private async void CreateGroupButton_Click(object? sender, RoutedEventArgs e)
     {
-        var dialog = new Window
-        {
-            Title = "Create New Group",
-            Width = 620,
-            Height = 720,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Owner = Window.GetWindow(this),
-            ResizeMode = ResizeMode.NoResize,
-            Background = (Brush)FindResource("PanelBackgroundBrush")
-        };
-
+        var dialog = new Window { Title = "Create New Group", Width = 620, Height = 720, WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = Window.GetWindow(this), ResizeMode = ResizeMode.NoResize, Background = (Brush)FindResource("PanelBackgroundBrush") };
         var root = new Grid { Margin = new Thickness(24) };
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        for (var i = 0; i < 4; i++) root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        var title = new TextBlock { Text = "Create a group", FontSize = 24, FontWeight = FontWeights.Bold, Foreground = (Brush)FindResource("TextBrush") };
-        Grid.SetRow(title, 0); root.Children.Add(title);
-        var subtitle = new TextBlock { Text = "Give your group a name, then search and select people by username.", FontSize = 13, Margin = new Thickness(0, 5, 0, 18), Foreground = (Brush)FindResource("SecondaryTextBrush") };
-        Grid.SetRow(subtitle, 1); root.Children.Add(subtitle);
+        var title = new TextBlock { Text = "Create a group", FontSize = 24, FontWeight = FontWeights.Bold, Foreground = (Brush)FindResource("TextBrush") }; Grid.SetRow(title, 0); root.Children.Add(title);
+        var subtitle = new TextBlock { Text = "Give your group a name, then search and select people by username.", FontSize = 13, Margin = new Thickness(0, 5, 0, 18), Foreground = (Brush)FindResource("SecondaryTextBrush") }; Grid.SetRow(subtitle, 1); root.Children.Add(subtitle);
+        var namePanel = new StackPanel { Margin = new Thickness(0, 0, 0, 14) }; namePanel.Children.Add(new TextBlock { Text = "Group name", FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush"), Margin = new Thickness(0, 0, 0, 7) });
+        var nameBox = new TextBox { Height = 42, Padding = new Thickness(12, 0, 12, 0), VerticalContentAlignment = VerticalAlignment.Center, ToolTip = "Group name" }; namePanel.Children.Add(nameBox); Grid.SetRow(namePanel, 2); root.Children.Add(namePanel);
 
-        var nameBox = new TextBox { Height = 42, Padding = new Thickness(12, 0, 12, 0), VerticalContentAlignment = VerticalAlignment.Center, ToolTip = "Group name" };
-        var namePanel = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };
-        namePanel.Children.Add(new TextBlock { Text = "Group name", FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush"), Margin = new Thickness(0, 0, 0, 7) });
-        namePanel.Children.Add(nameBox);
-        Grid.SetRow(namePanel, 2); root.Children.Add(namePanel);
+        var membersList = new ListBox { BorderThickness = new Thickness(1), BorderBrush = (Brush)FindResource("BorderBrush"), Background = (Brush)FindResource("InputBackgroundBrush"), Padding = new Thickness(4) };
+        var countText = new TextBlock { Text = "0 selected", Foreground = (Brush)FindResource("SecondaryTextBrush"), VerticalAlignment = VerticalAlignment.Center };
 
-        var searchGrid = new Grid { Height = 42, Margin = new Thickness(0, 0, 0, 10) };
-        searchGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        searchGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var searchPanel = new StackPanel(); searchPanel.Children.Add(new TextBlock { Text = "Find members", FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush"), Margin = new Thickness(0, 0, 0, 7) });
+        var searchGrid = new Grid { Height = 42, Margin = new Thickness(0, 0, 0, 10) }; searchGrid.ColumnDefinitions.Add(new ColumnDefinition()); searchGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var searchBox = new TextBox { Height = 42, Padding = new Thickness(12, 0, 12, 0), VerticalContentAlignment = VerticalAlignment.Center, ToolTip = "Search by username or display name" };
         searchBox.TextChanged += async (_, _) => await RefreshGroupUserSearchAsync(searchBox.Text, membersList, countText);
         Grid.SetColumn(searchBox, 0); searchGrid.Children.Add(searchBox);
-        var clearSearch = new Button { Content = "Clear", Height = 34, Margin = new Thickness(8, 4, 0, 4), Padding = new Thickness(12, 0, 12, 0), Style = (Style)FindResource("SecondaryButtonStyle") };
-        clearSearch.Click += (_, _) => searchBox.Clear();
-        Grid.SetColumn(clearSearch, 1); searchGrid.Children.Add(clearSearch);
+        var clearSearch = new Button { Content = "Clear", Height = 34, Margin = new Thickness(8, 4, 0, 4), Padding = new Thickness(12, 0, 12, 0), Style = (Style)FindResource("SecondaryButtonStyle") }; clearSearch.Click += (_, _) => searchBox.Clear(); Grid.SetColumn(clearSearch, 1); searchGrid.Children.Add(clearSearch);
+        searchPanel.Children.Add(searchGrid); Grid.SetRow(searchPanel, 3); root.Children.Add(searchPanel);
 
-        var searchPanel = new StackPanel();
-        searchPanel.Children.Add(new TextBlock { Text = "Find members", FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush"), Margin = new Thickness(0, 0, 0, 7) });
-        searchPanel.Children.Add(searchGrid);
-        Grid.SetRow(searchPanel, 3); root.Children.Add(searchPanel);
-
-        var membersList = new ListBox { BorderThickness = new Thickness(1), BorderBrush = (Brush)FindResource("BorderBrush"), Background = (Brush)FindResource("InputBackgroundBrush"), Padding = new Thickness(4) };
         Grid.SetRow(membersList, 4); root.Children.Add(membersList);
-
-        var countText = new TextBlock { Text = "0 selected", Foreground = (Brush)FindResource("SecondaryTextBrush"), VerticalAlignment = VerticalAlignment.Center };
         var createButton = new Button { Content = "Create Group", Width = 140, Height = 42, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0), Style = (Style)FindResource("PrimaryButtonStyle") };
-        var footer = new Grid();
-        footer.ColumnDefinitions.Add(new ColumnDefinition());
-        footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        footer.Children.Add(countText);
-        Grid.SetColumn(createButton, 1); footer.Children.Add(createButton);
-        Grid.SetRow(footer, 5); root.Children.Add(footer);
+        var footer = new Grid(); footer.ColumnDefinitions.Add(new ColumnDefinition()); footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); footer.Children.Add(countText); Grid.SetColumn(createButton, 1); footer.Children.Add(createButton); Grid.SetRow(footer, 5); root.Children.Add(footer);
 
         createButton.Click += (_, _) =>
         {
             var name = nameBox.Text.Trim();
-            var selected = membersList.Items.OfType<CheckBox>()
-                .Where(x => x.IsChecked == true)
-                .Select(x => x.Tag as GroupUserSearchModel)
-                .Where(x => x != null)
-                .Select(x => x!.Username)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
+            var selected = membersList.Items.OfType<CheckBox>().Where(x => x.IsChecked == true).Select(x => x.Tag as GroupUserSearchModel).Where(x => x != null).Select(x => x!.Username).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             if (string.IsNullOrWhiteSpace(name)) { MessageBox.Show("Enter a group name.", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Information); nameBox.Focus(); return; }
             if (selected.Count == 0) { MessageBox.Show("Select at least one member.", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Information); return; }
-            dialog.Tag = new CreateGroupRequest { Name = name, Usernames = selected };
-            dialog.DialogResult = true;
+            dialog.Tag = new CreateGroupRequest { Name = name, Usernames = selected }; dialog.DialogResult = true;
         };
 
         dialog.Content = root;
-        dialog.Loaded += async (_, _) => { nameBox.Focus(); await RefreshGroupUserSearchAsync(string.Empty, membersList, countText); };
+        dialog.Loaded += async (_, _) => { nameBox.Focus(); };
         dialog.ShowDialog();
-
         if (dialog.Tag is not CreateGroupRequest request) return;
         try
         {
             var result = await _apiService.PostAsync<CreateGroupRequest, CreateGroupResponse>("api/Chat/group", request);
             if (result?.Chat == null) throw new InvalidOperationException("The server did not return the created group.");
-            await LoadChatsAsync();
-            await OpenChatAsync(result.Chat);
+            await LoadChatsAsync(); await OpenChatAsync(result.Chat);
         }
         catch (Exception ex) { MessageBox.Show($"Could not create group.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error); }
     }
@@ -225,33 +163,22 @@ public partial class MainView
     {
         try
         {
+            if (string.IsNullOrWhiteSpace(query)) { membersList.Items.Clear(); UpdateGroupSelectedCount(membersList, countText); return; }
             var users = await _apiService.GetAsync<List<GroupUserSearchModel>>($"api/User/search?q={Uri.EscapeDataString(query.Trim())}") ?? [];
             var selected = membersList.Items.OfType<CheckBox>().Where(x => x.IsChecked == true).Select(x => x.Tag as GroupUserSearchModel).Where(x => x != null).Select(x => x!.Username).ToHashSet(StringComparer.OrdinalIgnoreCase);
             membersList.Items.Clear();
             foreach (var user in users)
             {
                 var check = new CheckBox { Tag = user, IsChecked = selected.Contains(user.Username), Padding = new Thickness(10, 8, 10, 8), Margin = new Thickness(2), Foreground = (Brush)FindResource("TextBrush"), FontSize = 14, VerticalContentAlignment = VerticalAlignment.Center };
-                var panel = new StackPanel { Orientation = Orientation.Horizontal };
-                var avatar = new Border { Width = 38, Height = 38, CornerRadius = new CornerRadius(19), Background = (Brush)FindResource("PrimarySoftBrush"), Margin = new Thickness(0, 0, 10, 0) };
-                avatar.Child = new TextBlock { Text = BuildGroupInitials(user.DisplayName), FontSize = 12, FontWeight = FontWeights.Bold, Foreground = (Brush)FindResource("PrimaryBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-                panel.Children.Add(avatar);
-                var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-                text.Children.Add(new TextBlock { Text = user.DisplayName, FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush") });
-                text.Children.Add(new TextBlock { Text = $"@{user.Username}", FontSize = 12, Foreground = (Brush)FindResource("SecondaryTextBrush") });
-                panel.Children.Add(text);
-                check.Content = panel;
-                check.Checked += (_, _) => UpdateGroupSelectedCount(membersList, countText);
-                check.Unchecked += (_, _) => UpdateGroupSelectedCount(membersList, countText);
-                membersList.Items.Add(check);
+                var row = new StackPanel { Orientation = Orientation.Horizontal };
+                row.Children.Add(new Border { Width = 38, Height = 38, CornerRadius = new CornerRadius(19), Background = (Brush)FindResource("PrimarySoftBrush"), Margin = new Thickness(0, 0, 10, 0), Child = new TextBlock { Text = BuildGroupInitials(user.DisplayName), FontSize = 12, FontWeight = FontWeights.Bold, Foreground = (Brush)FindResource("PrimaryBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } });
+                var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center }; text.Children.Add(new TextBlock { Text = user.DisplayName, FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush") }); text.Children.Add(new TextBlock { Text = $"@{user.Username}", FontSize = 12, Foreground = (Brush)FindResource("SecondaryTextBrush") }); row.Children.Add(text); check.Content = row;
+                check.Checked += (_, _) => UpdateGroupSelectedCount(membersList, countText); check.Unchecked += (_, _) => UpdateGroupSelectedCount(membersList, countText); membersList.Items.Add(check);
             }
             UpdateGroupSelectedCount(membersList, countText);
         }
         catch (Exception ex) { MessageBox.Show($"Could not search users.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
 
-    private static void UpdateGroupSelectedCount(ListBox membersList, TextBlock countText)
-    {
-        var count = membersList.Items.OfType<CheckBox>().Count(x => x.IsChecked == true);
-        countText.Text = $"{count} selected";
-    }
+    private static void UpdateGroupSelectedCount(ListBox membersList, TextBlock countText) => countText.Text = $"{membersList.Items.OfType<CheckBox>().Count(x => x.IsChecked == true)} selected";
 }
