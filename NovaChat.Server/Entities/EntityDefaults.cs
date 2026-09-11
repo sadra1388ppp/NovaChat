@@ -15,7 +15,7 @@ public partial class Chat
 {
     public Chat()
     {
-        Type = (int)ChatType.Private;
+        Type = ChatType.Private;
         Name = string.Empty;
         CreatedAt = DateTime.UtcNow;
     }
