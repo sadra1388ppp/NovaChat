@@ -66,10 +66,20 @@ public class UserService
 
     public async Task<User?> LoginAsync(LoginDto dto)
     {
-        var login = dto.Login.Trim(); if (string.IsNullOrWhiteSpace(login)) return null;
+        var login = dto.Login.Trim();
+        if (string.IsNullOrWhiteSpace(login)) return null;
+
         User? user = null;
-        if (TryNormalizePhoneNumber(login, out var phoneNumber)) user = await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber);
-        if (user == null) user = await _context.Users.FirstOrDefaultAsync(u => u.Username == login.ToLowerInvariant());
+
+        if (TryNormalizePhoneNumber(login, out var phoneNumber))
+            user = await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber);
+
+        if (user == null)
+            user = await _context.Users.FirstOrDefaultAsync(u => u.Username == login.ToLowerInvariant());
+
+        if (user == null)
+            user = await _context.Users.FirstOrDefaultAsync(u => u.Email == login);
+
         if (user == null) return null;
         if (!_passwordHashService.VerifyPassword(user, user.PasswordHash, dto.Password, out var needsRehash)) return null;
         if (needsRehash) { user.PasswordHash = _passwordHashService.HashPassword(dto.Password); await _context.SaveChangesAsync(); }
