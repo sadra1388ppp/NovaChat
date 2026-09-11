@@ -12,11 +12,19 @@ public class ContactService
 
     public async Task<(bool Success, string Message)> AddAsync(string ownerUserId, string contactUserId)
     {
-        if (!long.TryParse(ownerUserId, out var ownerId) || !long.TryParse(contactUserId?.Trim(), out var contactId)) return (false, "Valid numeric user ID is required.");
+        if (!long.TryParse(ownerUserId, out var ownerId) || !long.TryParse(contactUserId?.Trim(), out var contactId))
+            return (false, "Valid numeric user ID is required.");
         if (ownerId == contactId) return (false, "You cannot add yourself as a contact.");
         if (!await _context.Users.AnyAsync(u => u.Id == contactId)) return (false, "User not found.");
-        if (await _context.Contacts.AnyAsync(c => c.OwnerUserId == ownerId && c.ContactUserId == contactId)) return (false, "This user is already in your contacts.");
-        _context.Contacts.Add(new Contact { OwnerUserId = ownerId, ContactUserId = contactId, CreatedAt = DateTime.UtcNow });
+        if (await _context.Contacts.AnyAsync(c => c.OwnerUserId == ownerId && c.ContactUserId == contactId))
+            return (false, "This user is already in your contacts.");
+
+        _context.Contacts.Add(new Contact
+        {
+            OwnerUserId = ownerId,
+            ContactUserId = contactId,
+            CreatedAt = DateTime.UtcNow
+        });
         await _context.SaveChangesAsync();
         return (true, "Contact added successfully.");
     }
@@ -24,6 +32,7 @@ public class ContactService
     public async Task<List<ContactResponseDto>> GetAllAsync(string ownerUserId)
     {
         if (!long.TryParse(ownerUserId, out var ownerId)) return [];
+
         return await _context.Contacts.AsNoTracking()
             .Where(c => c.OwnerUserId == ownerId)
             .OrderBy(c => c.ContactUser.DisplayName)
@@ -54,21 +63,41 @@ public class ContactService
             })
             .ToListAsync();
 
-        // Query ChatMembers directly to avoid the correlated SelectMany/CROSS APPLY
-        // expression that Pomelo cannot translate for MariaDB.
-        var recentChats = await _context.ChatMembers.AsNoTracking()
-            .Where(m => m.Chat.Type == (int)ChatType.Private
-                        && m.UserId != ownerId
-                        && m.Chat.ChatMembers.Any(ownerMember => ownerMember.UserId == ownerId))
-            .Select(m => new ContactResponseDto
-            {
-                UserId = m.UserId.ToString(),
-                Username = m.User.Username,
-                DisplayName = m.User.DisplayName,
-                Email = m.User.Email,
-                AddedAt = m.Chat.CreatedAt
-            })
+        // Chats.Members is the single source of membership now. Load private chats
+        // and resolve the other username in memory to keep the query MariaDB-safe.
+        var privateChats = await _context.Chats.AsNoTracking()
+            .Where(c => c.Type == (int)ChatType.Private)
+            .OrderByDescending(c => c.CreatedAt)
             .ToListAsync();
+
+        var usernames = privateChats
+            .SelectMany(chat => ParseMembers(chat.Members)
+                .Where(username => !string.Equals(username, ownerUsername(ownerId), StringComparison.OrdinalIgnoreCase))
+                .Select(username => new { Username = username, chat.CreatedAt }))
+            .GroupBy(x => x.Username, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.OrderByDescending(x => x.CreatedAt).First())
+            .ToList();
+
+        var recentUsernames = usernames.Select(x => x.Username).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (recentUsernames.Count == 0)
+            return contacts.OrderBy(x => x.DisplayName).ThenBy(x => x.Username).ToList();
+
+        var recentUsers = await _context.Users.AsNoTracking()
+            .Where(u => recentUsernames.Contains(u.Username))
+            .ToListAsync();
+
+        var recentChats = recentUsers.Select(user =>
+        {
+            var recent = usernames.First(x => string.Equals(x.Username, user.Username, StringComparison.OrdinalIgnoreCase));
+            return new ContactResponseDto
+            {
+                UserId = user.Id.ToString(),
+                Username = user.Username,
+                DisplayName = user.DisplayName,
+                Email = user.Email,
+                AddedAt = recent.CreatedAt
+            };
+        });
 
         return contacts
             .Concat(recentChats)
@@ -88,4 +117,15 @@ public class ContactService
         await _context.SaveChangesAsync();
         return true;
     }
+
+    private async Task<string> ownerUsername(long ownerId) =>
+        await _context.Users.AsNoTracking().Where(u => u.Id == ownerId).Select(u => u.Username).FirstOrDefaultAsync() ?? string.Empty;
+
+    private static List<string> ParseMembers(string? members) =>
+        string.IsNullOrWhiteSpace(members)
+            ? []
+            : members.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
 }
