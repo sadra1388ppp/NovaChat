@@ -63,6 +63,11 @@ public class ContactService
             })
             .ToListAsync();
 
+        var ownerUsername = await _context.Users.AsNoTracking()
+            .Where(u => u.Id == ownerId)
+            .Select(u => u.Username)
+            .FirstOrDefaultAsync() ?? string.Empty;
+
         // Chats.Members is the single source of membership now. Load private chats
         // and resolve the other username in memory to keep the query MariaDB-safe.
         var privateChats = await _context.Chats.AsNoTracking()
@@ -70,15 +75,19 @@ public class ContactService
             .OrderByDescending(c => c.CreatedAt)
             .ToListAsync();
 
-        var usernames = privateChats
+        var usernameRows = privateChats
             .SelectMany(chat => ParseMembers(chat.Members)
-                .Where(username => !string.Equals(username, ownerUsername(ownerId), StringComparison.OrdinalIgnoreCase))
+                .Where(username => !string.Equals(username, ownerUsername, StringComparison.OrdinalIgnoreCase))
                 .Select(username => new { Username = username, chat.CreatedAt }))
             .GroupBy(x => x.Username, StringComparer.OrdinalIgnoreCase)
             .Select(g => g.OrderByDescending(x => x.CreatedAt).First())
             .ToList();
 
-        var recentUsernames = usernames.Select(x => x.Username).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var recentUsernames = usernameRows
+            .Select(x => x.Username)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
         if (recentUsernames.Count == 0)
             return contacts.OrderBy(x => x.DisplayName).ThenBy(x => x.Username).ToList();
 
@@ -88,7 +97,7 @@ public class ContactService
 
         var recentChats = recentUsers.Select(user =>
         {
-            var recent = usernames.First(x => string.Equals(x.Username, user.Username, StringComparison.OrdinalIgnoreCase));
+            var recent = usernameRows.First(x => string.Equals(x.Username, user.Username, StringComparison.OrdinalIgnoreCase));
             return new ContactResponseDto
             {
                 UserId = user.Id.ToString(),
@@ -117,9 +126,6 @@ public class ContactService
         await _context.SaveChangesAsync();
         return true;
     }
-
-    private async Task<string> ownerUsername(long ownerId) =>
-        await _context.Users.AsNoTracking().Where(u => u.Id == ownerId).Select(u => u.Username).FirstOrDefaultAsync() ?? string.Empty;
 
     private static List<string> ParseMembers(string? members) =>
         string.IsNullOrWhiteSpace(members)
