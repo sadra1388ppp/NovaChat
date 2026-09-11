@@ -16,24 +16,21 @@ namespace NovaChat.Server.Controllers;
 [Authorize]
 public class MessageDeletionController : ControllerBase
 {
-    private readonly _db;
+    private readonly AppDbContext _db;
     private readonly ChatService _chatService;
     private readonly IConfiguration _configuration;
     private readonly IHubContext<ChatHub> _hub;
-    private readonly IWebHostEnvironment _environment;
 
     public MessageDeletionController(
         AppDbContext db,
         ChatService chatService,
         IConfiguration configuration,
-        IHubContext<ChatHub> hub,
-        IWebHostEnvironment environment)
+        IHubContext<ChatHub> hub)
     {
         _db = db;
         _chatService = chatService;
         _configuration = configuration;
         _hub = hub;
-        _environment = environment;
     }
 
     [HttpDelete("{messageId:int}")]
@@ -75,9 +72,9 @@ public class MessageDeletionController : ControllerBase
             if (!owner && message.SenderId != userId)
                 return Forbid();
 
-            // SECURITY RULE: this is a logical delete only.
-            // NEVER remove the database row, clear Content, or delete the
-            // stored media. The original record remains available in MariaDB.
+            // SECURITY RULE: logical deletion only.
+            // Never remove the Message row, clear Content, or delete stored media.
+            // The original message remains intact in MariaDB for audit/history.
             message.DeletedForEveryone = true;
             await _db.SaveChangesAsync();
 
