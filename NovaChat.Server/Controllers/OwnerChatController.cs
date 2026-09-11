@@ -30,38 +30,11 @@ public class OwnerChatController : ControllerBase
         if (chat == null)
             return NotFound(new { message = "Chat not found." });
 
-        if (chat.Type != ChatType.Group)
-        {
-            var userIds = new[] { chat.User1Id, chat.User2Id }
-                .Where(id => id.HasValue && id.Value > 0)
-                .Select(id => id!.Value)
-                .Distinct()
-                .ToList();
-
-            var users = await _db.Users
-                .AsNoTracking()
-                .Where(u => userIds.Contains(u.Id))
-                .Select(u => new OwnerMemberDto
-                {
-                    UserId = u.Id.ToString(),
-                    Username = u.Username,
-                    DisplayName = u.DisplayName,
-                    Role = "MEMBER",
-                    Email = u.Email,
-                    PhoneNumber = u.PhoneNumber,
-                    AvatarUrl = u.AvatarUrl
-                })
-                .OrderBy(x => x.DisplayName)
-                .ToListAsync();
-
-            return Ok(users);
-        }
-
         var members = await _db.ChatMembers
             .AsNoTracking()
             .Where(m => m.ChatId == chatId)
             .Include(m => m.User)
-            .OrderBy(m => m.Role)
+            .OrderByDescending(m => m.Role)
             .ThenBy(m => m.User.DisplayName)
             .ToListAsync();
 
@@ -76,8 +49,6 @@ public class OwnerChatController : ControllerBase
                 PhoneNumber = m.User.PhoneNumber,
                 AvatarUrl = m.User.AvatarUrl
             })
-            .OrderBy(m => m.Role == "OWNER" ? 0 : m.Role == "ADMIN" ? 1 : 2)
-            .ThenBy(m => m.DisplayName)
             .ToList();
 
         return Ok(result);
@@ -118,28 +89,15 @@ public class OwnerChatController : ControllerBase
             .AsNoTracking()
             .Where(m => m.ChatId == chatId)
             .Select(m => m.UserId.ToString())
+            .Distinct()
             .ToListAsync();
-
-        if (chat.User1Id.HasValue && chat.User1Id.Value > 0)
-            recipients.Add(chat.User1Id.Value.ToString());
-        if (chat.User2Id.HasValue && chat.User2Id.Value > 0)
-            recipients.Add(chat.User2Id.Value.ToString());
-
-        var messages = await _db.Messages.Where(m => m.ChatId == chatId).ToListAsync();
-        if (messages.Count > 0)
-            _db.Messages.RemoveRange(messages);
-
-        var members = await _db.ChatMembers.Where(m => m.ChatId == chatId).ToListAsync();
-        if (members.Count > 0)
-            _db.ChatMembers.RemoveRange(members);
 
         _db.Chats.Remove(chat);
         await _db.SaveChangesAsync();
 
-        var distinctRecipients = recipients.Distinct().ToList();
-        if (distinctRecipients.Count > 0)
+        if (recipients.Count > 0)
         {
-            await _hub.Clients.Users(distinctRecipients)
+            await _hub.Clients.Users(recipients)
                 .SendAsync("ChatDeleted", new { chatId, deletedBy = "owner" });
         }
 
