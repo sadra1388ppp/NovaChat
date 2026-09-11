@@ -69,7 +69,8 @@ public class MessageDeletionController : ControllerBase
 
         if (mode == "everyone")
         {
-            if (!owner && message.SenderId != userId)
+            var currentUsername = User.FindFirst("username")?.Value;
+            if (!owner && !string.Equals(message.SenderId, currentUsername, StringComparison.OrdinalIgnoreCase))
                 return Forbid();
 
             // SECURITY RULE: logical deletion only.
@@ -82,7 +83,7 @@ public class MessageDeletionController : ControllerBase
             {
                 id = message.Id,
                 chatId = message.ChatId,
-                senderId = message.SenderId.ToString(),
+                senderId = message.SenderId,
                 sentAt = message.SentAt
             };
 
