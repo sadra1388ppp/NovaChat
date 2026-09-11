@@ -17,17 +17,20 @@ namespace NovaChat.Server.Controllers;
 public class MessageDeletionController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly ChatService _chatService;
     private readonly IConfiguration _configuration;
     private readonly IHubContext<ChatHub> _hub;
     private readonly IWebHostEnvironment _environment;
 
     public MessageDeletionController(
         AppDbContext db,
+        ChatService chatService,
         IConfiguration configuration,
         IHubContext<ChatHub> hub,
         IWebHostEnvironment environment)
     {
         _db = db;
+        _chatService = chatService;
         _configuration = configuration;
         _hub = hub;
         _environment = environment;
@@ -58,10 +61,9 @@ public class MessageDeletionController : ControllerBase
         if (message == null)
             return NotFound(new { message = "Message not found." });
 
-        var chat = await _db.Chats
-            .AsNoTracking()
-            .Include(c => c.ChatMembers)
-            .FirstOrDefaultAsync(c => c.Id == message.ChatId);
+        // ChatMembers is no longer an EF navigation. ChatService rebuilds the
+        // compatibility members from the Chats.Members username list.
+        var chat = await _chatService.GetChatByIdAsync(message.ChatId);
 
         if (chat == null)
             return NotFound(new { message = "Chat not found." });
