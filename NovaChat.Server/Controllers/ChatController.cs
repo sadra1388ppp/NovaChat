@@ -134,7 +134,7 @@ public class ChatController : ControllerBase
     {
         if (!TryGetCurrentUserId(out var userId)) return Unauthorized();
         var chat = await _chatService.GetChatByIdAsync(chatId);
-        if (chat == null || chat.Type != (int)ChatType.Group) return NotFound(new { message = "Group not found." });
+        if (chat == null || chat.Type != ChatType.Group) return NotFound(new { message = "Group not found." });
         var member = await _chatService.GetMemberAsync(chatId, userId);
         if (member == null || member.Role == (int)ChatMemberRole.Member) return Forbid();
         if (file == null || file.Length == 0) return BadRequest(new { message = "Please select an image." });
@@ -170,7 +170,7 @@ public class ChatController : ControllerBase
     {
         if (!TryGetCurrentUserId(out var userId)) return Unauthorized();
         var chat = await _chatService.GetChatByIdAsync(chatId);
-        if (chat == null || chat.Type != (int)ChatType.Group) return NotFound(new { message = "Group not found." });
+        if (chat == null || chat.Type != ChatType.Group) return NotFound(new { message = "Group not found." });
         var member = await _chatService.GetMemberAsync(chatId, userId);
         if (member == null || member.Role == (int)ChatMemberRole.Member) return Forbid();
         var old = chat.AvatarUrl;
@@ -233,19 +233,20 @@ public class ChatController : ControllerBase
         if (!TryGetCurrentUserId(out var userId)) return Unauthorized();
         var message = await _chatService.GetMessageByIdAsync(messageId);
         if (message == null) return NotFound(new { message = "Message not found." });
-        if (!IsOwner() && (!await _chatService.CanAccessChatAsync(message.ChatId, userId) || message.SenderId != userId)) return Forbid();
+        var currentUsername = User.FindFirst("username")?.Value;
+        if (!IsOwner() && (!await _chatService.CanAccessChatAsync(message.ChatId, userId) || !string.Equals(message.SenderId, currentUsername, StringComparison.OrdinalIgnoreCase))) return Forbid();
         var chat = await _chatService.GetChatByIdAsync(message.ChatId);
         if (chat == null || !await _chatService.DeleteMessageAsync(messageId)) return NotFound();
-        await _hub.Clients.Users(RecipientIds(chat)).SendAsync("MessageDeleted", new { id = message.Id, chatId = message.ChatId, senderId = message.SenderId.ToString(), content = message.Content, sentAt = message.SentAt });
+        await _hub.Clients.Users(RecipientIds(chat)).SendAsync("MessageDeleted", new { id = message.Id, chatId = message.ChatId, senderId = message.SenderId, content = message.Content, sentAt = message.SentAt });
         return Ok(new { message = "Message deleted successfully." });
     }
 
     private ChatListDto MapChat(Chat chat, Message? lastMessage) => new()
     {
         Id = chat.Id,
-        Type = ((ChatType)chat.Type).ToString(),
-        Name = chat.Type == (int)ChatType.Group ? chat.Name : string.Empty,
-        AvatarUrl = chat.Type == (int)ChatType.Group ? ToAbsoluteChatAvatarUrl(chat.AvatarUrl) : null,
+        Type = chat.Type,
+        Name = chat.Type == ChatType.Group ? chat.Name : string.Empty,
+        AvatarUrl = chat.Type == ChatType.Group ? ToAbsoluteChatAvatarUrl(chat.AvatarUrl) : null,
         CreatedByUserId = chat.CreatedByUserId?.ToString() ?? string.Empty,
         User1Id = chat.User1Id?.ToString() ?? string.Empty,
         User2Id = chat.User2Id?.ToString() ?? string.Empty,
@@ -271,7 +272,7 @@ public class ChatController : ControllerBase
     {
         var recipients = new List<string>();
 
-        if (chat.Type == (int)ChatType.Group)
+        if (chat.Type == ChatType.Group)
         {
             foreach (var member in chat.ChatMembers)
             {
