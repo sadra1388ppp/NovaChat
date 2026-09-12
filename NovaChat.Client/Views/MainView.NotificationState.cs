@@ -34,15 +34,12 @@ public partial class MainView
             _activeMainView = null;
     }
 
-    internal static bool IsCurrentChatNotification(string title)
+    internal static bool IsCurrentChat(int chatId)
     {
         var mainView = _activeMainView;
         if (mainView == null || !mainView.IsLoaded || !mainView._currentChatId.HasValue)
             return false;
 
-        return string.Equals(
-            mainView.ChatUserNameText.Text?.Trim(),
-            title.Trim(),
-            StringComparison.OrdinalIgnoreCase);
+        return mainView._currentChatId.Value == chatId;
     }
 }
