@@ -63,11 +63,19 @@ public class ChatHub : Hub
     {
         if (!TryGetCurrentUserId(out var userId)) throw new HubException("Unauthorized.");
         if (!await _chatService.CanAccessChatAsync(chatId, userId) && !IsOwner()) throw new HubException("You do not have access to this chat.");
+
         var messageIds = await _messageReadService.MarkChatAsReadAsync(chatId, userId);
         if (messageIds.Count == 0) return;
-        var chat = await _chatService.GetChatByIdAsync(chatId);
-        if (chat == null) return;
-        await Clients.Users(Recipients(chat)).SendAsync("MessagesRead", new { ChatId = chatId, ReaderUserId = userId.ToString(), MessageIds = messageIds });
+
+        // The sender is already a member of the SignalR chat group when the
+        // conversation is open. Broadcasting through the chat group avoids any
+        // dependency on SignalR's UserIdentifier/claim mapping.
+        await Clients.Group($"chat-{chatId}").SendAsync("MessagesRead", new
+        {
+            ChatId = chatId,
+            ReaderUserId = userId.ToString(),
+            MessageIds = messageIds
+        });
     }
 
     public async Task DeleteMessage(int messageId)
@@ -82,7 +90,13 @@ public class ChatHub : Hub
         await Clients.Users(Recipients(chat)).SendAsync("MessageDeleted", new { id = message.Id, chatId = message.ChatId, senderId = message.SenderId, content = message.Content, sentAt = message.SentAt });
     }
 
-    public async Task JoinChat(int chatId) { if (!TryGetCurrentUserId(out var userId)) throw new HubException("Unauthorized."); if (!await _chatService.CanAccessChatAsync(chatId, userId) && !IsOwner()) throw new HubException("You do not have access to this chat."); await Groups.AddToGroupAsync(Context.ConnectionId, $"chat-{chatId}"); }
+    public async Task JoinChat(int chatId)
+    {
+        if (!TryGetCurrentUserId(out var userId)) throw new HubException("Unauthorized.");
+        if (!await _chatService.CanAccessChatAsync(chatId, userId) && !IsOwner()) throw new HubException("You do not have access to this chat.");
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"chat-{chatId}");
+    }
+
     public Task LeaveChat(int chatId) => Groups.RemoveFromGroupAsync(Context.ConnectionId, $"chat-{chatId}");
     private IEnumerable<string> Recipients(Chat chat) => chat.ChatMembers.Select(m => m.UserId.ToString()).Distinct();
     private string? CurrentUserId() => Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
