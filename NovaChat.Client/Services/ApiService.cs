@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using NovaChat.Client.Models;
 
 namespace NovaChat.Client.Services;
 
@@ -75,8 +76,7 @@ public class ApiService
 
         if (TryGetChatMediaMessageId(endpoint, out var messageId))
         {
-            var envelopeEndpoint = $"api/ChatMedia/{messageId}/envelope";
-            using var envelopeResponse = await _httpClient.GetAsync(envelopeEndpoint);
+            using var envelopeResponse = await _httpClient.GetAsync($"api/ChatMedia/{messageId}/envelope");
             if (envelopeResponse.IsSuccessStatusCode)
             {
                 var envelopePayload = await envelopeResponse.Content.ReadFromJsonAsync<EncryptedMediaEnvelopeResponse>(JsonOptions);
@@ -92,12 +92,41 @@ public class ApiService
             }
 
             if (envelopeResponse.StatusCode != System.Net.HttpStatusCode.NotFound)
-                await EnsureSuccessAsync(envelopeResponse, envelopeEndpoint);
+                await EnsureSuccessAsync(envelopeResponse, $"api/ChatMedia/{messageId}/envelope");
         }
 
         using var response = await _httpClient.GetAsync(endpoint, HttpCompletionOption.ResponseHeadersRead);
         await EnsureSuccessAsync(response, endpoint);
         return await response.Content.ReadAsByteArrayAsync();
+    }
+
+    public async Task<byte[]> GetE2eeMediaBytesAsync(
+        int messageId,
+        E2eeCryptoService e2ee,
+        CancellationToken cancellationToken = default)
+    {
+        if (messageId <= 0) throw new ArgumentOutOfRangeException(nameof(messageId));
+        ArgumentNullException.ThrowIfNull(e2ee);
+
+        AddAuthorization();
+
+        var envelopeEndpoint = $"api/ChatMedia/{messageId}/envelope";
+        using var envelopeResponse = await _httpClient.GetAsync(envelopeEndpoint, cancellationToken);
+        await EnsureSuccessAsync(envelopeResponse, envelopeEndpoint);
+
+        var envelopePayload = await envelopeResponse.Content.ReadFromJsonAsync<EncryptedMediaEnvelopeResponse>(JsonOptions, cancellationToken);
+        if (envelopePayload == null || string.IsNullOrWhiteSpace(envelopePayload.Envelope))
+            throw new HttpRequestException("The server returned an empty E2EE media envelope.");
+
+        var mediaEndpoint = $"api/ChatMedia/{messageId}";
+        using var mediaResponse = await _httpClient.GetAsync(mediaEndpoint, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        await EnsureSuccessAsync(mediaResponse, mediaEndpoint);
+
+        var encryptedBytes = await mediaResponse.Content.ReadAsByteArrayAsync(cancellationToken);
+        if (encryptedBytes.Length == 0)
+            throw new InvalidDataException("The server returned an empty encrypted media blob.");
+
+        return await e2ee.DecryptMediaBytesAsync(envelopePayload.Envelope, encryptedBytes, cancellationToken);
     }
 
     public async Task<TResponse?> UploadFileAsync<TResponse>(string endpoint, string filePath, string fieldName = "file")
