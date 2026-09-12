@@ -52,7 +52,7 @@ public class ChatHub : Hub
     public async Task SendMessage(int chatId, string content)
     {
         if (!TryGetCurrentUserId(out var userId)) throw new HubException("Unauthorized.");
-        if (!IsE2eeEnvelope(content)) throw new HubException("NovaChat requires end-to-end encrypted messages.");
+        if (!IsRsaOnlyEnvelope(content)) throw new HubException("NovaChat requires RSA-only encrypted messages in this experiment.");
         if (content.Length > 250_000) throw new HubException("Encrypted message is too large.");
         if (!await _chatService.CanAccessChatAsync(chatId, userId) && !IsOwner()) throw new HubException("You do not have access to this chat.");
         var message = await _chatService.SendMessageAsync(chatId, userId, content);
@@ -95,7 +95,7 @@ public class ChatHub : Hub
     private bool TryGetCurrentUserId(out long userId) => long.TryParse(CurrentUserId(), out userId) && userId > 0;
     private bool IsOwner() { var ownerUsername = _configuration["Owner:Username"]; var username = Context.User?.FindFirst("username")?.Value; if (!string.IsNullOrWhiteSpace(ownerUsername) && string.Equals(ownerUsername, username, StringComparison.OrdinalIgnoreCase)) return true; return long.TryParse(_configuration["Owner:UserId"], out var ownerId) && long.TryParse(CurrentUserId(), out var currentId) && ownerId == currentId; }
 
-    private static bool IsE2eeEnvelope(string? content)
+    private static bool IsRsaOnlyEnvelope(string? content)
     {
         if (string.IsNullOrWhiteSpace(content)) return false;
         try
@@ -104,11 +104,17 @@ public class ChatHub : Hub
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object) return false;
             if (!root.TryGetProperty("v", out var version) || version.GetInt32() != 1) return false;
-            if (!root.TryGetProperty("alg", out var alg) || alg.GetString() != "AES-256-GCM+RSA-OAEP-SHA256") return false;
-            if (!root.TryGetProperty("nonce", out var nonce) || string.IsNullOrWhiteSpace(nonce.GetString())) return false;
-            if (!root.TryGetProperty("tag", out var tag) || string.IsNullOrWhiteSpace(tag.GetString())) return false;
-            if (!root.TryGetProperty("ciphertext", out var cipher) || string.IsNullOrWhiteSpace(cipher.GetString())) return false;
-            if (!root.TryGetProperty("keys", out var keys) || keys.ValueKind != JsonValueKind.Object || keys.EnumerateObject().Count() == 0) return false;
+            if (!root.TryGetProperty("alg", out var alg) || alg.GetString() != "RSA-3072-OAEP-SHA256-CHUNKED") return false;
+            if (!root.TryGetProperty("chunkSize", out var chunkSize) || chunkSize.GetInt32() <= 0 || chunkSize.GetInt32() > 318) return false;
+            if (!root.TryGetProperty("chunks", out var chunks) || chunks.ValueKind != JsonValueKind.Object || chunks.EnumerateObject().Count() == 0) return false;
+
+            foreach (var device in chunks.EnumerateObject())
+            {
+                if (string.IsNullOrWhiteSpace(device.Name) || device.Value.ValueKind != JsonValueKind.Array || device.Value.GetArrayLength() == 0) return false;
+                foreach (var chunk in device.Value.EnumerateArray())
+                    if (chunk.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(chunk.GetString())) return false;
+            }
+
             return true;
         }
         catch (JsonException) { return false; }
