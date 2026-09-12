@@ -9,9 +9,6 @@ namespace NovaChat.Client.Views;
 
 public partial class MainView
 {
-    private bool _conversationAvatarHooked;
-    private void HookConversationAvatarRefresh() => _conversationAvatarHooked = true;
-
     private async Task RefreshConversationAvatarsAsync()
     {
         var changed = false;
@@ -103,5 +100,7 @@ public partial class MainView
         catch { return null; }
     }
 
-    private void InitializeConversationAvatarFix() => HookConversationAvatarRefresh();
+    private void InitializeConversationAvatarFix()
+    {
+    }
 }
