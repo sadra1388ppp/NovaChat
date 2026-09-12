@@ -124,8 +124,7 @@ public class ChatMediaController : ControllerBase
             };
 
             // Media deliberately stays outside E2EE. Text messages remain E2EE,
-            // while the media pipeline stores the binary separately and keeps
-            // only safe metadata in the message record.
+            // while media is stored separately and only safe metadata is saved in the message.
             var message = await _chatService.SendMessageAsync(chatId, userId.Value, envelope.Serialize());
             if (message == null)
             {
@@ -134,8 +133,8 @@ public class ChatMediaController : ControllerBase
             }
 
             var dto = MessageDtoMapper.Map(message);
-            await _hub.Clients.Users(chat.ChatMembers.Select(m => m.UserId.ToString()).Distinct())
-                .SendAsync("ReceiveMessage", dto);
+            var recipients = chat.ChatMembers.Select(m => m.UserId.ToString()).Distinct(StringComparer.Ordinal);
+            await _hub.Clients.Users(recipients).SendAsync("ReceiveMessage", dto);
 
             return Ok(new { message = "Media sent successfully.", data = dto });
         }
@@ -180,6 +179,8 @@ public class ChatMediaController : ControllerBase
         return PhysicalFile(path, media.ContentType, enableRangeProcessing: true);
     }
 
-    private static long? CurrentUserId() =>
-        long.TryParse(null, out var _) ? null : null;
+    private long? CurrentUserId() =>
+        long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId) && userId > 0
+            ? userId
+            : null;
 }
