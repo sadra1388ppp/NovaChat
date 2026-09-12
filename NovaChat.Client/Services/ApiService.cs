@@ -133,29 +133,12 @@ public class ApiService
     {
         AddAuthorization();
 
-        if (TryGetChatMediaUploadInfo(endpoint, out var chatId, out var type, out var durationSeconds))
-        {
-            var e2ee = new E2eeCryptoService();
-            await e2ee.InitializeAsync(this);
-            var encrypted = await e2ee.EncryptMediaFileAsync(chatId, filePath, type, durationSeconds, this);
-
-            using var secureForm = new MultipartFormDataContent();
-            using var fileContent = new ByteArrayContent(encrypted.EncryptedBytes);
-            fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-            secureForm.Add(fileContent, fieldName, $"{encrypted.BlobId}.enc");
-            secureForm.Add(new StringContent(encrypted.BlobId), "blobId");
-            secureForm.Add(new StringContent(encrypted.EnvelopeJson), "envelope");
-
-            using var secureResponse = await _httpClient.PostAsync($"api/ChatMedia/{chatId}", secureForm);
-            await EnsureSuccessAsync(secureResponse, $"api/ChatMedia/{chatId}");
-            var result = await secureResponse.Content.ReadFromJsonAsync<TResponse>(JsonOptions);
-            await DecryptMediaUploadResponseAsync(result, e2ee);
-            return result;
-        }
-
+        // Chat media intentionally stays outside E2EE.
+        // Only text messages are end-to-end encrypted. Images, voice messages,
+        // and regular files use the normal authenticated multipart upload flow.
         using var form = new MultipartFormDataContent();
         await using var stream = File.OpenRead(filePath);
-        using var plainFileContent = new StreamContent(stream);
+        using var fileContent = new StreamContent(stream);
         var mediaType = System.IO.Path.GetExtension(filePath).ToLowerInvariant() switch
         {
             ".jpg" or ".jpeg" => "image/jpeg",
@@ -170,8 +153,9 @@ public class ApiService
             ".webm" => "video/webm",
             _ => "application/octet-stream"
         };
-        plainFileContent.Headers.ContentType = new MediaTypeHeaderValue(mediaType);
-        form.Add(plainFileContent, fieldName, System.IO.Path.GetFileName(filePath));
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue(mediaType);
+        form.Add(fileContent, fieldName, System.IO.Path.GetFileName(filePath));
+
         using var response = await _httpClient.PostAsync(endpoint, form);
         await EnsureSuccessAsync(response, endpoint);
         return await response.Content.ReadFromJsonAsync<TResponse>(JsonOptions);
@@ -185,14 +169,6 @@ public class ApiService
         return true;
     }
 
-    private async Task DecryptMediaUploadResponseAsync<TResponse>(TResponse? response, E2eeCryptoService e2ee)
-    {
-        if (response == null) return;
-        var dataProperty = typeof(TResponse).GetProperty("Data");
-        if (dataProperty?.GetValue(response) is NovaChat.Client.Models.MessageModel message)
-            await e2ee.DecryptMessageAsync(message);
-    }
-
     private static bool TryGetChatMediaMessageId(string endpoint, out int messageId)
     {
         messageId = 0;
@@ -202,30 +178,6 @@ public class ApiService
                segments[0].Equals("api", StringComparison.OrdinalIgnoreCase) &&
                segments[1].Equals("ChatMedia", StringComparison.OrdinalIgnoreCase) &&
                int.TryParse(segments[2], out messageId) && messageId > 0;
-    }
-
-    private static bool TryGetChatMediaUploadInfo(string endpoint, out int chatId, out string type, out double? durationSeconds)
-    {
-        chatId = 0;
-        type = string.Empty;
-        durationSeconds = null;
-
-        var uri = new Uri(endpoint.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? endpoint : $"http://localhost/{endpoint.TrimStart('/')}");
-        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length != 3 || !segments[0].Equals("api", StringComparison.OrdinalIgnoreCase) || !segments[1].Equals("ChatMedia", StringComparison.OrdinalIgnoreCase) || !int.TryParse(segments[2], out chatId) || chatId <= 0)
-            return false;
-
-        var query = uri.Query.TrimStart('?');
-        foreach (var part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var pieces = part.Split('=', 2);
-            var key = Uri.UnescapeDataString(pieces[0]);
-            var value = pieces.Length == 2 ? Uri.UnescapeDataString(pieces[1]) : string.Empty;
-            if (key.Equals("type", StringComparison.OrdinalIgnoreCase)) type = value.Trim().ToLowerInvariant();
-            else if (key.Equals("durationSeconds", StringComparison.OrdinalIgnoreCase) && double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed)) durationSeconds = parsed;
-        }
-
-        return type is "image" or "file" or "voice";
     }
 
     private static async Task EnsureSuccessAsync(HttpResponseMessage response, string endpoint)
