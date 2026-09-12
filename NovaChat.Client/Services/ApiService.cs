@@ -9,7 +9,6 @@ namespace NovaChat.Client.Services;
 public class ApiService
 {
     private readonly HttpClient _httpClient;
-
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
 
     public ApiService()
@@ -66,6 +65,24 @@ public class ApiService
     public async Task<byte[]?> GetBytesAsync(string endpoint)
     {
         AddAuthorization();
+
+        if (TryGetChatMediaMessageId(endpoint, out var messageId))
+        {
+            var envelopeEndpoint = $"api/ChatMedia/{messageId}/envelope";
+            using var envelopeResponse = await _httpClient.GetAsync(envelopeEndpoint);
+            await EnsureSuccessAsync(envelopeResponse, envelopeEndpoint);
+            var envelopePayload = await envelopeResponse.Content.ReadFromJsonAsync<EncryptedMediaEnvelopeResponse>(JsonOptions);
+            if (envelopePayload == null || string.IsNullOrWhiteSpace(envelopePayload.Envelope))
+                throw new HttpRequestException("The server did not return an encrypted media envelope.");
+
+            using var mediaResponse = await _httpClient.GetAsync(endpoint, HttpCompletionOption.ResponseHeadersRead);
+            await EnsureSuccessAsync(mediaResponse, endpoint);
+            var encryptedBytes = await mediaResponse.Content.ReadAsByteArrayAsync();
+            var e2ee = new E2eeCryptoService();
+            await e2ee.InitializeAsync(this);
+            return await e2ee.DecryptMediaBytesAsync(envelopePayload.Envelope, encryptedBytes);
+        }
+
         using var response = await _httpClient.GetAsync(endpoint, HttpCompletionOption.ResponseHeadersRead);
         await EnsureSuccessAsync(response, endpoint);
         return await response.Content.ReadAsByteArrayAsync();
@@ -75,9 +92,29 @@ public class ApiService
     {
         AddAuthorization();
 
+        if (TryGetChatMediaUploadInfo(endpoint, out var chatId, out var type, out var durationSeconds))
+        {
+            var e2ee = new E2eeCryptoService();
+            await e2ee.InitializeAsync(this);
+            var encrypted = await e2ee.EncryptMediaFileAsync(chatId, filePath, type, durationSeconds, this);
+
+            using var secureForm = new MultipartFormDataContent();
+            using var fileContent = new ByteArrayContent(encrypted.EncryptedBytes);
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+            secureForm.Add(fileContent, fieldName, $"{encrypted.BlobId}.enc");
+            secureForm.Add(new StringContent(encrypted.BlobId), "blobId");
+            secureForm.Add(new StringContent(encrypted.EnvelopeJson), "envelope");
+
+            using var secureResponse = await _httpClient.PostAsync($"api/ChatMedia/{chatId}", secureForm);
+            await EnsureSuccessAsync(secureResponse, $"api/ChatMedia/{chatId}");
+            var result = await secureResponse.Content.ReadFromJsonAsync<TResponse>(JsonOptions);
+            await DecryptMediaUploadResponseAsync(result, e2ee);
+            return result;
+        }
+
         using var form = new MultipartFormDataContent();
         await using var stream = File.OpenRead(filePath);
-        using var fileContent = new StreamContent(stream);
+        using var plainFileContent = new StreamContent(stream);
 
         var mediaType = System.IO.Path.GetExtension(filePath).ToLowerInvariant() switch
         {
@@ -94,8 +131,8 @@ public class ApiService
             _ => "application/octet-stream"
         };
 
-        fileContent.Headers.ContentType = new MediaTypeHeaderValue(mediaType);
-        form.Add(fileContent, fieldName, System.IO.Path.GetFileName(filePath));
+        plainFileContent.Headers.ContentType = new MediaTypeHeaderValue(mediaType);
+        form.Add(plainFileContent, fieldName, System.IO.Path.GetFileName(filePath));
 
         using var response = await _httpClient.PostAsync(endpoint, form);
         await EnsureSuccessAsync(response, endpoint);
@@ -110,21 +147,55 @@ public class ApiService
         return true;
     }
 
+    private async Task DecryptMediaUploadResponseAsync<TResponse>(TResponse? response, E2eeCryptoService e2ee)
+    {
+        if (response == null) return;
+        var dataProperty = typeof(TResponse).GetProperty("Data");
+        if (dataProperty?.GetValue(response) is NovaChat.Client.Models.MessageModel message)
+            await e2ee.DecryptMessageAsync(message);
+    }
+
+    private static bool TryGetChatMediaMessageId(string endpoint, out int messageId)
+    {
+        messageId = 0;
+        var clean = endpoint.Split('?', 2)[0].Trim('/');
+        var segments = clean.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return segments.Length == 3 &&
+               segments[0].Equals("api", StringComparison.OrdinalIgnoreCase) &&
+               segments[1].Equals("ChatMedia", StringComparison.OrdinalIgnoreCase) &&
+               int.TryParse(segments[2], out messageId) &&
+               messageId > 0;
+    }
+
+    private static bool TryGetChatMediaUploadInfo(string endpoint, out int chatId, out string type, out double? durationSeconds)
+    {
+        chatId = 0;
+        type = string.Empty;
+        durationSeconds = null;
+
+        var uri = new Uri(endpoint.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? endpoint : $"http://localhost/{endpoint.TrimStart('/')}");
+        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length != 3 || !segments[0].Equals("api", StringComparison.OrdinalIgnoreCase) || !segments[1].Equals("ChatMedia", StringComparison.OrdinalIgnoreCase) || !int.TryParse(segments[2], out chatId) || chatId <= 0)
+            return false;
+
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        type = (query["type"] ?? string.Empty).Trim().ToLowerInvariant();
+        if (double.TryParse(query["durationSeconds"], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+            durationSeconds = parsed;
+        return type is "image" or "file" or "voice";
+    }
+
     private static async Task EnsureSuccessAsync(HttpResponseMessage response, string endpoint)
     {
         if (response.IsSuccessStatusCode) return;
-
         var body = await response.Content.ReadAsStringAsync();
         var message = ExtractErrorMessage(body);
-        throw new HttpRequestException(
-            $"API {endpoint} failed ({(int)response.StatusCode} {response.ReasonPhrase}): {message}");
+        throw new HttpRequestException($"API {endpoint} failed ({(int)response.StatusCode} {response.ReasonPhrase}): {message}");
     }
 
     private static string ExtractErrorMessage(string body)
     {
-        if (string.IsNullOrWhiteSpace(body))
-            return "The server returned no error details.";
-
+        if (string.IsNullOrWhiteSpace(body)) return "The server returned no error details.";
         try
         {
             using var document = JsonDocument.Parse(body);
@@ -133,12 +204,13 @@ public class ApiService
             if (document.RootElement.TryGetProperty("title", out var title))
                 return title.ValueKind == JsonValueKind.String ? title.GetString() ?? body : title.ToString();
         }
-        catch (JsonException)
-        {
-            // Fall back to plain-text response bodies.
-        }
-
+        catch (JsonException) { }
         return body.Length > 1000 ? body[..1000] : body;
+    }
+
+    private sealed class EncryptedMediaEnvelopeResponse
+    {
+        public string Envelope { get; set; } = string.Empty;
     }
 
     private sealed class FlexibleStringConverter : JsonConverter<string>
@@ -147,28 +219,18 @@ public class ApiService
         {
             switch (reader.TokenType)
             {
-                case JsonTokenType.String:
-                    return reader.GetString();
+                case JsonTokenType.String: return reader.GetString();
                 case JsonTokenType.Number:
-                    if (reader.TryGetInt64(out var integer))
-                        return integer.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                    if (reader.TryGetDecimal(out var decimalValue))
-                        return decimalValue.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    if (reader.TryGetInt64(out var integer)) return integer.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    if (reader.TryGetDecimal(out var decimalValue)) return decimalValue.ToString(System.Globalization.CultureInfo.InvariantCulture);
                     return reader.GetDouble().ToString(System.Globalization.CultureInfo.InvariantCulture);
-                case JsonTokenType.True:
-                    return "true";
-                case JsonTokenType.False:
-                    return "false";
-                case JsonTokenType.Null:
-                    return null;
-                default:
-                    throw new JsonException($"Cannot convert JSON token {reader.TokenType} to string.");
+                case JsonTokenType.True: return "true";
+                case JsonTokenType.False: return "false";
+                case JsonTokenType.Null: return null;
+                default: throw new JsonException($"Cannot convert JSON token {reader.TokenType} to string.");
             }
         }
 
-        public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
-        {
-            writer.WriteStringValue(value);
-        }
+        public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options) => writer.WriteStringValue(value);
     }
 }
