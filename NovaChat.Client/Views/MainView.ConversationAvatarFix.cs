@@ -1,6 +1,7 @@
 using NovaChat.Client.Models;
 using NovaChat.Client.Services;
-using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Windows;
 using System.Windows.Media.Imaging;
 
 namespace NovaChat.Client.Views;
@@ -16,54 +17,55 @@ public partial class MainView
 
         foreach (var item in _chats.ToArray())
         {
+            string? avatarEndpoint = null;
+
             if (item.Chat.IsGroup)
             {
-                var avatarUri = string.IsNullOrWhiteSpace(item.Chat.AvatarUrl)
-                    ? null
-                    : _apiService.BuildAbsoluteUrl(item.Chat.AvatarUrl);
-
-                if (!string.Equals(item.AvatarUri, avatarUri, StringComparison.Ordinal))
-                {
-                    item.AvatarUri = avatarUri;
-                    changed = true;
-                }
-
-                continue;
+                if (!string.IsNullOrWhiteSpace(item.Chat.AvatarUrl))
+                    avatarEndpoint = $"api/Chat/{item.Chat.Id}/avatar?v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
             }
-
-            var userId = item.Chat.OtherUserId(AuthState.UserId);
-            if (string.IsNullOrWhiteSpace(userId)) continue;
-
-            try
+            else
             {
-                var profile = await _apiService.GetAsync<ProfileModel>($"api/User/profile/{Uri.EscapeDataString(userId)}");
-                if (profile == null) continue;
-
-                var avatarUri = string.IsNullOrWhiteSpace(profile.AvatarUrl)
-                    ? null
-                    : _apiService.BuildAbsoluteUrl(profile.AvatarUrl);
-
-                if (!string.Equals(item.DisplayName, profile.DisplayName, StringComparison.Ordinal) ||
-                    item.IsOnline != profile.IsOnline ||
-                    !string.Equals(item.AvatarUri, avatarUri, StringComparison.Ordinal))
+                var userId = item.Chat.OtherUserId(AuthState.UserId);
+                if (!string.IsNullOrWhiteSpace(userId))
                 {
-                    item.DisplayName = profile.DisplayName;
-                    item.IsOnline = profile.IsOnline;
-                    item.AvatarUri = avatarUri;
-                    changed = true;
+                    try
+                    {
+                        var profile = await _apiService.GetAsync<ProfileModel>($"api/User/profile/{Uri.EscapeDataString(userId)}");
+                        if (profile != null)
+                        {
+                            item.DisplayName = profile.DisplayName;
+                            avatarEndpoint = string.IsNullOrWhiteSpace(profile.AvatarUrl)
+                                ? null
+                                : $"api/User/profile/{Uri.EscapeDataString(userId)}/avatar?v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+                            item.IsOnline = profile.IsOnline;
+                        }
+                    }
+                    catch { }
                 }
             }
-            catch { }
+
+            var absoluteKey = string.IsNullOrWhiteSpace(avatarEndpoint) ? null : _apiService.BuildAbsoluteUrl(avatarEndpoint);
+            if (!string.Equals(item.AvatarUri, absoluteKey, StringComparison.OrdinalIgnoreCase))
+            {
+                item.AvatarUri = absoluteKey;
+                changed = true;
+                if (!string.IsNullOrWhiteSpace(avatarEndpoint))
+                {
+                    var image = await LoadConversationAvatarAsync(_apiService.BuildAbsoluteUrl(avatarEndpoint));
+                    item.AvatarSource = image;
+                }
+                else
+                {
+                    item.AvatarSource = null;
+                }
+            }
         }
 
-        // Rebind only when something actually changed. Rebinding the ItemsControl
-        // every second was making group avatars visibly disappear and reappear.
         if (changed)
             RefreshChatsList();
 
-        // Ensure the current group's header avatar gets loaded once, but never
-        // repeatedly replace the Image source while the presence timer is running.
-        if (_currentChatId.HasValue && IsCurrentGroupChat && ChatHeaderAvatarImage.Visibility != System.Windows.Visibility.Visible)
+        if (_currentChatId.HasValue && IsCurrentGroupChat && ChatHeaderAvatarImage.Visibility != Visibility.Visible)
             _ = RefreshCurrentGroupAvatarAsync();
     }
 
@@ -78,6 +80,9 @@ public partial class MainView
                 : new ApiService().BuildAbsoluteUrl(endpoint);
 
             using var http = new HttpClient();
+            if (!string.IsNullOrWhiteSpace(AuthState.Token))
+                http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", AuthState.Token);
+
             using var response = await http.GetAsync(absolute, HttpCompletionOption.ResponseHeadersRead);
             if (!response.IsSuccessStatusCode) return null;
 
