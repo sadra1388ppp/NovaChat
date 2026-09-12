@@ -1,12 +1,12 @@
-using System.Drawing;
-using Forms = System.Windows.Forms;
+using System.Windows;
+using NovaChat.Client.Views;
 
 namespace NovaChat.Client.Services;
 
 public static class NotificationService
 {
     private static readonly object SyncRoot = new();
-    private static Forms.NotifyIcon? _notifyIcon;
+    private static readonly List<NotificationWindow> ActiveNotifications = [];
 
     public static void ShowMessageNotification(string title, string message)
     {
@@ -15,50 +15,72 @@ public static class NotificationService
 
         try
         {
-            lock (SyncRoot)
+            Application.Current?.Dispatcher.Invoke(() =>
             {
-                _notifyIcon ??= CreateNotifyIcon();
-                _notifyIcon.BalloonTipTitle = title.Trim();
-                _notifyIcon.BalloonTipText = message.Trim();
-                _notifyIcon.ShowBalloonTip(3500);
-            }
+                var notification = new NotificationWindow(title.Trim(), message.Trim());
+                lock (SyncRoot)
+                {
+                    ActiveNotifications.Add(notification);
+                    RepositionNotifications();
+                }
+
+                notification.Closed += (_, _) =>
+                {
+                    lock (SyncRoot)
+                    {
+                        ActiveNotifications.Remove(notification);
+                        RepositionNotifications();
+                    }
+                };
+
+                notification.Show();
+                notification.Activate();
+            });
         }
-        catch
+        catch (Exception ex)
         {
-            // Notifications must never be allowed to break message delivery or the UI.
+            System.Diagnostics.Debug.WriteLine($"Notification failed: {ex}");
         }
     }
 
     public static void Dispose()
     {
-        lock (SyncRoot)
+        try
         {
-            if (_notifyIcon == null)
-                return;
-
-            try
+            Application.Current?.Dispatcher.Invoke(() =>
             {
-                _notifyIcon.Visible = false;
-                _notifyIcon.Dispose();
-            }
-            catch
-            {
-                // Best-effort cleanup during application shutdown.
-            }
-            finally
-            {
-                _notifyIcon = null;
-            }
+                lock (SyncRoot)
+                {
+                    foreach (var notification in ActiveNotifications.ToArray())
+                    {
+                        try { notification.Close(); } catch { }
+                    }
+                    ActiveNotifications.Clear();
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Notification cleanup failed: {ex}");
         }
     }
 
-    private static Forms.NotifyIcon CreateNotifyIcon()
+    private static void RepositionNotifications()
     {
-        return new Forms.NotifyIcon
+        var workArea = SystemParameters.WorkArea;
+        const double rightMargin = 18;
+        const double bottomMargin = 18;
+        const double gap = 10;
+        var bottom = workArea.Bottom - bottomMargin;
+
+        for (var i = ActiveNotifications.Count - 1; i >= 0; i--)
         {
-            Icon = SystemIcons.Information,
-            Visible = false,
-            Text = "NovaChat"
-        };
+            var notification = ActiveNotifications[i];
+            if (!notification.IsLoaded) continue;
+
+            notification.Left = workArea.Right - notification.Width - rightMargin;
+            notification.Top = bottom - notification.Height;
+            bottom -= notification.Height + gap;
+        }
     }
 }
