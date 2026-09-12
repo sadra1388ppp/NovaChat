@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 
@@ -16,9 +15,9 @@ public partial class MainView
             new RoutedEventHandler(E2eeCopyMenuItem_Click));
 
         EventManager.RegisterClassHandler(
-            typeof(MainView),
+            typeof(Border),
             FrameworkElement.LoadedEvent,
-            new RoutedEventHandler(E2eeMediaRecoveryLoaded));
+            new RoutedEventHandler(E2eeMediaBorderLoaded));
     }
 
     private static async void E2eeCopyMenuItem_Click(object sender, RoutedEventArgs e)
@@ -74,34 +73,29 @@ public partial class MainView
         if (directTextBlocks.Count == 0)
             return string.Empty;
 
-        var content = directTextBlocks.FirstOrDefault(textBlock =>
-            !textBlock.Text.Contains('\u200B', StringComparison.Ordinal) &&
-            !LooksLikeClock(textBlock.Text));
-
         var chat = mainView._currentChatId.HasValue
             ? mainView._chats.FirstOrDefault(x => x.Chat.Id == mainView._currentChatId.Value)?.Chat
             : null;
 
-        if (chat?.IsGroup == true && directTextBlocks.Count > 1)
-        {
-            var first = directTextBlocks[0];
-            if (string.Equals(first.Text, mainView.AuthenticatedDisplaySenderName(), StringComparison.OrdinalIgnoreCase) ||
-                !LooksLikeClock(first.Text))
-            {
-                content = directTextBlocks.Skip(1).FirstOrDefault(textBlock =>
-                    !textBlock.Text.Contains('\u200B', StringComparison.Ordinal) &&
-                    !LooksLikeClock(textBlock.Text));
-            }
-        }
+        var candidates = directTextBlocks
+            .Where(textBlock =>
+                !textBlock.Text.Contains("\u200B", StringComparison.Ordinal) &&
+                !LooksLikeClock(textBlock.Text))
+            .ToList();
 
-        return content?.Text?.Trim() ?? string.Empty;
+        if (chat?.IsGroup == true && candidates.Count > 1)
+            candidates.RemoveAt(0);
+
+        return candidates.FirstOrDefault()?.Text?.Trim() ?? string.Empty;
     }
-
-    private string AuthenticatedDisplaySenderName() => AuthState.Username ?? string.Empty;
 
     private static bool LooksLikeClock(string value)
     {
-        return TimeSpan.TryParseExact(value.Trim(), new[] { "hh\\:mm", "h\\:mm" }, null, out _);
+        return TimeSpan.TryParseExact(
+            value.Trim(),
+            new[] { "hh\:mm", "h\:mm" },
+            System.Globalization.CultureInfo.InvariantCulture,
+            out _);
     }
 
     private static Border? FindMessageRootBorderForCopy(DependencyObject element, Panel messagesPanel)
@@ -117,45 +111,26 @@ public partial class MainView
         return null;
     }
 
-    private static async void E2eeMediaRecoveryLoaded(object sender, RoutedEventArgs e)
+    private static async void E2eeMediaBorderLoaded(object sender, RoutedEventArgs e)
     {
-        if (sender is not MainView view)
+        if (sender is not Border border || border.Tag is not int messageId || messageId <= 0)
+            return;
+        if (!IsPendingMediaBubble(border))
+            return;
+        if (FindAncestor<MainView>(border) is not MainView view)
             return;
 
-        await view.RecoverUnrenderedMediaAsync();
-    }
+        await Task.Delay(350);
+        if (!IsPendingMediaBubble(border))
+            return;
 
-    private async Task RecoverUnrenderedMediaAsync()
-    {
-        for (var attempt = 0; attempt < 3; attempt++)
+        try
         {
-            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
-
-            var pending = MessagesPanel.Children
-                .OfType<Border>()
-                .Where(IsPendingMediaBubble)
-                .ToList();
-
-            if (pending.Count == 0)
-                return;
-
-            foreach (var border in pending)
-            {
-                if (border.Tag is not int messageId || messageId <= 0)
-                    continue;
-
-                try
-                {
-                    await RenderMediaBubbleAsync(border, messageId);
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"E2EE media recovery failed for message {messageId}: {ex}");
-                }
-            }
-
-            if (attempt < 2)
-                await Task.Delay(250);
+            await view.RenderMediaBubbleAsync(border, messageId);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"E2EE media recovery failed for message {messageId}: {ex}");
         }
     }
 
@@ -166,7 +141,7 @@ public partial class MainView
 
         return panel.Children
             .OfType<TextBlock>()
-            .Any(textBlock => textBlock.Text.Contains('\u200B', StringComparison.Ordinal));
+            .Any(textBlock => textBlock.Text.Contains("\u200B", StringComparison.Ordinal));
     }
 
     private static MainView? FindAncestor<T>(DependencyObject element) where T : DependencyObject
