@@ -13,6 +13,7 @@ public partial class MainView
     private readonly HashSet<int> _seenMessageIds = [];
     private bool _readReceiptHandlersRegistered;
     private DispatcherTimer? _unreadRefreshTimer;
+    private int? _lastAutoReadChatId;
     private static readonly bool ReadReceiptClassHandlerRegistered = RegisterReadReceiptClassHandler();
 
     private static bool RegisterReadReceiptClassHandler()
@@ -63,8 +64,27 @@ public partial class MainView
             var counts = await _apiService.GetAsync<Dictionary<string, int>>("api/message-read/unread") ?? [];
             await Dispatcher.InvokeAsync(() =>
             {
+                var currentChatId = _currentChatId;
+                var shouldMarkCurrentChatRead = currentChatId.HasValue && _lastAutoReadChatId != currentChatId.Value;
+
                 foreach (var item in _chats)
+                {
+                    // The conversation currently visible on screen is already being read.
+                    // Never let the background unread refresh put a badge back on it.
+                    if (currentChatId == item.Chat.Id)
+                    {
+                        item.UnreadCount = 0;
+                        continue;
+                    }
+
                     item.UnreadCount = counts.TryGetValue(item.Chat.Id.ToString(), out var count) ? count : 0;
+                }
+
+                if (shouldMarkCurrentChatRead)
+                {
+                    _lastAutoReadChatId = currentChatId;
+                    _ = MarkCurrentChatAsReadAsync();
+                }
             });
         }
         catch { }
