@@ -102,6 +102,59 @@ public sealed class E2eeCryptoService
         await api.PostAsync<RegisterDeviceRequest, RegisterDeviceResponse>("api/e2ee/devices", new RegisterDeviceRequest { DeviceId = _deviceId, PublicKeyPem = publicKeyPem });
     }
 
+    public async Task<string> EncryptForChatAsync(int chatId, string plaintext, ApiService api, CancellationToken cancellationToken = default)
+    {
+        await EnsureInitializedAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(plaintext))
+            throw new ArgumentException("Message cannot be empty.", nameof(plaintext));
+        if (plaintext.Length > MaxPlaintextLength)
+            throw new InvalidOperationException("Message is too large.");
+
+        var devices = await api.GetAsync<List<E2eeDeviceDto>>($"api/e2ee/chats/{chatId}/devices", cancellationToken);
+        if (devices == null || devices.Count == 0)
+            throw new InvalidOperationException("No trusted encryption devices are registered for this conversation. Ask every participant to open NovaChat once.");
+
+        var aesKey = RandomNumberGenerator.GetBytes(AesKeySize);
+        try
+        {
+            var nonce = RandomNumberGenerator.GetBytes(NonceSize);
+            var plain = Encoding.UTF8.GetBytes(plaintext);
+            var cipher = new byte[plain.Length];
+            var tag = new byte[TagSize];
+            using (var aes = new AesGcm(aesKey, TagSize))
+                aes.Encrypt(nonce, plain, cipher, tag);
+
+            var keys = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var device in devices.DistinctBy(x => x.DeviceId))
+            {
+                if (string.IsNullOrWhiteSpace(device.DeviceId) || string.IsNullOrWhiteSpace(device.PublicKeyPem))
+                    continue;
+
+                using var rsa = RSA.Create();
+                rsa.ImportFromPem(device.PublicKeyPem);
+                keys[device.DeviceId] = Convert.ToBase64String(rsa.Encrypt(aesKey, RSAEncryptionPadding.OaepSHA256));
+            }
+
+            if (keys.Count == 0)
+                throw new InvalidOperationException("No valid trusted encryption devices are registered for this conversation.");
+
+            var envelope = new E2eeEnvelope
+            {
+                Version = 1,
+                Algorithm = TextAlgorithm,
+                Nonce = Convert.ToBase64String(nonce),
+                Tag = Convert.ToBase64String(tag),
+                Ciphertext = Convert.ToBase64String(cipher),
+                Keys = keys
+            };
+            return JsonSerializer.Serialize(envelope, JsonOptions);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(aesKey);
+        }
+    }
+
     public async Task<MessageModel> DecryptMessageAsync(MessageModel message, CancellationToken cancellationToken = default)
     {
         await EnsureInitializedAsync(cancellationToken);
@@ -111,7 +164,6 @@ public sealed class E2eeCryptoService
 
         if (!E2eeEnvelope.TryParse(message.Content, out var envelope) || envelope == null)
         {
-            // DTOs for legacy media already contain their safe UI representation.
             if (message.MessageType is "image" or "file" or "voice") return message;
             message.Content = "[Legacy message — not E2EE]";
             return message;
@@ -264,9 +316,6 @@ public sealed class E2eeCryptoService
         var devices = await api.GetAsync<List<E2eeDeviceDto>>($"api/e2ee/chats/{chatId}/devices", cancellationToken);
         if (devices == null || devices.Count == 0) throw new InvalidOperationException("No trusted encryption devices are registered for this conversation. Ask every participant to open NovaChat once.");
 
-        var deviceIds = devices.Select(x => x.DeviceId).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.Ordinal).ToList();
-        if (deviceIds.Count == 0) throw new InvalidOperationException("No valid encryption devices are registered for this conversation.");
-
         var fileBytes = await File.ReadAllBytesAsync(filePath, cancellationToken);
         var aesKey = RandomNumberGenerator.GetBytes(AesKeySize);
         try
@@ -295,10 +344,16 @@ public sealed class E2eeCryptoService
             var keys = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var device in devices.DistinctBy(x => x.DeviceId))
             {
+                if (string.IsNullOrWhiteSpace(device.DeviceId) || string.IsNullOrWhiteSpace(device.PublicKeyPem))
+                    continue;
+
                 using var rsa = RSA.Create();
                 rsa.ImportFromPem(device.PublicKeyPem);
                 keys[device.DeviceId] = Convert.ToBase64String(rsa.Encrypt(aesKey, RSAEncryptionPadding.OaepSHA256));
             }
+
+            if (keys.Count == 0)
+                throw new InvalidOperationException("No valid trusted encryption devices are registered for this conversation.");
 
             var blobId = Guid.NewGuid().ToString("N");
             var envelope = new E2eeMediaEnvelope
@@ -440,10 +495,10 @@ public sealed class E2eeCryptoService
             {
                 var value = JsonSerializer.Deserialize<E2eeMediaEnvelope>(content[prefix.Length..], JsonOptions);
                 if (value == null || value.Version != 1 || value.Algorithm != MediaAlgorithm ||
-                    !Guid.TryParseExact(value.BlobId, "N", out _) || value.Keys.Count == 0 ||
+                    string.IsNullOrWhiteSpace(value.BlobId) || !Guid.TryParseExact(value.BlobId, "N", out _) ||
                     string.IsNullOrWhiteSpace(value.FileNonce) || string.IsNullOrWhiteSpace(value.FileTag) ||
                     string.IsNullOrWhiteSpace(value.MetadataNonce) || string.IsNullOrWhiteSpace(value.MetadataTag) ||
-                    string.IsNullOrWhiteSpace(value.MetadataCiphertext)) return false;
+                    string.IsNullOrWhiteSpace(value.MetadataCiphertext) || value.Keys.Count == 0) return false;
                 envelope = value;
                 return true;
             }
