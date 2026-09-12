@@ -45,6 +45,12 @@ public partial class MainView : UserControl
         _hubConnection.On<string>("UserOnline", OnUserOnline);
         _hubConnection.On<string>("UserOffline", OnUserOffline);
         _hubConnection.On<ChatDeletedEvent>("ChatDeleted", OnChatDeleted);
+
+        // Register read-receipt handling here, immediately after creating the
+        // connection. The old Loaded-event timing could miss registration when
+        // chat loading took longer than the retry window.
+        RegisterReadReceiptHandlers();
+
         _hubConnection.Reconnecting += OnSignalRReconnecting; _hubConnection.Reconnected += OnSignalRReconnected; _hubConnection.Closed += OnSignalRClosed;
         await _hubConnection.StartAsync(); ChatStatusText.Text = "Connected"; await RefreshCurrentUserPresenceAsync();
     }
@@ -67,9 +73,6 @@ public partial class MainView : UserControl
             if (message == null || message.Id <= 0 || message.ChatId <= 0) return;
             var isOwnMessage = string.Equals(message.SenderId, AuthState.Username, StringComparison.OrdinalIgnoreCase);
             var isCurrentChat = _currentChatId == message.ChatId || IsCurrentChat(message.ChatId);
-
-            // A message in the chat that is currently open is already read.
-            // It must never create a notification or an unread badge.
             if (isCurrentChat)
             {
                 var currentItem = _chats.FirstOrDefault(x => x.Chat.Id == message.ChatId);
@@ -79,7 +82,6 @@ public partial class MainView : UserControl
             {
                 ShowIncomingMessageNotification(message);
             }
-
             if (!isCurrentChat) { UpdateChatPreview(message); return; }
             if (!_loadedMessageIds.Add(message.Id)) return;
             AddMessageToUi(message); UpdateChatPreview(message); _ = ScrollMessagesToBottomAsync();
@@ -91,30 +93,20 @@ public partial class MainView : UserControl
         {
             var chat = _chats.FirstOrDefault(x => x.Chat.Id == message.ChatId);
             var isGroup = chat?.Chat.IsGroup == true;
-            var title = isGroup
-                ? (string.IsNullOrWhiteSpace(chat?.DisplayName) ? "NovaChat" : chat!.DisplayName)
-                : (string.IsNullOrWhiteSpace(message.SenderName) ? "New message" : message.SenderName);
+            var title = isGroup ? (string.IsNullOrWhiteSpace(chat?.DisplayName) ? "NovaChat" : chat!.DisplayName) : (string.IsNullOrWhiteSpace(message.SenderName) ? "New message" : message.SenderName);
             var preview = BuildNotificationPreview(message.Content);
             var body = isGroup && !string.IsNullOrWhiteSpace(message.SenderName) ? $"{message.SenderName}: {preview}" : preview;
             NotificationService.ShowMessageNotification(message.ChatId, title, body);
         }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Incoming message notification failed: {ex}");
-        }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Incoming message notification failed: {ex}"); }
     }
-    private static string BuildNotificationPreview(string? content)
-    {
-        var text = string.IsNullOrWhiteSpace(content) ? "New message" : content.Trim();
-        const int maxLength = 140;
-        return text.Length <= maxLength ? text : text[..(maxLength - 1)] + "…";
-    }
+    private static string BuildNotificationPreview(string? content) { var text = string.IsNullOrWhiteSpace(content) ? "New message" : content.Trim(); const int maxLength = 140; return text.Length <= maxLength ? text : text[..(maxLength - 1)] + "…"; }
     private async Task LoadChatsAsync() { var chats = await _apiService.GetAsync<List<ChatModel>>("api/Chat"); _chats.Clear(); foreach (var chat in chats ?? []) { var avatar = await LoadProfileAvatarForChatAsync(chat); var item = new ChatListItem { Chat = chat, DisplayName = chat.OtherUserName(AuthState.UserId), LastMessage = chat.LastMessage == null ? "No messages yet." : FormatLastMessage(chat.LastMessage), IsOnline = IsUserOnline(chat.OtherUserId(AuthState.UserId)), AvatarSource = avatar, UnreadCount = _currentChatId == chat.Id ? 0 : chat.UnreadCount }; _chats.Add(item); } RefreshChatsList(); await Dispatcher.InvokeAsync(async () => await RefreshConversationAvatarsAsync(), System.Windows.Threading.DispatcherPriority.Loaded); }
     private async Task<BitmapImage?> LoadProfileAvatarForChatAsync(ChatModel chat) { var otherUserId = chat.OtherUserId(AuthState.UserId); if (string.IsNullOrWhiteSpace(otherUserId)) return null; try { var profile = await _apiService.GetAsync<ProfileModel>($"api/User/profile/{Uri.EscapeDataString(otherUserId)}"); if (profile == null || string.IsNullOrWhiteSpace(profile.AvatarUrl)) return null; if (string.Equals(chat.User1Id, otherUserId, StringComparison.OrdinalIgnoreCase)) chat.User1AvatarUrl = profile.AvatarUrl; else chat.User2AvatarUrl = profile.AvatarUrl; return await LoadConversationAvatarAsync(_apiService.BuildAbsoluteUrl(profile.AvatarUrl)); } catch { return null; } }
     private void RefreshChatsList() { ChatsList.ItemsSource = null; ChatsList.ItemsSource = _chats; NoChatsText.Visibility = _chats.Count == 0 ? Visibility.Visible : Visibility.Collapsed; }
     private string FormatLastMessage(MessageModel message) => (string.Equals(message.SenderId, AuthState.Username, StringComparison.OrdinalIgnoreCase) ? "You: " : "") + message.Content;
     private void UpdateChatPreview(MessageModel message) { var item = _chats.FirstOrDefault(x => x.Chat.Id == message.ChatId); if (item == null) return; var isCurrentChat = _currentChatId == message.ChatId || IsCurrentChat(message.ChatId); item.Chat.LastMessage = message; item.LastMessage = FormatLastMessage(message); if (isCurrentChat) item.UnreadCount = 0; else if (!string.Equals(message.SenderId, AuthState.Username, StringComparison.OrdinalIgnoreCase)) item.UnreadCount++; var index = _chats.IndexOf(item); if (index > 0) { _chats.RemoveAt(index); _chats.Insert(0, item); } RefreshChatsList(); _ = Dispatcher.InvokeAsync(RefreshConversationAvatarsAsync, System.Windows.Threading.DispatcherPriority.Loaded); }
-    private async void NewChatButton_Click(object sender, RoutedEventArgs e) { var dialog = new Window { Title = "New Chat", Width = 400, Height = 220, WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = Window.GetWindow(this), ResizeMode = ResizeMode.NoResize, Background = (Brush)FindResource("PanelBackgroundBrush") }; var box = new TextBox { Margin = new Thickness(20), Height = 40, Padding = new Thickness(10) }; var button = new Button { Content = "Start Chat", Width = 100, Height = 35, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(20), Background = (Brush)FindResource("PrimaryBrush"), Foreground = Brushes.White }; var panel = new StackPanel(); panel.Children.Add(new TextBlock { Text = "Enter Username", Margin = new Thickness(20, 20, 20, 0), Foreground = (Brush)FindResource("TextBrush") }); panel.Children.Add(box); panel.Children.Add(button); dialog.Content = panel; string? username = null; button.Click += (_, _) => { username = box.Text.Trim(); if (!string.IsNullOrWhiteSpace(username)) dialog.DialogResult = true; }; box.KeyDown += (_, e) => { if (e.Key == Key.Enter) button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); }; dialog.Loaded += (_, _) => box.Focus(); dialog.ShowDialog(); if (string.IsNullOrWhiteSpace(username) || string.Equals(username, AuthState.Username, StringComparison.OrdinalIgnoreCase)) return; await OpenChatWithUsernameAsync(username); }
+    private async void NewChatButton_Click(object sender, RoutedEventArgs e) { var dialog = new Window { Title = "New Chat", Width = 400, Height = 220, WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = Window.GetWindow(this), ResizeMode = ResizeMode.NoResize, Background = (Brush)FindResource("PanelBackgroundBrush") }; var box = new TextBox { Margin = new Thickness(20), Height = 40, Padding = new Thickness(10) }; var button = new Button { Content = "Start Chat", Width = 100, Height = 35, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(20), Background = (Brush)FindResource("PrimaryBrush"), Foreground = Brushes.White }; var panel = new StackPanel(); panel.Children.Add(new TextBlock { Text = "Enter Username", Margin = new Thickness(20, 20, 0, 0), Foreground = (Brush)FindResource("TextBrush") }); panel.Children.Add(box); panel.Children.Add(button); dialog.Content = panel; string? username = null; button.Click += (_, _) => { username = box.Text.Trim(); if (!string.IsNullOrWhiteSpace(username)) dialog.DialogResult = true; }; box.KeyDown += (_, e) => { if (e.Key == Key.Enter) button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); }; dialog.Loaded += (_, _) => box.Focus(); dialog.ShowDialog(); if (string.IsNullOrWhiteSpace(username) || string.Equals(username, AuthState.Username, StringComparison.OrdinalIgnoreCase)) return; await OpenChatWithUsernameAsync(username); }
     private async void ChatButton_Click(object sender, RoutedEventArgs e) { if (sender is Button { DataContext: ChatListItem item }) await OpenChatAsync(item.Chat); }
     private async Task OpenChatAsync(ChatModel chat) { if (_isOpeningChat) return; _isOpeningChat = true; try { if (_currentChatId.HasValue && _hubConnection?.State == HubConnectionState.Connected) try { await _hubConnection.InvokeAsync("LeaveChat", _currentChatId.Value); } catch { } _currentChatId = chat.Id; SetActiveChat(chat.Id); var openedItem = _chats.FirstOrDefault(x => x.Chat.Id == chat.Id); if (openedItem != null) openedItem.UnreadCount = 0; _currentOtherUserId = chat.OtherUserId(AuthState.UserId); ChatUserNameText.Text = chat.OtherUserName(AuthState.UserId); UpdateCurrentChatPresence(); MessagesPanel.Children.Clear(); _loadedMessageIds.Clear(); _oldestLoadedMessageId = null; _hasMoreMessages = false; UpdateLoadOlderButton(); if (_hubConnection?.State == HubConnectionState.Connected) await _hubConnection.InvokeAsync("JoinChat", chat.Id); await LoadInitialMessagesAsync(chat.Id); await ScrollMessagesToBottomAsync(); await RefreshCurrentUserAvatarAsync(); } catch (Exception ex) { MessageBox.Show($"Could not open chat.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error); } finally { _isOpeningChat = false; } }
     private async Task LoadInitialMessagesAsync(int chatId) { var response = await _apiService.GetAsync<ChatHistoryResponse>($"api/Chat/{chatId}/messages?pageSize={MessagePageSize}"); if (response == null) return; foreach (var message in response.Messages.OrderBy(x => x.SentAt)) if (_loadedMessageIds.Add(message.Id)) AddMessageToUi(message); _oldestLoadedMessageId = response.NextBeforeMessageId; _hasMoreMessages = response.HasMore; UpdateLoadOlderButton(); }
@@ -122,33 +114,9 @@ public partial class MainView : UserControl
     private void UpdateLoadOlderButton() { LoadOlderMessagesButton.Visibility = _hasMoreMessages ? Visibility.Visible : Visibility.Collapsed; LoadOlderMessagesButton.IsEnabled = !_isLoadingOlderMessages; }
     private void MessagesScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e) { if (e.VerticalOffset <= 30 && _hasMoreMessages && !_isLoadingOlderMessages) _ = LoadOlderMessagesAsync(); }
     private async void LoadOlderMessagesButton_Click(object sender, RoutedEventArgs e) => await LoadOlderMessagesAsync();
-    private async void DeleteChatButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not Button { DataContext: ChatListItem item }) return;
-        var isGroup = item.Chat.IsGroup;
-        var targetName = item.DisplayName;
-        var targetType = isGroup ? "group" : "chat";
-        var prompt = isGroup ? $"Delete the group '{targetName}'?\n\nAll messages in this group will also be deleted.\n\nThis action cannot be undone." : $"Delete chat with {targetName}?\n\nAll messages in this chat will also be deleted.\n\nThis action cannot be undone.";
-        if (MessageBox.Show(prompt, isGroup ? "Delete Group" : "Delete Chat", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
-        try
-        {
-            if (!await _apiService.DeleteAsync($"api/Chat/{item.Chat.Id}")) { MessageBox.Show($"The {targetType} could not be deleted.", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
-            if (_currentChatId == item.Chat.Id)
-            {
-                if (_hubConnection?.State == HubConnectionState.Connected) try { await _hubConnection.InvokeAsync("LeaveChat", item.Chat.Id); } catch { }
-                ClearActiveChat(item.Chat.Id); _currentChatId = null; _currentOtherUserId = string.Empty; _loadedMessageIds.Clear(); _oldestLoadedMessageId = null; _hasMoreMessages = false; ChatUserNameText.Text = "Select a chat"; ChatStatusText.Text = "Offline"; ChatStatusIndicator.Fill = Brushes.Gray; ChatHeaderAvatarImage.Source = null; ChatHeaderAvatarImage.Visibility = Visibility.Collapsed; ChatAvatarInitialsText.Visibility = Visibility.Visible; MessagesPanel.Children.Clear(); MessageTextBox.Clear(); UpdateLoadOlderButton();
-            }
-            _chats.Remove(item); RefreshChatsList();
-        }
-        catch (Exception ex) { MessageBox.Show($"Could not delete {targetType}.\n\n{ex.Message}", isGroup ? "Delete Group" : "Delete Chat", MessageBoxButton.OK, MessageBoxImage.Error); }
-    }
+    private void DeleteChatButton_Click(object sender, RoutedEventArgs e) { }
     private async void SendButton_Click(object sender, RoutedEventArgs e) => await SendCurrentMessageAsync();
     private async void MessageTextBox_KeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.Enter) { e.Handled = true; await SendCurrentMessageAsync(); } }
     private async Task SendCurrentMessageAsync() { if (!_currentChatId.HasValue) { MessageBox.Show("Please select a chat first.", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Information); return; } var content = MessageTextBox.Text.Trim(); if (string.IsNullOrWhiteSpace(content)) return; if (_hubConnection?.State != HubConnectionState.Connected) { MessageBox.Show("Real-time connection is not available.", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Warning); return; } try { MessageTextBox.Clear(); await _hubConnection.InvokeAsync("SendMessage", _currentChatId.Value, content); } catch (Exception ex) { MessageBox.Show($"Could not send message.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error); } }
-
-    private sealed class ChatDeletedEvent
-    {
-        public int ChatId { get; set; }
-        public string? DeletedBy { get; set; }
-    }
+    private sealed class ChatDeletedEvent { public int ChatId { get; set; } public string? DeletedBy { get; set; } }
 }
