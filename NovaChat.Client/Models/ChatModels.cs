@@ -17,6 +17,7 @@ public class ChatModel
     public string? User2AvatarUrl { get; set; }
     public DateTime CreatedAt { get; set; }
     public MessageModel? LastMessage { get; set; }
+    public int UnreadCount { get; set; }
     public bool IsGroup => string.Equals(Type, "Group", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "1", StringComparison.OrdinalIgnoreCase);
     public string OtherUserId(string currentUserId) => IsGroup ? string.Empty : string.Equals(User1Id, currentUserId, StringComparison.OrdinalIgnoreCase) ? User2Id : User1Id;
     public string OtherUserName(string currentUserId) => IsGroup ? Name : string.Equals(User1Id, currentUserId, StringComparison.OrdinalIgnoreCase) ? User2Name : User1Name;
@@ -37,6 +38,7 @@ public class MessageModel
     public string? ContentType { get; set; }
     public long? FileSize { get; set; }
     public double? DurationSeconds { get; set; }
+    public string DeliveryState { get; set; } = "sent";
 }
 
 public class ChatHistoryResponse { public List<MessageModel> Messages { get; set; } = []; public bool HasMore { get; set; } public int? NextBeforeMessageId { get; set; } }
