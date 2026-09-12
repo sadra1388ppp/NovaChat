@@ -17,6 +17,15 @@ public sealed class MessageReadController(ChatService chatService, MessageReadSe
         return Ok(await messageReadService.GetUnreadCountsAsync(userId, cancellationToken));
     }
 
+    [HttpGet("{chatId}/sent")]
+    public async Task<IActionResult> GetSentMessageReadStates(int chatId, CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        if (!await chatService.CanAccessChatAsync(chatId, userId)) return Forbid();
+        var ids = await messageReadService.GetReadMessageIdsForSenderAsync(chatId, userId, cancellationToken);
+        return Ok(new { chatId, messageIds = ids });
+    }
+
     [HttpPost("{chatId}/read")]
     public async Task<IActionResult> MarkRead(int chatId, CancellationToken cancellationToken)
     {
