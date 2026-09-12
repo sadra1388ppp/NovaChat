@@ -87,7 +87,7 @@ public partial class MainView : UserControl
                 : (string.IsNullOrWhiteSpace(message.SenderName) ? "New message" : message.SenderName);
             var preview = BuildNotificationPreview(message.Content);
             var body = isGroup && !string.IsNullOrWhiteSpace(message.SenderName) ? $"{message.SenderName}: {preview}" : preview;
-            NotificationService.ShowMessageNotification(title, body);
+            NotificationService.ShowMessageNotification(message.ChatId, title, body);
         }
         catch (Exception ex)
         {
