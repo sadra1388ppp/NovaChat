@@ -310,7 +310,7 @@ public sealed class RsaOnlyCryptoService
             try
             {
                 var value = JsonSerializer.Deserialize<RsaEnvelope>(content, JsonOptions);
-                if (value == null || value.Version != 1 || value.Algorithm != Algorithm ||
+                if (value == null || value.Version != 1 || value.Algorithm != RsaOnlyCryptoService.Algorithm ||
                     value.ChunkSize <= 0 || value.ChunkSize > RsaOaepMaxPlaintextBytes || value.Chunks.Count == 0)
                     return false;
 
