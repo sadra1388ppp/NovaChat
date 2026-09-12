@@ -1,4 +1,5 @@
-﻿using System.Windows;
+using System.Windows;
+using NovaChat.Client.Services;
 using NovaChat.Client.Views;
 
 namespace NovaChat.Client
@@ -7,6 +8,7 @@ namespace NovaChat.Client
     {
         private bool _isOwner;
         private string? _pendingChatUsername;
+        private MainView? _mainView;
 
         public MainWindow()
         {
@@ -19,7 +21,17 @@ namespace NovaChat.Client
         {
             _isOwner = false;
             _pendingChatUsername = null;
+
+            NotificationService.Dispose();
+
+            if (_mainView != null)
+            {
+                MainContainer.Children.Remove(_mainView);
+                _mainView = null;
+            }
+
             MainContainer.Children.Clear();
+
             LoginView loginView = new LoginView();
             loginView.CreateAccountRequested += ShowRegister;
             loginView.LoginSuccessful += HandleNormalUserLogin;
@@ -27,8 +39,17 @@ namespace NovaChat.Client
             MainContainer.Children.Add(loginView);
         }
 
-        private void HandleNormalUserLogin() { _isOwner = false; ShowMain(); }
-        private void HandleOwnerLogin() { _isOwner = true; ShowMain(); }
+        private void HandleNormalUserLogin()
+        {
+            _isOwner = false;
+            ShowMain();
+        }
+
+        private void HandleOwnerLogin()
+        {
+            _isOwner = true;
+            ShowMain();
+        }
 
         public void ShowRegister()
         {
@@ -41,16 +62,28 @@ namespace NovaChat.Client
         public void ShowMain()
         {
             MainContainer.Children.Clear();
-            MainView mainView = new MainView();
-            mainView.ProfileRequested += ShowProfile;
-            mainView.SettingsRequested += ShowSettings;
-            mainView.SetOwnerMode(_isOwner);
-            MainContainer.Children.Add(mainView);
+
+            if (_mainView == null)
+            {
+                _mainView = new MainView();
+                _mainView.ProfileRequested += ShowProfile;
+                _mainView.SettingsRequested += ShowSettings;
+            }
+
+            _mainView.SetOwnerMode(_isOwner);
+            MainContainer.Children.Add(_mainView);
+
             if (!string.IsNullOrWhiteSpace(_pendingChatUsername))
             {
                 var username = _pendingChatUsername;
                 _pendingChatUsername = null;
-                mainView.Loaded += async (_, _) => await mainView.OpenChatWithUsernameAsync(username);
+                _mainView.Loaded += OpenPendingChatOnce;
+
+                async void OpenPendingChatOnce(object? sender, RoutedEventArgs e)
+                {
+                    _mainView!.Loaded -= OpenPendingChatOnce;
+                    await _mainView.OpenChatWithUsernameAsync(username);
+                }
             }
         }
 
