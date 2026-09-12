@@ -145,7 +145,7 @@ public partial class MainView
     {
         using var client = new HttpClient { BaseAddress = new Uri("http://localhost:5256/") };
         if (!string.IsNullOrWhiteSpace(AuthState.Token)) client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", AuthState.Token);
-        using var request = new HttpRequestMessage(HttpMethod.Delete, $"api/message-deletion/{messageId") } { Content = JsonContent.Create(new { Mode = mode }) };
+        using var request = new HttpRequestMessage(HttpMethod.Delete, $"api/message-deletion/{messageId}") { Content = JsonContent.Create(new { Mode = mode }) };
         using var response = await client.SendAsync(request);
         return response.IsSuccessStatusCode;
     }
