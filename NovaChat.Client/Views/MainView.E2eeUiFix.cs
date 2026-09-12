@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Threading;
 
 namespace NovaChat.Client.Views;
 
@@ -20,7 +19,7 @@ public partial class MainView
             new RoutedEventHandler(E2eeMediaBorderLoaded));
     }
 
-    private static async void E2eeCopyMenuItem_Click(object sender, RoutedEventArgs e)
+    private static void E2eeCopyMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not MenuItem item || !string.Equals(item.Header?.ToString(), "Copy message", StringComparison.Ordinal))
             return;
@@ -56,8 +55,6 @@ public partial class MainView
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
         }
-
-        await Task.CompletedTask;
     }
 
     private static string ExtractVisibleMessageText(Border messageBorder, MainView mainView)
@@ -65,37 +62,22 @@ public partial class MainView
         if (messageBorder.Child is not StackPanel panel)
             return string.Empty;
 
-        var directTextBlocks = panel.Children
+        var candidates = panel.Children
             .OfType<TextBlock>()
             .Where(textBlock => !string.IsNullOrWhiteSpace(textBlock.Text))
             .ToList();
 
-        if (directTextBlocks.Count == 0)
+        if (candidates.Count == 0)
             return string.Empty;
 
         var chat = mainView._currentChatId.HasValue
             ? mainView._chats.FirstOrDefault(x => x.Chat.Id == mainView._currentChatId.Value)?.Chat
             : null;
 
-        var candidates = directTextBlocks
-            .Where(textBlock =>
-                !textBlock.Text.Contains("\u200B", StringComparison.Ordinal) &&
-                !LooksLikeClock(textBlock.Text))
-            .ToList();
-
         if (chat?.IsGroup == true && candidates.Count > 1)
             candidates.RemoveAt(0);
 
         return candidates.FirstOrDefault()?.Text?.Trim() ?? string.Empty;
-    }
-
-    private static bool LooksLikeClock(string value)
-    {
-        return TimeSpan.TryParseExact(
-            value.Trim(),
-            new[] { "hh\:mm", "h\:mm" },
-            System.Globalization.CultureInfo.InvariantCulture,
-            out _);
     }
 
     private static Border? FindMessageRootBorderForCopy(DependencyObject element, Panel messagesPanel)
