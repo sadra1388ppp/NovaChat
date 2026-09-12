@@ -13,7 +13,6 @@ public partial class MainView
     private readonly HashSet<int> _seenMessageIds = [];
     private bool _readReceiptHandlersRegistered;
     private DispatcherTimer? _unreadRefreshTimer;
-    private int? _lastAutoReadChatId;
     private static readonly bool ReadReceiptClassHandlerRegistered = RegisterReadReceiptClassHandler();
 
     private static bool RegisterReadReceiptClassHandler()
@@ -61,6 +60,12 @@ public partial class MainView
     {
         try
         {
+            // Persist the currently open conversation as read BEFORE asking the
+            // server for unread counts. This makes the read state authoritative
+            // on the server instead of relying only on the local badge state.
+            if (_currentChatId.HasValue)
+                await MarkCurrentChatAsReadAsync();
+
             var counts = await _apiService.GetAsync<Dictionary<string, int>>("api/message-read/unread") ?? [];
             await Dispatcher.InvokeAsync(() =>
             {
@@ -92,9 +97,8 @@ public partial class MainView
             var item = _chats.FirstOrDefault(x => x.Chat.Id == chatId);
             if (item != null) item.UnreadCount = 0;
 
-            // Persist the read state immediately. This is the important part:
-            // once the user has actually opened the conversation, those messages
-            // must not come back as unread after switching to another chat.
+            // Persist the read state immediately. MessageReads uses a primary key
+            // per message/user, so repeating this operation is safe and idempotent.
             if (_hubConnection?.State == HubConnectionState.Connected)
                 await _hubConnection.InvokeAsync("MarkChatAsRead", chatId);
             else
