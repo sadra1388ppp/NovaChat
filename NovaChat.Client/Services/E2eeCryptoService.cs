@@ -1,4 +1,5 @@
 using NovaChat.Client.Models;
+using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -18,7 +19,7 @@ public sealed class E2eeCryptoService
     private RSA? _privateKey;
     private string _deviceId = string.Empty;
 
-    private string KeyFilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NovaChat", "e2ee-device.json");
+    private string KeyFilePath => System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NovaChat", "e2ee-device.json");
 
     public async Task InitializeAsync(ApiService api, CancellationToken cancellationToken = default)
     {
@@ -27,7 +28,9 @@ public sealed class E2eeCryptoService
         try
         {
             if (_privateKey != null && !string.IsNullOrWhiteSpace(_deviceId)) return;
-            Directory.CreateDirectory(Path.GetDirectoryName(KeyFilePath)!);
+            var directory = System.IO.Path.GetDirectoryName(KeyFilePath);
+            if (!string.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
+
             if (File.Exists(KeyFilePath))
             {
                 try
@@ -60,7 +63,10 @@ public sealed class E2eeCryptoService
                 await File.WriteAllBytesAsync(KeyFilePath, protectedBytes, cancellationToken);
             }
         }
-        finally { _initializeLock.Release(); }
+        finally
+        {
+            _initializeLock.Release();
+        }
 
         var publicKeyPem = _privateKey!.ExportSubjectPublicKeyInfoPem();
         await api.PostAsync<RegisterDeviceRequest, RegisterDeviceResponse>("api/e2ee/devices", new RegisterDeviceRequest { DeviceId = _deviceId, PublicKeyPem = publicKeyPem });
@@ -84,17 +90,33 @@ public sealed class E2eeCryptoService
         try
         {
             var key = _privateKey!.Decrypt(Convert.FromBase64String(wrappedKey), RSAEncryptionPadding.OaepSHA256);
-            var nonce = Convert.FromBase64String(envelope.Nonce);
-            var tag = Convert.FromBase64String(envelope.Tag);
-            var cipher = Convert.FromBase64String(envelope.Ciphertext);
-            var plain = new byte[cipher.Length];
-            using var aes = new AesGcm(key, TagSize);
-            aes.Decrypt(nonce, cipher, tag, plain);
-            CryptographicOperations.ZeroMemory(key);
-            message.Content = Encoding.UTF8.GetString(plain);
+            try
+            {
+                var nonce = Convert.FromBase64String(envelope.Nonce);
+                var tag = Convert.FromBase64String(envelope.Tag);
+                var cipher = Convert.FromBase64String(envelope.Ciphertext);
+                var plain = new byte[cipher.Length];
+                using var aes = new AesGcm(key, TagSize);
+                aes.Decrypt(nonce, cipher, tag, plain);
+                message.Content = Encoding.UTF8.GetString(plain);
+                return message;
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(key);
+            }
+        }
+        catch (CryptographicException)
+        {
+            message.Content = "[Encrypted message — unable to decrypt]";
             return message;
         }
-        catch (Exception) when (true)
+        catch (FormatException)
+        {
+            message.Content = "[Encrypted message — unable to decrypt]";
+            return message;
+        }
+        catch (ArgumentException)
         {
             message.Content = "[Encrypted message — unable to decrypt]";
             return message;
@@ -111,45 +133,72 @@ public sealed class E2eeCryptoService
         if (devices == null || devices.Count == 0) throw new InvalidOperationException("No trusted encryption devices are registered for this conversation. Ask every participant to open NovaChat once.");
 
         var aesKey = RandomNumberGenerator.GetBytes(AesKeySize);
-        var nonce = RandomNumberGenerator.GetBytes(NonceSize);
-        var plain = Encoding.UTF8.GetBytes(plaintext);
-        var cipher = new byte[plain.Length];
-        var tag = new byte[TagSize];
-        using (var aes = new AesGcm(aesKey, TagSize)) aes.Encrypt(nonce, plain, cipher, tag);
-
-        var keys = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var device in devices.DistinctBy(x => x.DeviceId))
+        try
         {
-            using var rsa = RSA.Create();
-            rsa.ImportFromPem(device.PublicKeyPem);
-            var wrapped = rsa.Encrypt(aesKey, RSAEncryptionPadding.OaepSHA256);
-            keys[device.DeviceId] = Convert.ToBase64String(wrapped);
+            var nonce = RandomNumberGenerator.GetBytes(NonceSize);
+            var plain = Encoding.UTF8.GetBytes(plaintext);
+            var cipher = new byte[plain.Length];
+            var tag = new byte[TagSize];
+            using (var aes = new AesGcm(aesKey, TagSize))
+                aes.Encrypt(nonce, plain, cipher, tag);
+
+            var keys = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var device in devices.DistinctBy(x => x.DeviceId))
+            {
+                using var rsa = RSA.Create();
+                rsa.ImportFromPem(device.PublicKeyPem);
+                var wrapped = rsa.Encrypt(aesKey, RSAEncryptionPadding.OaepSHA256);
+                keys[device.DeviceId] = Convert.ToBase64String(wrapped);
+            }
+
+            var envelope = new E2eeEnvelope
+            {
+                Version = 1,
+                Algorithm = "AES-256-GCM+RSA-OAEP-SHA256",
+                Nonce = Convert.ToBase64String(nonce),
+                Tag = Convert.ToBase64String(tag),
+                Ciphertext = Convert.ToBase64String(cipher),
+                Keys = keys
+            };
+            return JsonSerializer.Serialize(envelope, JsonOptions);
         }
-        CryptographicOperations.ZeroMemory(aesKey);
-
-        var envelope = new E2eeEnvelope
+        finally
         {
-            Version = 1,
-            Algorithm = "AES-256-GCM+RSA-OAEP-SHA256",
-            Nonce = Convert.ToBase64String(nonce),
-            Tag = Convert.ToBase64String(tag),
-            Ciphertext = Convert.ToBase64String(cipher),
-            Keys = keys
-        };
-        return JsonSerializer.Serialize(envelope, JsonOptions);
+            CryptographicOperations.ZeroMemory(aesKey);
+        }
     }
 
-    private async Task EnsureInitializedAsync(CancellationToken cancellationToken)
+    private Task EnsureInitializedAsync(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (_privateKey == null || string.IsNullOrWhiteSpace(_deviceId))
             throw new InvalidOperationException("E2EE is not initialized.");
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
-    private sealed class StoredDevice { public string DeviceId { get; set; } = string.Empty; public string PrivateKeyPem { get; set; } = string.Empty; }
-    private sealed class RegisterDeviceRequest { public string DeviceId { get; set; } = string.Empty; public string PublicKeyPem { get; set; } = string.Empty; }
-    private sealed class RegisterDeviceResponse { public string DeviceId { get; set; } = string.Empty; }
-    private sealed class E2eeDeviceDto { public string DeviceId { get; set; } = string.Empty; public string UserId { get; set; } = string.Empty; public string PublicKeyPem { get; set; } = string.Empty; }
+    private sealed class StoredDevice
+    {
+        public string DeviceId { get; set; } = string.Empty;
+        public string PrivateKeyPem { get; set; } = string.Empty;
+    }
+
+    private sealed class RegisterDeviceRequest
+    {
+        public string DeviceId { get; set; } = string.Empty;
+        public string PublicKeyPem { get; set; } = string.Empty;
+    }
+
+    private sealed class RegisterDeviceResponse
+    {
+        public string DeviceId { get; set; } = string.Empty;
+    }
+
+    private sealed class E2eeDeviceDto
+    {
+        public string DeviceId { get; set; } = string.Empty;
+        public string UserId { get; set; } = string.Empty;
+        public string PublicKeyPem { get; set; } = string.Empty;
+    }
 
     private sealed class E2eeEnvelope
     {
