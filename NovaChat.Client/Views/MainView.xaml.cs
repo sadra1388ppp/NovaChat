@@ -29,7 +29,7 @@ public partial class MainView : UserControl
 
     public MainView()
     {
-        InitializeComponent(); InitializeConversationAvatarFix();
+        InitializeComponent(); ResetActiveChat(); InitializeConversationAvatarFix();
         if (!_messageDeletionHandlerRegistered) { EventManager.RegisterClassHandler(typeof(Border), UIElement.MouseRightButtonUpEvent, new MouseButtonEventHandler(OnMessageBubbleRightClick)); _messageDeletionHandlerRegistered = true; }
         SetOwnerMode(false); Loaded += MainView_Loaded; Unloaded += MainView_Unloaded; StartMessageDeletionHook();
     }
@@ -66,7 +66,7 @@ public partial class MainView : UserControl
         {
             if (message == null || message.Id <= 0 || message.ChatId <= 0) return;
             var isOwnMessage = string.Equals(message.SenderId, AuthState.Username, StringComparison.OrdinalIgnoreCase);
-            var isCurrentChat = IsCurrentChat(message.ChatId);
+            var isCurrentChat = _currentChatId == message.ChatId || IsCurrentChat(message.ChatId);
 
             if (!isOwnMessage && !isCurrentChat)
                 ShowIncomingMessageNotification(message);
