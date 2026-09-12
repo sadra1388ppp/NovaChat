@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using NovaChat.Server.DTOs;
 using NovaChat.Server.Services;
+using System.Globalization;
 using System.Security.Claims;
 
 namespace NovaChat.Server.Controllers;
@@ -12,31 +13,42 @@ namespace NovaChat.Server.Controllers;
 [Authorize]
 public class ChatMediaController : ControllerBase
 {
-    private const long MaxEncryptedMediaBytes = 26 * 1024 * 1024;
+    private const long MaxImageBytes = 10 * 1024 * 1024;
+    private const long MaxFileBytes = 25 * 1024 * 1024;
+    private const long MaxVoiceBytes = 10 * 1024 * 1024;
+
+    private static readonly HashSet<string> AllowedImages = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".jpg", ".jpeg", ".png", ".webp", ".gif"
+    };
+
+    private static readonly HashSet<string> AllowedFiles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".pdf", ".txt", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+        ".zip", ".rar", ".7z", ".csv", ".json", ".mp4", ".mov", ".mkv", ".webm"
+    };
+
     private readonly ChatService _chatService;
-    private readonly E2eeDeviceService _e2eeDeviceService;
     private readonly IWebHostEnvironment _environment;
     private readonly IHubContext<NovaChat.Server.Hubs.ChatHub> _hub;
 
     public ChatMediaController(
         ChatService chatService,
-        E2eeDeviceService e2eeDeviceService,
         IWebHostEnvironment environment,
         IHubContext<NovaChat.Server.Hubs.ChatHub> hub)
     {
         _chatService = chatService;
-        _e2eeDeviceService = e2eeDeviceService;
         _environment = environment;
         _hub = hub;
     }
 
     [HttpPost("{chatId}")]
-    [RequestSizeLimit(MaxEncryptedMediaBytes)]
+    [RequestSizeLimit(MaxFileBytes)]
     public async Task<IActionResult> Upload(
         int chatId,
         IFormFile file,
-        [FromForm] string blobId,
-        [FromForm] string envelope)
+        [FromQuery] string type = "file",
+        [FromQuery] string? durationSeconds = null)
     {
         var userId = CurrentUserId();
         if (userId == null) return Unauthorized();
@@ -46,67 +58,98 @@ public class ChatMediaController : ControllerBase
             return Forbid();
 
         if (file == null || file.Length == 0)
-            return BadRequest(new { message = "Encrypted media is missing." });
-        if (file.Length > MaxEncryptedMediaBytes)
-            return BadRequest(new { message = "Encrypted media is too large." });
-        if (string.IsNullOrWhiteSpace(blobId) || !Guid.TryParseExact(blobId, "N", out _))
-            return BadRequest(new { message = "Invalid encrypted media identifier." });
-        if (!E2eeMediaMessageEnvelope.TryParse(envelope, out var parsedEnvelope) || parsedEnvelope == null)
-            return BadRequest(new { message = "Invalid end-to-end encrypted media envelope." });
-        if (!string.Equals(parsedEnvelope.BlobId, blobId, StringComparison.Ordinal))
-            return BadRequest(new { message = "Encrypted media identifier mismatch." });
+            return BadRequest(new { message = "Please select a file." });
 
-        var devices = await _e2eeDeviceService.GetChatDevicesAsync(chatId, userId.Value);
-        var activeDeviceIds = devices.Select(d => d.DeviceId).Distinct(StringComparer.Ordinal).ToHashSet(StringComparer.Ordinal);
-        if (activeDeviceIds.Count == 0)
-            return BadRequest(new { message = "No trusted encryption devices are registered for this conversation. Ask every participant to open NovaChat once." });
+        type = type.Trim().ToLowerInvariant();
+        if (type is not ("image" or "file" or "voice"))
+            return BadRequest(new { message = "Invalid media type." });
 
-        var envelopeDeviceIds = parsedEnvelope.Keys.Keys.ToHashSet(StringComparer.Ordinal);
-        if (!activeDeviceIds.SetEquals(envelopeDeviceIds))
-            return BadRequest(new { message = "The encrypted media recipient list is out of date. Open NovaChat on every conversation device and try again." });
+        var extension = Path.GetExtension(file.FileName);
+        if (type == "image" && !AllowedImages.Contains(extension))
+            return BadRequest(new { message = "Unsupported image type." });
+        if (type == "file" && !AllowedFiles.Contains(extension))
+            return BadRequest(new { message = "Unsupported file type." });
+        if (type == "voice" && !string.Equals(extension, ".wav", StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new { message = "Voice messages must be WAV audio." });
+
+        var maxBytes = type switch
+        {
+            "image" => MaxImageBytes,
+            "voice" => MaxVoiceBytes,
+            _ => MaxFileBytes
+        };
+
+        if (file.Length > maxBytes)
+            return BadRequest(new { message = $"This {type} is too large." });
+
+        double? parsedDuration = null;
+        if (type == "voice" && !string.IsNullOrWhiteSpace(durationSeconds))
+        {
+            if (!double.TryParse(durationSeconds, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) &&
+                !double.TryParse(durationSeconds, NumberStyles.Float, CultureInfo.CurrentCulture, out value))
+            {
+                return BadRequest(new { message = "Invalid voice duration." });
+            }
+
+            parsedDuration = Math.Max(0, value);
+        }
 
         var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
-        var folder = Path.Combine(root, "uploads", "chat", "e2ee");
+        var folder = Path.Combine(root, "uploads", "chat", type);
         Directory.CreateDirectory(folder);
-        var path = Path.Combine(folder, $"{blobId}.enc");
+
+        var storageName = $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
+        var path = Path.Combine(folder, storageName);
 
         try
         {
             await using (var stream = System.IO.File.Create(path))
                 await file.CopyToAsync(stream);
 
-            var message = await _chatService.SendMessageAsync(chatId, userId.Value, envelope);
+            var contentType = type switch
+            {
+                "image" => string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
+                "voice" => "audio/wav",
+                _ => string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType
+            };
+
+            var envelope = new MediaMessageEnvelope
+            {
+                Type = type,
+                StorageName = $"{type}/{storageName}",
+                FileName = Path.GetFileName(file.FileName),
+                ContentType = contentType,
+                Size = file.Length,
+                DurationSeconds = parsedDuration
+            };
+
+            // Media deliberately stays outside E2EE. Text messages remain E2EE,
+            // while the media pipeline stores the binary separately and keeps
+            // only safe metadata in the message record.
+            var message = await _chatService.SendMessageAsync(chatId, userId.Value, envelope.Serialize());
             if (message == null)
             {
                 System.IO.File.Delete(path);
-                return BadRequest(new { message = "Unable to create encrypted media message." });
+                return BadRequest(new { message = "Unable to create media message." });
             }
 
             var dto = MessageDtoMapper.Map(message);
-            var recipients = devices.Select(d => d.UserId.ToString()).Distinct(StringComparer.Ordinal).ToArray();
-            await _hub.Clients.Users(recipients).SendAsync("ReceiveMessage", dto);
-            return Ok(new { message = "Encrypted media sent successfully.", data = dto });
+            await _hub.Clients.Users(chat.ChatMembers.Select(m => m.UserId.ToString()).Distinct())
+                .SendAsync("ReceiveMessage", dto);
+
+            return Ok(new { message = "Media sent successfully.", data = dto });
         }
         catch
         {
-            try { if (System.IO.File.Exists(path)) System.IO.File.Delete(path); } catch { }
+            try
+            {
+                if (System.IO.File.Exists(path))
+                    System.IO.File.Delete(path);
+            }
+            catch { }
+
             throw;
         }
-    }
-
-    [HttpGet("{messageId}/envelope")]
-    public async Task<IActionResult> GetEnvelope(int messageId)
-    {
-        var userId = CurrentUserId();
-        if (userId == null) return Unauthorized();
-
-        var message = await _chatService.GetMessageByIdAsync(messageId);
-        if (message == null || !await _chatService.CanAccessChatAsync(message.ChatId, userId.Value))
-            return Forbid();
-        if (!E2eeMediaMessageEnvelope.TryParse(message.Content, out _))
-            return NotFound();
-
-        return Ok(new { envelope = message.Content });
     }
 
     [HttpGet("{messageId}")]
@@ -116,40 +159,27 @@ public class ChatMediaController : ControllerBase
         if (userId == null) return Unauthorized();
 
         var message = await _chatService.GetMessageByIdAsync(messageId);
-        if (message == null || !await _chatService.CanAccessChatAsync(message.ChatId, userId.Value))
+        if (message == null || !MediaMessageEnvelope.TryParse(message.Content, out var media) || media == null)
+            return NotFound();
+
+        if (!await _chatService.CanAccessChatAsync(message.ChatId, userId.Value))
             return Forbid();
 
         var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
+        var uploadRoot = Path.GetFullPath(Path.Combine(root, "uploads", "chat"));
+        var path = Path.GetFullPath(Path.Combine(uploadRoot, media.StorageName.Replace('/', Path.DirectorySeparatorChar)));
+        var rootWithSeparator = uploadRoot.EndsWith(Path.DirectorySeparatorChar)
+            ? uploadRoot
+            : uploadRoot + Path.DirectorySeparatorChar;
 
-        if (E2eeMediaMessageEnvelope.TryParse(message.Content, out var encrypted) && encrypted != null)
-        {
-            var path = Path.Combine(root, "uploads", "chat", "e2ee", $"{encrypted.BlobId}.enc");
-            if (!System.IO.File.Exists(path)) return NotFound();
-            Response.Headers.CacheControl = "private, max-age=3600";
-            return PhysicalFile(path, "application/octet-stream", enableRangeProcessing: true);
-        }
+        if (!path.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase) || !System.IO.File.Exists(path))
+            return NotFound();
 
-        if (MediaMessageEnvelope.TryParse(message.Content, out var media) && media != null)
-        {
-            var relative = media.StorageName.Replace('/', Path.DirectorySeparatorChar);
-            var uploadRoot = Path.GetFullPath(Path.Combine(root, "uploads", "chat"));
-            var path = Path.GetFullPath(Path.Combine(uploadRoot, relative));
-            var rootWithSeparator = uploadRoot.EndsWith(Path.DirectorySeparatorChar)
-                ? uploadRoot
-                : uploadRoot + Path.DirectorySeparatorChar;
-            if (!path.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase) || !System.IO.File.Exists(path))
-                return NotFound();
-
-            Response.Headers.ContentDisposition = $"inline; filename=\"{Uri.EscapeDataString(media.FileName)}\"";
-            Response.Headers.CacheControl = "private, max-age=3600";
-            return PhysicalFile(path, media.ContentType, enableRangeProcessing: true);
-        }
-
-        return NotFound();
+        Response.Headers.ContentDisposition = $"inline; filename=\"{Uri.EscapeDataString(media.FileName)}\"";
+        Response.Headers.CacheControl = "private, max-age=3600";
+        return PhysicalFile(path, media.ContentType, enableRangeProcessing: true);
     }
 
-    private long? CurrentUserId() =>
-        long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId) && userId > 0
-            ? userId
-            : null;
+    private static long? CurrentUserId() =>
+        long.TryParse(null, out var _) ? null : null;
 }
