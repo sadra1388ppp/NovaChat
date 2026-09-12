@@ -4,6 +4,7 @@
 -- Chats has no User1Id/User2Id columns.
 -- Chat deletion is a soft delete: IsDeleted/DeletedAt preserve records for security and auditability.
 -- Messages store SenderId as the sender username for human-readable audit/history display.
+-- MessageReads stores durable per-user read receipts for professional unread/seen behavior.
 -- Select/create the target database separately. This is not an in-place upgrade.
 -- All application dates are UTC.
 
@@ -64,4 +65,14 @@ CREATE TABLE `Contacts` (
     KEY `IX_Contacts_ContactUserId` (`ContactUserId`),
     CONSTRAINT `FK_Contacts_Users_OwnerUserId` FOREIGN KEY (`OwnerUserId`) REFERENCES `Users` (`Id`) ON DELETE CASCADE,
     CONSTRAINT `FK_Contacts_Users_ContactUserId` FOREIGN KEY (`ContactUserId`) REFERENCES `Users` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `MessageReads` (
+    `MessageId` INT NOT NULL,
+    `UserId` BIGINT NOT NULL,
+    `ReadAt` DATETIME(6) NOT NULL,
+    PRIMARY KEY (`MessageId`, `UserId`),
+    KEY `IX_MessageReads_UserId` (`UserId`),
+    CONSTRAINT `FK_MessageReads_Messages_MessageId` FOREIGN KEY (`MessageId`) REFERENCES `Messages` (`Id`) ON DELETE CASCADE,
+    CONSTRAINT `FK_MessageReads_Users_UserId` FOREIGN KEY (`UserId`) REFERENCES `Users` (`Id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
