@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Net.Http;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
@@ -529,9 +530,21 @@ namespace NovaChat.Client.Views
                     result.User.DisplayName,
                     result.User.Email);
 
-                // Owner identity is the public Username, not the internal database Id.
-                const string ownerUsername = "BlackRoom";
-                if (string.Equals(result.User.Username, ownerUsername, StringComparison.OrdinalIgnoreCase))
+                // Ask the server whether this authenticated account has OwnerOnly access.
+                // This keeps the client in sync with Owner:Username from appsettings.json and
+                // avoids hard-coding a specific Owner username in the WPF application.
+                var isOwner = false;
+                try
+                {
+                    await _apiService.GetAsync<OwnerAccessResponse>("api/Admin/test");
+                    isOwner = true;
+                }
+                catch (HttpRequestException)
+                {
+                    isOwner = false;
+                }
+
+                if (isOwner)
                     OwnerLoginSuccessful?.Invoke();
                 else
                     LoginSuccessful?.Invoke();
@@ -547,6 +560,11 @@ namespace NovaChat.Client.Views
                 if (lifetimeToken is { IsCancellationRequested: false })
                     LoginButton.IsEnabled = true;
             }
+        }
+
+        private sealed class OwnerAccessResponse
+        {
+            public string? Message { get; set; }
         }
 
         private void CreateAccountButton_Click(object sender, RoutedEventArgs e)
