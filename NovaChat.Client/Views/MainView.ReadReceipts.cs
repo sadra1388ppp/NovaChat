@@ -26,7 +26,7 @@ public partial class MainView
     {
         if (sender is not MainView view) return;
         for (var i = 0; i < 30 && view._hubConnection == null; i++) await Task.Delay(100);
-        if (view._hubConnection != null) view.RegisterReadReceiptHandlers();
+        view.RegisterReadReceiptHandlers();
         await view.RefreshUnreadCountsAsync();
         view.StartUnreadRefreshTimer();
     }
@@ -38,6 +38,7 @@ public partial class MainView
         await Task.Delay(350);
         if (view._currentChatId != item.Chat.Id) return;
         await view.MarkCurrentChatAsReadAsync();
+        await view.RefreshSentReadStatesAsync(item.Chat.Id);
         view.UpdateMessageReceiptsUi();
     }
 
@@ -66,11 +67,13 @@ public partial class MainView
             if (_currentChatId.HasValue)
                 await MarkCurrentChatAsReadAsync();
 
+            var currentChatId = _currentChatId;
+            if (currentChatId.HasValue)
+                await RefreshSentReadStatesAsync(currentChatId.Value);
+
             var counts = await _apiService.GetAsync<Dictionary<string, int>>("api/message-read/unread") ?? [];
             await Dispatcher.InvokeAsync(() =>
             {
-                var currentChatId = _currentChatId;
-
                 foreach (var item in _chats)
                 {
                     // The conversation currently visible on screen is always read.
@@ -105,6 +108,31 @@ public partial class MainView
                 await _apiService.PostAsync<object, ReadMessagesResponse>($"api/message-read/{chatId}/read", new { });
         }
         catch { }
+    }
+
+    private async Task RefreshSentReadStatesAsync(int chatId)
+    {
+        try
+        {
+            var response = await _apiService.GetAsync<ReadMessagesResponse>($"api/message-read/{chatId}/sent");
+            if (response == null || response.MessageIds == null || response.MessageIds.Count == 0)
+            {
+                await Dispatcher.InvokeAsync(UpdateMessageReceiptsUi);
+                return;
+            }
+
+            await Dispatcher.InvokeAsync(() =>
+            {
+                foreach (var messageId in response.MessageIds)
+                    _seenMessageIds.Add(messageId);
+
+                UpdateMessageReceiptsUi();
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Could not refresh sent message read states: {ex}");
+        }
     }
 
     private void OnMessagesRead(MessagesReadEvent evt)
