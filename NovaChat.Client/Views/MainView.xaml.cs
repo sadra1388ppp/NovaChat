@@ -60,7 +60,46 @@ public partial class MainView : UserControl
     private bool IsUserOnline(string id) => !string.IsNullOrWhiteSpace(id) && _onlineUserIds.Contains(id);
     private void RefreshPresenceUi() { foreach (var item in _chats) item.IsOnline = IsUserOnline(item.Chat.OtherUserId(AuthState.UserId)); RefreshChatsList(); UpdateCurrentChatPresence(); }
     private void UpdateCurrentChatPresence() { if (string.IsNullOrWhiteSpace(_currentOtherUserId)) { ChatStatusText.Text = "Offline"; ChatStatusIndicator.Fill = Brushes.Gray; return; } var online = IsUserOnline(_currentOtherUserId); ChatStatusText.Text = online ? "Online" : "Offline"; ChatStatusIndicator.Fill = online ? Brushes.LimeGreen : Brushes.Gray; }
-    private async void OnMessageReceived(MessageModel message) { await Dispatcher.InvokeAsync(() => { if (_currentChatId != message.ChatId) { UpdateChatPreview(message); return; } if (!_loadedMessageIds.Add(message.Id)) return; AddMessageToUi(message); UpdateChatPreview(message); _ = ScrollMessagesToBottomAsync(); }); }
+    private async void OnMessageReceived(MessageModel message)
+    {
+        await Dispatcher.InvokeAsync(() =>
+        {
+            if (message == null || message.Id <= 0 || message.ChatId <= 0) return;
+            var isOwnMessage = string.Equals(message.SenderId, AuthState.Username, StringComparison.OrdinalIgnoreCase);
+            var isCurrentChat = _currentChatId == message.ChatId;
+
+            if (!isOwnMessage && !isCurrentChat)
+                ShowIncomingMessageNotification(message);
+
+            if (!isCurrentChat) { UpdateChatPreview(message); return; }
+            if (!_loadedMessageIds.Add(message.Id)) return;
+            AddMessageToUi(message); UpdateChatPreview(message); _ = ScrollMessagesToBottomAsync();
+        });
+    }
+    private void ShowIncomingMessageNotification(MessageModel message)
+    {
+        try
+        {
+            var chat = _chats.FirstOrDefault(x => x.Chat.Id == message.ChatId);
+            var isGroup = chat?.Chat.IsGroup == true;
+            var title = isGroup
+                ? (string.IsNullOrWhiteSpace(chat?.DisplayName) ? "NovaChat" : chat!.DisplayName)
+                : (string.IsNullOrWhiteSpace(message.SenderName) ? "New message" : message.SenderName);
+            var preview = BuildNotificationPreview(message.Content);
+            var body = isGroup && !string.IsNullOrWhiteSpace(message.SenderName) ? $"{message.SenderName}: {preview}" : preview;
+            NotificationService.ShowMessageNotification(title, body);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Incoming message notification failed: {ex}");
+        }
+    }
+    private static string BuildNotificationPreview(string? content)
+    {
+        var text = string.IsNullOrWhiteSpace(content) ? "New message" : content.Trim();
+        const int maxLength = 140;
+        return text.Length <= maxLength ? text : text[..(maxLength - 1)] + "…";
+    }
     private async Task LoadChatsAsync() { var chats = await _apiService.GetAsync<List<ChatModel>>("api/Chat"); _chats.Clear(); foreach (var chat in chats ?? []) { var avatar = await LoadProfileAvatarForChatAsync(chat); var item = new ChatListItem { Chat = chat, DisplayName = chat.OtherUserName(AuthState.UserId), LastMessage = chat.LastMessage == null ? "No messages yet." : FormatLastMessage(chat.LastMessage), IsOnline = IsUserOnline(chat.OtherUserId(AuthState.UserId)), AvatarSource = avatar }; _chats.Add(item); } RefreshChatsList(); await Dispatcher.InvokeAsync(async () => await RefreshConversationAvatarsAsync(), System.Windows.Threading.DispatcherPriority.Loaded); }
     private async Task<BitmapImage?> LoadProfileAvatarForChatAsync(ChatModel chat) { var otherUserId = chat.OtherUserId(AuthState.UserId); if (string.IsNullOrWhiteSpace(otherUserId)) return null; try { var profile = await _apiService.GetAsync<ProfileModel>($"api/User/profile/{Uri.EscapeDataString(otherUserId)}"); if (profile == null || string.IsNullOrWhiteSpace(profile.AvatarUrl)) return null; if (string.Equals(chat.User1Id, otherUserId, StringComparison.OrdinalIgnoreCase)) chat.User1AvatarUrl = profile.AvatarUrl; else chat.User2AvatarUrl = profile.AvatarUrl; return await LoadConversationAvatarAsync(_apiService.BuildAbsoluteUrl(profile.AvatarUrl)); } catch { return null; } }
     private void RefreshChatsList() { ChatsList.ItemsSource = null; ChatsList.ItemsSource = _chats; NoChatsText.Visibility = _chats.Count == 0 ? Visibility.Visible : Visibility.Collapsed; }
