@@ -13,11 +13,6 @@ public partial class MainView
             MenuItem.ClickEvent,
             new RoutedEventHandler(E2eeCopyMenuItem_Click));
 
-        EventManager.RegisterClassHandler(
-            typeof(Border),
-            FrameworkElement.LoadedEvent,
-            new RoutedEventHandler(E2eeMediaBorderLoaded));
-
         RegisterGroupUiHandlers();
     }
 
@@ -93,38 +88,5 @@ public partial class MainView
         }
 
         return null;
-    }
-
-    private static async void E2eeMediaBorderLoaded(object sender, RoutedEventArgs e)
-    {
-        if (sender is not Border border || border.Tag is not int messageId || messageId <= 0)
-            return;
-        if (!IsPendingMediaBubble(border))
-            return;
-        if (FindAncestor<MainView>(border) is not MainView view)
-            return;
-
-        await Task.Delay(350);
-        if (!IsPendingMediaBubble(border))
-            return;
-
-        try
-        {
-            await view.RenderMediaBubbleAsync(border, messageId);
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"E2EE media recovery failed for message {messageId}: {ex}");
-        }
-    }
-
-    private static bool IsPendingMediaBubble(Border border)
-    {
-        if (border.Child is not StackPanel panel)
-            return false;
-
-        return panel.Children
-            .OfType<TextBlock>()
-            .Any(textBlock => textBlock.Text.Contains("\u200B", StringComparison.Ordinal));
     }
 }
