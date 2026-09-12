@@ -18,16 +18,41 @@ public sealed class E2eeCryptoService
     private readonly SemaphoreSlim _initializeLock = new(1, 1);
     private RSA? _privateKey;
     private string _deviceId = string.Empty;
+    private string _initializedUserId = string.Empty;
 
-    private string KeyFilePath => System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NovaChat", "e2ee-device.json");
+    private string KeyFilePath
+    {
+        get
+        {
+            var userId = string.IsNullOrWhiteSpace(AuthState.UserId) ? "unknown" : AuthState.UserId.Trim();
+            return System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "NovaChat",
+                "e2ee",
+                $"device-{userId}.json");
+        }
+    }
 
     public async Task InitializeAsync(ApiService api, CancellationToken cancellationToken = default)
     {
-        if (_privateKey != null && !string.IsNullOrWhiteSpace(_deviceId)) return;
+        var currentUserId = AuthState.UserId.Trim();
+        if (string.IsNullOrWhiteSpace(currentUserId))
+            throw new InvalidOperationException("E2EE requires an authenticated user.");
+
+        if (_privateKey != null && !string.IsNullOrWhiteSpace(_deviceId) && _initializedUserId == currentUserId)
+            return;
+
         await _initializeLock.WaitAsync(cancellationToken);
         try
         {
-            if (_privateKey != null && !string.IsNullOrWhiteSpace(_deviceId)) return;
+            if (_privateKey != null && !string.IsNullOrWhiteSpace(_deviceId) && _initializedUserId == currentUserId)
+                return;
+
+            _privateKey?.Dispose();
+            _privateKey = null;
+            _deviceId = string.Empty;
+            _initializedUserId = currentUserId;
+
             var directory = System.IO.Path.GetDirectoryName(KeyFilePath);
             if (!string.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
 
@@ -171,8 +196,9 @@ public sealed class E2eeCryptoService
     private Task EnsureInitializedAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (_privateKey == null || string.IsNullOrWhiteSpace(_deviceId))
-            throw new InvalidOperationException("E2EE is not initialized.");
+        var currentUserId = AuthState.UserId.Trim();
+        if (_privateKey == null || string.IsNullOrWhiteSpace(_deviceId) || _initializedUserId != currentUserId)
+            throw new InvalidOperationException("E2EE is not initialized for the current user.");
         return Task.CompletedTask;
     }
 
