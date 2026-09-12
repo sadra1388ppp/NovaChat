@@ -5,8 +5,9 @@ namespace NovaChat.Client.Views;
 public partial class MainView
 {
     private static MainView? _activeMainView;
+    private static readonly bool _notificationStateHandlersRegistered = RegisterNotificationStateHandlers();
 
-    static MainView()
+    private static bool RegisterNotificationStateHandlers()
     {
         EventManager.RegisterClassHandler(
             typeof(MainView),
@@ -17,6 +18,8 @@ public partial class MainView
             typeof(MainView),
             FrameworkElement.UnloadedEvent,
             new RoutedEventHandler(OnMainViewUnloaded));
+
+        return true;
     }
 
     private static void OnMainViewLoaded(object sender, RoutedEventArgs e)
