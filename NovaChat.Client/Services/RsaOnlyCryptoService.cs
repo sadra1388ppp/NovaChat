@@ -8,9 +8,8 @@ namespace NovaChat.Client.Services;
 
 /// <summary>
 /// Experimental RSA-only text encryption.
-/// IMPORTANT: This is intentionally a prototype to compare against the hybrid AES+RSA design.
 /// RSA-OAEP can only encrypt small payloads, so plaintext UTF-8 bytes are split into chunks.
-/// Media remains outside E2EE and is handled by the normal media upload flow.
+/// Media remains outside E2EE and uses the normal authenticated media flow.
 /// </summary>
 public sealed class RsaOnlyCryptoService
 {
@@ -18,7 +17,7 @@ public sealed class RsaOnlyCryptoService
     private const int OaepHashBytes = 32; // SHA-256
     private const int RsaModulusBytes = RsaKeySize / 8;
     private const int RsaOaepMaxPlaintextBytes = RsaModulusBytes - (2 * OaepHashBytes) - 2;
-    private const int ChunkSize = 190; // Safely below RSA-3072/OAEP-SHA256 maximum of 318 bytes.
+    private const int ChunkSize = 190;
     private const int MaxPlaintextBytes = 60_000;
     private const string Algorithm = "RSA-3072-OAEP-SHA256-CHUNKED";
 
@@ -126,62 +125,57 @@ public sealed class RsaOnlyCryptoService
             throw new ArgumentException("Message cannot be empty.", nameof(plaintext));
 
         var plainBytes = Encoding.UTF8.GetBytes(plaintext);
-        if (plainBytes.Length > MaxPlaintextBytes)
-            throw new InvalidOperationException($"RSA-only messages are limited to {MaxPlaintextBytes:N0} UTF-8 bytes in this experiment.");
-
-        var devices = await api.GetAsync<List<E2eeDeviceDto>>(
-            $"api/e2ee/chats/{chatId}/devices", cancellationToken);
-
-        if (devices == null || devices.Count == 0)
-            throw new InvalidOperationException("No trusted encryption devices are registered for this conversation.");
-
-        if (ChunkSize > RsaOaepMaxPlaintextBytes)
-            throw new InvalidOperationException("RSA chunk size configuration is invalid.");
-
-        var chunks = new List<string>();
-        using var rsa = RSA.Create();
-        foreach (var chunk in Chunk(plainBytes, ChunkSize))
+        try
         {
-            // RSA-only experiment: every plaintext chunk is encrypted directly with
-            // every recipient device's RSA public key. There is no AES content key.
-            // The first recipient's result is stored as the primary payload while
-            // all recipients get their own ciphertext list below.
-            _ = chunk;
-        }
+            if (plainBytes.Length > MaxPlaintextBytes)
+                throw new InvalidOperationException($"RSA-only messages are limited to {MaxPlaintextBytes:N0} UTF-8 bytes in this experiment.");
 
-        var encryptedForDevices = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-        foreach (var device in devices.DistinctBy(x => x.DeviceId))
-        {
-            if (string.IsNullOrWhiteSpace(device.DeviceId) || string.IsNullOrWhiteSpace(device.PublicKeyPem))
-                continue;
+            var devices = await api.GetAsync<List<E2eeDeviceDto>>(
+                $"api/e2ee/chats/{chatId}/devices", cancellationToken);
 
-            using var deviceRsa = RSA.Create();
-            deviceRsa.ImportFromPem(device.PublicKeyPem);
-            var encryptedChunks = new List<string>();
+            if (devices == null || devices.Count == 0)
+                throw new InvalidOperationException("No trusted encryption devices are registered for this conversation.");
 
-            foreach (var chunk in Chunk(plainBytes, ChunkSize))
+            if (ChunkSize > RsaOaepMaxPlaintextBytes)
+                throw new InvalidOperationException("RSA chunk size configuration is invalid.");
+
+            var encryptedForDevices = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+            foreach (var device in devices.DistinctBy(x => x.DeviceId))
             {
-                var encrypted = deviceRsa.Encrypt(chunk, RSAEncryptionPadding.OaepSHA256);
-                encryptedChunks.Add(Convert.ToBase64String(encrypted));
+                if (string.IsNullOrWhiteSpace(device.DeviceId) || string.IsNullOrWhiteSpace(device.PublicKeyPem))
+                    continue;
+
+                using var deviceRsa = RSA.Create();
+                deviceRsa.ImportFromPem(device.PublicKeyPem);
+                var encryptedChunks = new List<string>();
+
+                foreach (var chunk in Chunk(plainBytes, ChunkSize))
+                {
+                    var encrypted = deviceRsa.Encrypt(chunk, RSAEncryptionPadding.OaepSHA256);
+                    encryptedChunks.Add(Convert.ToBase64String(encrypted));
+                    CryptographicOperations.ZeroMemory(chunk);
+                }
+
+                encryptedForDevices[device.DeviceId] = encryptedChunks;
             }
 
-            encryptedForDevices[device.DeviceId] = encryptedChunks;
+            if (encryptedForDevices.Count == 0)
+                throw new InvalidOperationException("No valid trusted encryption devices are registered for this conversation.");
+
+            var envelope = new RsaEnvelope
+            {
+                Version = 1,
+                Algorithm = Algorithm,
+                ChunkSize = ChunkSize,
+                Chunks = encryptedForDevices
+            };
+
+            return JsonSerializer.Serialize(envelope, JsonOptions);
         }
-
-        CryptographicOperations.ZeroMemory(plainBytes);
-
-        if (encryptedForDevices.Count == 0)
-            throw new InvalidOperationException("No valid trusted encryption devices are registered for this conversation.");
-
-        var envelope = new RsaEnvelope
+        finally
         {
-            Version = 1,
-            Algorithm = Algorithm,
-            ChunkSize = ChunkSize,
-            Chunks = encryptedForDevices
-        };
-
-        return JsonSerializer.Serialize(envelope, JsonOptions);
+            CryptographicOperations.ZeroMemory(plainBytes);
+        }
     }
 
     public async Task<MessageModel> DecryptMessageAsync(
@@ -216,19 +210,28 @@ public sealed class RsaOnlyCryptoService
                 var cipher = Convert.FromBase64String(encryptedChunk);
                 var plain = _privateKey!.Decrypt(cipher, RSAEncryptionPadding.OaepSHA256);
                 if (plain.Length == 0 || plain.Length > envelope.ChunkSize)
+                {
+                    CryptographicOperations.ZeroMemory(plain);
                     throw new CryptographicException("RSA chunk size is invalid.");
+                }
 
                 await buffer.WriteAsync(plain, cancellationToken);
                 CryptographicOperations.ZeroMemory(plain);
             }
 
             var plainBytes = buffer.ToArray();
-            if (plainBytes.Length > MaxPlaintextBytes)
-                throw new CryptographicException("RSA plaintext is too large.");
+            try
+            {
+                if (plainBytes.Length > MaxPlaintextBytes)
+                    throw new CryptographicException("RSA plaintext is too large.");
 
-            message.Content = Encoding.UTF8.GetString(plainBytes);
-            CryptographicOperations.ZeroMemory(plainBytes);
-            return message;
+                message.Content = Encoding.UTF8.GetString(plainBytes);
+                return message;
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(plainBytes);
+            }
         }
         catch (CryptographicException)
         {
@@ -247,13 +250,13 @@ public sealed class RsaOnlyCryptoService
         }
     }
 
-    private async Task EnsureInitializedAsync(CancellationToken cancellationToken)
+    private Task EnsureInitializedAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var currentUserId = AuthState.UserId.Trim();
         if (_privateKey == null || string.IsNullOrWhiteSpace(_deviceId) || _initializedUserId != currentUserId)
             throw new InvalidOperationException("RSA encryption is not initialized for the current user.");
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
     private static IEnumerable<byte[]> Chunk(byte[] source, int chunkSize)
