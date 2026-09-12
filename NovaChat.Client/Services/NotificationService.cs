@@ -13,10 +13,22 @@ public static class NotificationService
         if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(message))
             return;
 
+        // The message event can arrive from an older MainView instance while WPF is
+        // transitioning between views. Always make the final notification decision
+        // against the currently active MainView, not the instance that received the event.
+        if (MainView.IsCurrentChatNotification(title))
+            return;
+
         try
         {
             Application.Current?.Dispatcher.Invoke(() =>
             {
+                // Re-check on the UI thread immediately before displaying the popup.
+                // This closes the race where the user opens the chat while the event
+                // is waiting to be dispatched.
+                if (MainView.IsCurrentChatNotification(title))
+                    return;
+
                 var notification = new NotificationWindow(title.Trim(), message.Trim());
                 lock (SyncRoot)
                 {
