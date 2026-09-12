@@ -65,12 +65,9 @@ public class ChatHub : Hub
         if (!await _chatService.CanAccessChatAsync(chatId, userId) && !IsOwner()) throw new HubException("You do not have access to this chat.");
         var messageIds = await _messageReadService.MarkChatAsReadAsync(chatId, userId);
         if (messageIds.Count == 0) return;
-        await Clients.Users(Recipients(await _chatService.GetChatByIdAsync(chatId)!)).SendAsync("MessagesRead", new
-        {
-            ChatId = chatId,
-            ReaderUserId = userId.ToString(),
-            MessageIds = messageIds
-        });
+        var chat = await _chatService.GetChatByIdAsync(chatId);
+        if (chat == null) return;
+        await Clients.Users(Recipients(chat)).SendAsync("MessagesRead", new { ChatId = chatId, ReaderUserId = userId.ToString(), MessageIds = messageIds });
     }
 
     public async Task DeleteMessage(int messageId)
@@ -78,7 +75,8 @@ public class ChatHub : Hub
         if (!TryGetCurrentUserId(out var userId)) throw new HubException("Unauthorized.");
         var message = await _chatService.GetMessageByIdAsync(messageId);
         if (message == null) throw new HubException("Message not found.");
-        if (!IsOwner() && (message.SenderId != userId.ToString(System.Globalization.CultureInfo.InvariantCulture) || !await _chatService.CanAccessChatAsync(message.ChatId, userId))) throw new HubException("You do not have permission to delete this message.");
+        var username = Context.User?.FindFirst("username")?.Value;
+        if (!IsOwner() && (!string.Equals(message.SenderId, username, StringComparison.OrdinalIgnoreCase) || !await _chatService.CanAccessChatAsync(message.ChatId, userId))) throw new HubException("You do not have permission to delete this message.");
         var chat = await _chatService.GetChatByIdAsync(message.ChatId);
         if (chat == null || !await _chatService.DeleteMessageAsync(messageId)) throw new HubException("Unable to send deletion.");
         await Clients.Users(Recipients(chat)).SendAsync("MessageDeleted", new { id = message.Id, chatId = message.ChatId, senderId = message.SenderId, content = message.Content, sentAt = message.SentAt });
