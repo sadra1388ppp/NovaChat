@@ -48,6 +48,72 @@ CREATE TABLE IF NOT EXISTS `MessageReads` (
         finally { await context.Database.CloseConnectionAsync(); }
     }
 
+    public async Task<List<int>> GetReadMessageIdsForSenderAsync(int chatId, long senderId, CancellationToken cancellationToken = default)
+    {
+        var senderUsername = await context.Users.AsNoTracking()
+            .Where(u => u.Id == senderId)
+            .Select(u => u.Username)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(senderUsername)) return [];
+
+        var chat = await context.Chats.AsNoTracking()
+            .Where(c => c.Id == chatId && !c.IsDeleted)
+            .Select(c => new { c.Members })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (chat == null) return [];
+
+        var memberUsernames = (chat.Members ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(x => !string.Equals(x, senderUsername, StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (memberUsernames.Count == 0) return [];
+
+        var recipientIds = await context.Users.AsNoTracking()
+            .Where(u => memberUsernames.Contains(u.Username))
+            .Select(u => u.Id)
+            .ToListAsync(cancellationToken);
+
+        if (recipientIds.Count != memberUsernames.Count) return [];
+
+        var connection = context.Database.GetDbConnection();
+        await context.Database.OpenConnectionAsync(cancellationToken);
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = @"
+SELECT m.Id
+FROM Messages m
+JOIN (
+    SELECT mr.MessageId, COUNT(DISTINCT mr.UserId) AS ReadCount
+    FROM MessageReads mr
+    WHERE mr.UserId <> @senderId
+    GROUP BY mr.MessageId
+) r ON r.MessageId = m.Id
+WHERE m.ChatId = @chatId
+  AND m.SenderId = @senderUsername
+  AND m.DeletedForEveryone = 0
+  AND r.ReadCount >= @recipientCount
+ORDER BY m.Id";
+
+            AddParameter(command, "@senderId", senderId);
+            AddParameter(command, "@chatId", chatId);
+            AddParameter(command, "@senderUsername", senderUsername);
+            AddParameter(command, "@recipientCount", recipientIds.Count);
+
+            var result = new List<int>();
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+                result.Add(reader.GetInt32(0));
+
+            return result;
+        }
+        finally { await context.Database.CloseConnectionAsync(); }
+    }
+
     public async Task<Dictionary<int, int>> GetUnreadCountsAsync(long userId, CancellationToken cancellationToken = default)
     {
         var username = await context.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => u.Username).FirstOrDefaultAsync(cancellationToken);
