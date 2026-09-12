@@ -27,7 +27,6 @@ CREATE TABLE IF NOT EXISTS `MessageReads` (
             .OrderBy(m => m.Id)
             .Select(m => m.Id)
             .ToListAsync(cancellationToken);
-
         if (ids.Count == 0) return [];
 
         var connection = context.Database.GetDbConnection();
@@ -37,19 +36,12 @@ CREATE TABLE IF NOT EXISTS `MessageReads` (
             var readIds = new List<int>();
             foreach (var messageId in ids)
             {
-                await using var exists = connection.CreateCommand();
-                exists.CommandText = "SELECT 1 FROM MessageReads WHERE MessageId=@messageId AND UserId=@userId LIMIT 1";
-                AddParameter(exists, "@messageId", messageId);
-                AddParameter(exists, "@userId", userId);
-                var alreadyRead = await exists.ExecuteScalarAsync(cancellationToken);
-                if (alreadyRead != null) continue;
-
                 await using var insert = connection.CreateCommand();
-                insert.CommandText = "INSERT INTO MessageReads (MessageId, UserId, ReadAt) VALUES (@messageId, @userId, UTC_TIMESTAMP(6))";
+                insert.CommandText = "INSERT IGNORE INTO MessageReads (MessageId, UserId, ReadAt) VALUES (@messageId, @userId, UTC_TIMESTAMP(6))";
                 AddParameter(insert, "@messageId", messageId);
                 AddParameter(insert, "@userId", userId);
-                await insert.ExecuteNonQueryAsync(cancellationToken);
-                readIds.Add(messageId);
+                var affected = await insert.ExecuteNonQueryAsync(cancellationToken);
+                if (affected > 0) readIds.Add(messageId);
             }
             return readIds;
         }
@@ -60,7 +52,6 @@ CREATE TABLE IF NOT EXISTS `MessageReads` (
     {
         var username = await context.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => u.Username).FirstOrDefaultAsync(cancellationToken);
         if (string.IsNullOrWhiteSpace(username)) return [];
-
         var result = new Dictionary<int, int>();
         var connection = context.Database.GetDbConnection();
         await context.Database.OpenConnectionAsync(cancellationToken);
@@ -90,13 +81,13 @@ GROUP BY m.ChatId";
     public async Task<bool> AreAllRecipientsReadAsync(int messageId, long senderId, CancellationToken cancellationToken = default)
     {
         var username = await context.Users.AsNoTracking().Where(u => u.Id == senderId).Select(u => u.Username).FirstOrDefaultAsync(cancellationToken);
-        var chat = await context.Chats.AsNoTracking().FirstOrDefaultAsync(c => c.Id == context.Messages.Where(m => m.Id == messageId).Select(m => m.ChatId).FirstOrDefault(), cancellationToken);
+        var chatId = await context.Messages.AsNoTracking().Where(m => m.Id == messageId).Select(m => (int?)m.ChatId).FirstOrDefaultAsync(cancellationToken);
+        var chat = chatId.HasValue ? await context.Chats.AsNoTracking().FirstOrDefaultAsync(c => c.Id == chatId.Value, cancellationToken) : null;
         if (string.IsNullOrWhiteSpace(username) || chat == null) return false;
         var memberUsernames = (chat.Members ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(x => !string.Equals(x, username, StringComparison.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         if (memberUsernames.Count == 0) return false;
         var recipientIds = await context.Users.AsNoTracking().Where(u => memberUsernames.Contains(u.Username)).Select(u => u.Id).ToListAsync(cancellationToken);
         if (recipientIds.Count != memberUsernames.Count) return false;
-
         var connection = context.Database.GetDbConnection();
         await context.Database.OpenConnectionAsync(cancellationToken);
         try
@@ -110,11 +101,5 @@ GROUP BY m.ChatId";
         finally { await context.Database.CloseConnectionAsync(); }
     }
 
-    private static void AddParameter(IDbCommand command, string name, object value)
-    {
-        var parameter = command.CreateParameter();
-        parameter.ParameterName = name;
-        parameter.Value = value;
-        command.Parameters.Add(parameter);
-    }
+    private static void AddParameter(IDbCommand command, string name, object value) { var parameter = command.CreateParameter(); parameter.ParameterName = name; parameter.Value = value; command.Parameters.Add(parameter); }
 }
