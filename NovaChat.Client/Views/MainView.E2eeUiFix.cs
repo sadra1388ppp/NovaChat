@@ -17,6 +17,8 @@ public partial class MainView
             typeof(Border),
             FrameworkElement.LoadedEvent,
             new RoutedEventHandler(E2eeMediaBorderLoaded));
+
+        RegisterGroupUiHandlers();
     }
 
     private static void E2eeCopyMenuItem_Click(object sender, RoutedEventArgs e)
@@ -124,18 +126,5 @@ public partial class MainView
         return panel.Children
             .OfType<TextBlock>()
             .Any(textBlock => textBlock.Text.Contains("\u200B", StringComparison.Ordinal));
-    }
-
-    private static MainView? FindAncestor<T>(DependencyObject element) where T : DependencyObject
-    {
-        DependencyObject? current = element;
-        while (current != null)
-        {
-            if (current is T match)
-                return match;
-            current = VisualTreeHelper.GetParent(current);
-        }
-
-        return null;
     }
 }
