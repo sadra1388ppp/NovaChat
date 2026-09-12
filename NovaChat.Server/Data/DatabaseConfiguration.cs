@@ -23,6 +23,14 @@ public static class DatabaseConfiguration
         if (string.IsNullOrWhiteSpace(connection.Database))
             throw new InvalidOperationException("The MariaDB connection string must specify Database.");
 
+        // The development database is a local MariaDB instance. Some local MariaDB
+        // installations advertise SSL but close the TLS handshake unexpectedly, which
+        // produces SocketException 10054 before the application can query the database.
+        // Disable SSL only for loopback hosts; remote deployments keep their configured
+        // SSL mode unchanged.
+        if (connection.Server is "localhost" or "127.0.0.1" or "::1")
+            connection.SslMode = MySqlSslMode.None;
+
         // MariaDB DATETIME has no timezone. Every date in NovaChat is stored as UTC.
         connection.DateTimeKind = MySqlDateTimeKind.Utc;
         var versionText = configuration["Database:ServerVersion"] ?? "11.8.0";
