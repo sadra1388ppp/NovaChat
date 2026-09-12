@@ -61,9 +61,6 @@ public partial class MainView
     {
         try
         {
-            // Persist the currently open conversation as read BEFORE asking the
-            // server for unread counts. This makes the read state authoritative
-            // on the server instead of relying only on the local badge state.
             if (_currentChatId.HasValue)
                 await MarkCurrentChatAsReadAsync();
 
@@ -76,8 +73,6 @@ public partial class MainView
             {
                 foreach (var item in _chats)
                 {
-                    // The conversation currently visible on screen is always read.
-                    // Never restore its badge from the server's unread snapshot.
                     if (currentChatId == item.Chat.Id)
                     {
                         item.UnreadCount = 0;
@@ -100,8 +95,6 @@ public partial class MainView
             var item = _chats.FirstOrDefault(x => x.Chat.Id == chatId);
             if (item != null) item.UnreadCount = 0;
 
-            // Persist the read state immediately. MessageReads uses a primary key
-            // per message/user, so repeating this operation is safe and idempotent.
             if (_hubConnection?.State == HubConnectionState.Connected)
                 await _hubConnection.InvokeAsync("MarkChatAsRead", chatId);
             else
@@ -166,10 +159,29 @@ public partial class MainView
         }
     }
 
-    private static TextBlock? FindReceiptText(Border border) =>
-        border.Child is StackPanel panel
-            ? panel.Children.OfType<TextBlock>().FirstOrDefault(x => Equals(x.Tag, "receipt"))
-            : null;
+    private static TextBlock? FindReceiptText(Border border)
+    {
+        return FindReceiptTextRecursive(border.Child);
+    }
+
+    private static TextBlock? FindReceiptTextRecursive(DependencyObject? element)
+    {
+        if (element is null) return null;
+
+        if (element is TextBlock text && Equals(text.Tag, "receipt"))
+            return text;
+
+        if (element is Panel panel)
+        {
+            foreach (UIElement child in panel.Children)
+            {
+                var found = FindReceiptTextRecursive(child);
+                if (found != null) return found;
+            }
+        }
+
+        return null;
+    }
 
     private sealed class MessagesReadEvent
     {
