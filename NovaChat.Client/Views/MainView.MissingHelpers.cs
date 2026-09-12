@@ -21,7 +21,7 @@ public partial class MainView
         if (mine) meta.Children.Add(new TextBlock { Tag = "receipt", Text = "✓", FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(5, 0, 0, 0), Foreground = Brushes.White });
         panel.Children.Add(meta);
         border.Child = panel;
-        if (message.MessageType is "image" or "file" or "voice") border.Loaded += (_, _) => _ = RenderMediaBubbleAsync(border, message.Id);
+        if (message.MessageType is "image" or "file" or "voice") border.Loaded += (_, _) => _ = RenderMediaBubbleFromMessageAsync(border, message);
         if (insertAtTop) MessagesPanel.Children.Insert(Math.Min(1, MessagesPanel.Children.Count), border); else MessagesPanel.Children.Add(border);
         if (mine) Dispatcher.InvokeAsync(UpdateMessageReceiptsUi, System.Windows.Threading.DispatcherPriority.Loaded);
     }
