@@ -310,6 +310,7 @@ public partial class MainView
             if (_hubConnection?.State == HubConnectionState.Connected)
                 try { await _hubConnection.InvokeAsync("LeaveChat", chatId); } catch { }
 
+            ClearActiveChat(chatId);
             _currentChatId = null;
             _currentOtherUserId = string.Empty;
             _loadedMessageIds.Clear();
