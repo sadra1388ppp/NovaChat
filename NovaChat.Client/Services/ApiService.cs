@@ -72,17 +72,22 @@ public class ApiService
         {
             var envelopeEndpoint = $"api/ChatMedia/{messageId}/envelope";
             using var envelopeResponse = await _httpClient.GetAsync(envelopeEndpoint);
-            await EnsureSuccessAsync(envelopeResponse, envelopeEndpoint);
-            var envelopePayload = await envelopeResponse.Content.ReadFromJsonAsync<EncryptedMediaEnvelopeResponse>(JsonOptions);
-            if (envelopePayload == null || string.IsNullOrWhiteSpace(envelopePayload.Envelope))
-                throw new HttpRequestException("The server did not return an encrypted media envelope.");
+            if (envelopeResponse.IsSuccessStatusCode)
+            {
+                var envelopePayload = await envelopeResponse.Content.ReadFromJsonAsync<EncryptedMediaEnvelopeResponse>(JsonOptions);
+                if (envelopePayload == null || string.IsNullOrWhiteSpace(envelopePayload.Envelope))
+                    throw new HttpRequestException("The server did not return an encrypted media envelope.");
 
-            using var mediaResponse = await _httpClient.GetAsync(endpoint, HttpCompletionOption.ResponseHeadersRead);
-            await EnsureSuccessAsync(mediaResponse, endpoint);
-            var encryptedBytes = await mediaResponse.Content.ReadAsByteArrayAsync();
-            var e2ee = new E2eeCryptoService();
-            await e2ee.InitializeAsync(this);
-            return await e2ee.DecryptMediaBytesAsync(envelopePayload.Envelope, encryptedBytes);
+                using var mediaResponse = await _httpClient.GetAsync(endpoint, HttpCompletionOption.ResponseHeadersRead);
+                await EnsureSuccessAsync(mediaResponse, endpoint);
+                var encryptedBytes = await mediaResponse.Content.ReadAsByteArrayAsync();
+                var e2ee = new E2eeCryptoService();
+                await e2ee.InitializeAsync(this);
+                return await e2ee.DecryptMediaBytesAsync(envelopePayload.Envelope, encryptedBytes);
+            }
+
+            if (envelopeResponse.StatusCode != System.Net.HttpStatusCode.NotFound)
+                await EnsureSuccessAsync(envelopeResponse, envelopeEndpoint);
         }
 
         using var response = await _httpClient.GetAsync(endpoint, HttpCompletionOption.ResponseHeadersRead);
