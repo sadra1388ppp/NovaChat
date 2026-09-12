@@ -54,12 +54,14 @@ public class ApiService
         return await response.Content.ReadFromJsonAsync<TResponse>(JsonOptions);
     }
 
-    public async Task<TResponse?> GetAsync<TResponse>(string endpoint)
+    public Task<TResponse?> GetAsync<TResponse>(string endpoint) => GetAsync<TResponse>(endpoint, CancellationToken.None);
+
+    public async Task<TResponse?> GetAsync<TResponse>(string endpoint, CancellationToken cancellationToken)
     {
         AddAuthorization();
-        using var response = await _httpClient.GetAsync(endpoint);
+        using var response = await _httpClient.GetAsync(endpoint, cancellationToken);
         await EnsureSuccessAsync(response, endpoint);
-        return await response.Content.ReadFromJsonAsync<TResponse>(JsonOptions);
+        return await response.Content.ReadFromJsonAsync<TResponse>(JsonOptions, cancellationToken);
     }
 
     public async Task<byte[]?> GetBytesAsync(string endpoint)
@@ -115,7 +117,6 @@ public class ApiService
         using var form = new MultipartFormDataContent();
         await using var stream = File.OpenRead(filePath);
         using var plainFileContent = new StreamContent(stream);
-
         var mediaType = System.IO.Path.GetExtension(filePath).ToLowerInvariant() switch
         {
             ".jpg" or ".jpeg" => "image/jpeg",
@@ -130,10 +131,8 @@ public class ApiService
             ".webm" => "video/webm",
             _ => "application/octet-stream"
         };
-
         plainFileContent.Headers.ContentType = new MediaTypeHeaderValue(mediaType);
         form.Add(plainFileContent, fieldName, System.IO.Path.GetFileName(filePath));
-
         using var response = await _httpClient.PostAsync(endpoint, form);
         await EnsureSuccessAsync(response, endpoint);
         return await response.Content.ReadFromJsonAsync<TResponse>(JsonOptions);
@@ -163,8 +162,7 @@ public class ApiService
         return segments.Length == 3 &&
                segments[0].Equals("api", StringComparison.OrdinalIgnoreCase) &&
                segments[1].Equals("ChatMedia", StringComparison.OrdinalIgnoreCase) &&
-               int.TryParse(segments[2], out messageId) &&
-               messageId > 0;
+               int.TryParse(segments[2], out messageId) && messageId > 0;
     }
 
     private static bool TryGetChatMediaUploadInfo(string endpoint, out int chatId, out string type, out double? durationSeconds)
@@ -178,10 +176,16 @@ public class ApiService
         if (segments.Length != 3 || !segments[0].Equals("api", StringComparison.OrdinalIgnoreCase) || !segments[1].Equals("ChatMedia", StringComparison.OrdinalIgnoreCase) || !int.TryParse(segments[2], out chatId) || chatId <= 0)
             return false;
 
-        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
-        type = (query["type"] ?? string.Empty).Trim().ToLowerInvariant();
-        if (double.TryParse(query["durationSeconds"], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
-            durationSeconds = parsed;
+        var query = uri.Query.TrimStart('?');
+        foreach (var part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var pieces = part.Split('=', 2);
+            var key = Uri.UnescapeDataString(pieces[0]);
+            var value = pieces.Length == 2 ? Uri.UnescapeDataString(pieces[1]) : string.Empty;
+            if (key.Equals("type", StringComparison.OrdinalIgnoreCase)) type = value.Trim().ToLowerInvariant();
+            else if (key.Equals("durationSeconds", StringComparison.OrdinalIgnoreCase) && double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed)) durationSeconds = parsed;
+        }
+
         return type is "image" or "file" or "voice";
     }
 
