@@ -12,6 +12,7 @@ public partial class AllChatsView : UserControl
     public event Action? BackToChatRequested;
 
     private readonly ApiService _apiService = new();
+    private readonly E2eeCryptoService _e2ee = new();
     private readonly ObservableCollection<AdminChatItem> _allChats = [];
     private readonly ObservableCollection<AdminChatItem> _filteredChats = [];
     private bool _isLoading;
@@ -26,17 +27,36 @@ public partial class AllChatsView : UserControl
     private async void AllChatsView_Loaded(object sender, RoutedEventArgs e)
     {
         if (_isLoading) return;
-        await LoadChatsAsync();
+        _isLoading = true;
+        try
+        {
+            await _e2ee.InitializeAsync(_apiService);
+            await LoadChatsAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = "Could not initialize secure Owner access.";
+            MessageBox.Show($"Could not initialize secure Owner access.\n\n{ex.Message}", "All Chats", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
     }
 
     private async Task LoadChatsAsync()
     {
-        _isLoading = true;
         StatusText.Text = "Loading all conversations...";
 
         try
         {
             var chats = await _apiService.GetAsync<List<ChatModel>>("api/Chat/all") ?? [];
+            foreach (var chat in chats)
+            {
+                if (chat.LastMessage != null)
+                    await _e2ee.DecryptMessageAsync(chat.LastMessage);
+            }
+
             _allChats.Clear();
             foreach (var chat in chats)
                 _allChats.Add(new AdminChatItem(chat));
@@ -54,10 +74,6 @@ public partial class AllChatsView : UserControl
             TotalChatsText.Text = "0";
             StatusText.Text = "Could not load conversations.";
             MessageBox.Show($"Could not load all chats.\n\n{ex.Message}", "All Chats", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-        finally
-        {
-            _isLoading = false;
         }
     }
 
@@ -82,7 +98,15 @@ public partial class AllChatsView : UserControl
     {
         if (_isLoading) return;
         ClearDetails();
-        await LoadChatsAsync();
+        _isLoading = true;
+        try
+        {
+            await LoadChatsAsync();
+        }
+        finally
+        {
+            _isLoading = false;
+        }
     }
 
     private void BackButton_Click(object sender, RoutedEventArgs e) => BackToChatRequested?.Invoke();
@@ -135,8 +159,14 @@ public partial class AllChatsView : UserControl
                     $"{m.DisplayName}  •  @{m.Username}  •  ID {m.UserId}"));
             }
 
-            var ownerHistory = await _apiService.GetAsync<OwnerMessagesResponse>($"api/OwnerChat/{item.Chat.Id}/messages?pageSize=200");
+            var ownerHistory = await _apiService.GetAsync<OwnerMessagesResponse>($"api/OwnerChat/{item.Chat.Id}/messages?pageSize=1000");
             var messages = ownerHistory?.Messages ?? [];
+
+            // The server returns only the encrypted envelope. Decrypting here
+            // guarantees the message plaintext never travels through the API.
+            foreach (var message in messages)
+                await _e2ee.DecryptMessageAsync(message);
+
             MessagesList.ItemsSource = messages.Select(m => new AdminMessageItem(m)).ToList();
             NoMessagesText.Visibility = messages.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             StatusText.Text = $"{kind} #{item.Chat.Id} • {members.Count} participant{(members.Count == 1 ? string.Empty : "s")} • {messages.Count} message{(messages.Count == 1 ? string.Empty : "s")} loaded.";

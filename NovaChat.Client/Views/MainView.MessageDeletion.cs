@@ -54,12 +54,36 @@ public partial class MainView
     private async void CopyMessageMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not MenuItem item || item.Tag is not MessageBubbleInfo info) return;
-        var message = await GetMessageByIdAsync(_currentChatId ?? 0, info.MessageId);
-        if (message == null || string.IsNullOrWhiteSpace(message.Content)) return;
+
         try
         {
-            Clipboard.SetText(message.Content);
+            var message = await GetMessageByIdAsync(_currentChatId ?? 0, info.MessageId);
+            if (message == null || string.IsNullOrWhiteSpace(message.Content)) return;
+
+            // Messages are stored as ciphertext on the server. Never copy the raw E2EE
+            // envelope to the clipboard; decrypt the selected message first and copy only
+            // the user-visible plaintext.
+            message = await _e2ee.DecryptMessageAsync(message);
+            var text = message.Content?.Trim();
+            if (string.IsNullOrWhiteSpace(text)) return;
+
+            // Media bubbles should copy the human-readable filename rather than the
+            // encrypted envelope or the internal zero-width message id marker.
+            if (message.MessageType is "image" or "file" or "voice")
+            {
+                if (!string.IsNullOrWhiteSpace(message.FileName))
+                    text = message.FileName.Trim();
+                else
+                    text = text.Replace("📷 ", string.Empty, StringComparison.Ordinal)
+                        .Replace("📎 ", string.Empty, StringComparison.Ordinal)
+                        .Replace("🎙 ", string.Empty, StringComparison.Ordinal);
+                var marker = text.IndexOf('\u200B');
+                if (marker >= 0) text = text[..marker].Trim();
+            }
+
+            Clipboard.SetText(text);
             System.Media.SystemSounds.Asterisk.Play();
+            e.Handled = true;
         }
         catch (Exception ex)
         {

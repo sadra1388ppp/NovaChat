@@ -21,6 +21,7 @@ builder.Services.AddScoped<JwtService>();
 builder.Services.AddScoped<AdminService>();
 builder.Services.AddScoped<ChatService>();
 builder.Services.AddScoped<MessageReadService>();
+builder.Services.AddScoped<E2eeDeviceService>();
 builder.Services.AddSingleton<PresenceService>();
 builder.Services.AddSingleton<IAuthorizationHandler, OwnerAuthorizationHandler>();
 builder.Services.AddAuthorization(options => options.AddPolicy("OwnerOnly", policy => { policy.RequireAuthenticatedUser(); policy.AddRequirements(new OwnerRequirement()); }));
@@ -39,10 +40,17 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
-await using (var scope = app.Services.CreateAsyncScope())
+try
 {
+    await using var scope = app.Services.CreateAsyncScope();
     await scope.ServiceProvider.GetRequiredService<DatabaseInitializer>().ValidateSchemaAsync();
 }
+catch (Exception exception) when (exception is not OperationCanceledException)
+{
+    app.Logger.LogCritical(exception, "NovaChat server startup database validation failed. The HTTP listener was not started.");
+    throw;
+}
+
 var webRoot = app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
 Directory.CreateDirectory(Path.Combine(webRoot, "uploads", "avatars"));
 if (app.Environment.IsDevelopment()) { app.UseSwagger(); app.UseSwaggerUI(); }
