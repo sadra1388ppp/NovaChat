@@ -1,45 +1,28 @@
-using System.Windows;
-
 namespace NovaChat.Client.Views;
 
 public partial class MainView
 {
-    private static MainView? _activeMainView;
-    private static readonly bool _notificationStateHandlersRegistered = RegisterNotificationStateHandlers();
+    private static readonly object NotificationStateLock = new();
+    private static int? _activeChatId;
 
-    private static bool RegisterNotificationStateHandlers()
+    internal static void SetActiveChat(int chatId)
     {
-        EventManager.RegisterClassHandler(
-            typeof(MainView),
-            FrameworkElement.LoadedEvent,
-            new RoutedEventHandler(OnMainViewLoaded));
-
-        EventManager.RegisterClassHandler(
-            typeof(MainView),
-            FrameworkElement.UnloadedEvent,
-            new RoutedEventHandler(OnMainViewUnloaded));
-
-        return true;
+        lock (NotificationStateLock)
+            _activeChatId = chatId;
     }
 
-    private static void OnMainViewLoaded(object sender, RoutedEventArgs e)
+    internal static void ClearActiveChat(int chatId)
     {
-        if (sender is MainView mainView)
-            _activeMainView = mainView;
-    }
-
-    private static void OnMainViewUnloaded(object sender, RoutedEventArgs e)
-    {
-        if (sender is MainView mainView && ReferenceEquals(_activeMainView, mainView))
-            _activeMainView = null;
+        lock (NotificationStateLock)
+        {
+            if (_activeChatId == chatId)
+                _activeChatId = null;
+        }
     }
 
     internal static bool IsCurrentChat(int chatId)
     {
-        var mainView = _activeMainView;
-        if (mainView == null || !mainView.IsLoaded || !mainView._currentChatId.HasValue)
-            return false;
-
-        return mainView._currentChatId.Value == chatId;
+        lock (NotificationStateLock)
+            return _activeChatId == chatId;
     }
 }
