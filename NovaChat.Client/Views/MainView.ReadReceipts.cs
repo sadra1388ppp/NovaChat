@@ -65,12 +65,11 @@ public partial class MainView
             await Dispatcher.InvokeAsync(() =>
             {
                 var currentChatId = _currentChatId;
-                var shouldMarkCurrentChatRead = currentChatId.HasValue && _lastAutoReadChatId != currentChatId.Value;
 
                 foreach (var item in _chats)
                 {
-                    // The conversation currently visible on screen is already being read.
-                    // Never let the background unread refresh put a badge back on it.
+                    // The conversation currently visible on screen is always read.
+                    // Never restore its badge from the server's unread snapshot.
                     if (currentChatId == item.Chat.Id)
                     {
                         item.UnreadCount = 0;
@@ -78,12 +77,6 @@ public partial class MainView
                     }
 
                     item.UnreadCount = counts.TryGetValue(item.Chat.Id.ToString(), out var count) ? count : 0;
-                }
-
-                if (shouldMarkCurrentChatRead)
-                {
-                    _lastAutoReadChatId = currentChatId;
-                    _ = MarkCurrentChatAsReadAsync();
                 }
             });
         }
@@ -99,6 +92,9 @@ public partial class MainView
             var item = _chats.FirstOrDefault(x => x.Chat.Id == chatId);
             if (item != null) item.UnreadCount = 0;
 
+            // Persist the read state immediately. This is the important part:
+            // once the user has actually opened the conversation, those messages
+            // must not come back as unread after switching to another chat.
             if (_hubConnection?.State == HubConnectionState.Connected)
                 await _hubConnection.InvokeAsync("MarkChatAsRead", chatId);
             else
