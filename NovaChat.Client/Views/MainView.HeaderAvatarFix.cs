@@ -2,7 +2,6 @@ using NovaChat.Client.Models;
 using NovaChat.Client.Services;
 using System.Windows;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
 
 namespace NovaChat.Client.Views;
 
@@ -20,25 +19,12 @@ public partial class MainView
     {
         try
         {
-            var profile = await _apiService.GetAsync<ProfileModel>(
-                $"api/User/profile/{Uri.EscapeDataString(userId)}");
+            var profile = await _apiService.GetAsync<ProfileModel>($"api/User/profile/{Uri.EscapeDataString(userId)}");
             if (profile == null) return;
 
-            BitmapImage? bitmap = null;
-            if (!string.IsNullOrWhiteSpace(profile.AvatarUrl))
-            {
-                var url = _apiService.BuildAbsoluteUrl(profile.AvatarUrl);
-                var separator = url.Contains('?') ? '&' : '?';
-                bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.UriSource = new Uri(
-                    $"{url}{separator}v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}",
-                    UriKind.Absolute);
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
-                bitmap.EndInit();
-                bitmap.Freeze();
-            }
+            var bitmap = string.IsNullOrWhiteSpace(profile.AvatarUrl)
+                ? null
+                : await LoadConversationAvatarAsync(_apiService.BuildAbsoluteUrl($"api/User/profile/{Uri.EscapeDataString(userId)}/avatar?v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}"));
 
             await Dispatcher.InvokeAsync(() =>
             {
