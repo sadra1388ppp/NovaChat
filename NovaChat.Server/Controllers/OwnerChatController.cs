@@ -29,7 +29,17 @@ public class OwnerChatController : ControllerBase
     public async Task<IActionResult> GetMessages(int chatId, [FromQuery] int pageSize = 100)
     {
         var exists = await _db.Chats.AsNoTracking().AnyAsync(c => c.Id == chatId); if (!exists) return NotFound(new { message = "Chat not found." }); pageSize = Math.Clamp(pageSize, 1, 200);
-        var messages = await _db.Messages.AsNoTracking().Include(m => m.Sender).Where(m => m.ChatId == chatId && !m.DeletedForEveryone).OrderBy(m => m.SentAt).ThenBy(m => m.Id).Take(pageSize).ToListAsync(); return Ok(new { messages = messages.Select(m => MessageDtoMapper.Map(m)).ToList(), count = messages.Count });
+        var messages = await _db.Messages.AsNoTracking().Where(m => m.ChatId == chatId && !m.DeletedForEveryone).OrderBy(m => m.SentAt).ThenBy(m => m.Id).Take(pageSize).ToListAsync();
+        var result = messages.Select(m => new
+        {
+            m.Id,
+            m.ChatId,
+            SenderId = m.SenderId,
+            SentAt = m.SentAt,
+            Content = "[Encrypted message — content unavailable to administrators]",
+            Encrypted = true
+        }).ToList();
+        return Ok(new { messages = result, count = result.Count });
     }
     [HttpDelete("{chatId:int}")]
     public async Task<IActionResult> DeleteChat(int chatId)
