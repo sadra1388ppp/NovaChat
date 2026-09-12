@@ -131,7 +131,9 @@ public partial class MainView
             {
                 var seen = _seenMessageIds.Contains(messageId);
                 receipt.Text = seen ? "✓✓" : "✓";
-                receipt.Foreground = Brushes.White;
+                receipt.Foreground = seen
+                    ? new SolidColorBrush(Color.FromRgb(116, 203, 255))
+                    : Brushes.White;
             }
         }
     }
