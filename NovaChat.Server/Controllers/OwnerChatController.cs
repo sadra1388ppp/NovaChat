@@ -73,7 +73,7 @@ public class OwnerChatController : ControllerBase
         // Owner authorization is enforced by the controller policy. Return the
         // original encrypted envelope so the Owner client can decrypt locally.
         // Never decrypt message content on the server.
-        var result = messages.Select(MessageDtoMapper.Map).ToList();
+        var result = messages.Select(m => MessageDtoMapper.Map(m)).ToList();
         return Ok(new { messages = result, count = result.Count });
     }
 
