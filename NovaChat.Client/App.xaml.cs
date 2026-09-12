@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
+using NovaChat.Client.Services;
 using NovaChat.Client.Views;
 
 namespace NovaChat.Client;
@@ -18,6 +19,7 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         RegisterGlobalExceptionHandlers();
+        Exit += OnApplicationExit;
 
         try
         {
@@ -34,6 +36,11 @@ public partial class App : Application
         }
 
         base.OnStartup(e);
+    }
+
+    private void OnApplicationExit(object? sender, ExitEventArgs e)
+    {
+        NotificationService.Dispose();
     }
 
     private void RegisterGlobalExceptionHandlers()
