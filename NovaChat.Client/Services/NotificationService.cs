@@ -8,15 +8,15 @@ public static class NotificationService
     private static readonly object SyncRoot = new();
     private static readonly List<NotificationWindow> ActiveNotifications = [];
 
-    public static void ShowMessageNotification(string title, string message)
+    public static void ShowMessageNotification(int chatId, string title, string message)
     {
-        if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(message))
+        if (chatId <= 0 || string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(message))
             return;
 
         // The message event can arrive from an older MainView instance while WPF is
         // transitioning between views. Always make the final notification decision
         // against the currently active MainView, not the instance that received the event.
-        if (MainView.IsCurrentChatNotification(title))
+        if (MainView.IsCurrentChat(chatId))
             return;
 
         try
@@ -26,7 +26,7 @@ public static class NotificationService
                 // Re-check on the UI thread immediately before displaying the popup.
                 // This closes the race where the user opens the chat while the event
                 // is waiting to be dispatched.
-                if (MainView.IsCurrentChatNotification(title))
+                if (MainView.IsCurrentChat(chatId))
                     return;
 
                 var notification = new NotificationWindow(title.Trim(), message.Trim());
