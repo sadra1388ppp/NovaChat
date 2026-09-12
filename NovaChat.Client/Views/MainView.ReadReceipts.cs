@@ -65,10 +65,7 @@ public partial class MainView
         try
         {
             var counts = await _apiService.GetAsync<Dictionary<string, int>>("api/message-read/unread") ?? [];
-            await Dispatcher.InvokeAsync(() =>
-            {
-                foreach (var item in _chats) item.UnreadCount = counts.TryGetValue(item.Chat.Id.ToString(), out var count) ? count : 0;
-            });
+            await Dispatcher.InvokeAsync(() => { foreach (var item in _chats) item.UnreadCount = counts.TryGetValue(item.Chat.Id.ToString(), out var count) ? count : 0; });
         }
         catch { }
     }
@@ -79,10 +76,12 @@ public partial class MainView
         var chatId = _currentChatId.Value;
         try
         {
-            await _apiService.PostAsync<object, ReadMessagesResponse>($"api/message-read/{chatId}/read", new { });
             var item = _chats.FirstOrDefault(x => x.Chat.Id == chatId);
             if (item != null) item.UnreadCount = 0;
-            if (_hubConnection?.State == HubConnectionState.Connected) await _hubConnection.InvokeAsync("MarkChatAsRead", chatId);
+            if (_hubConnection?.State == HubConnectionState.Connected)
+                await _hubConnection.InvokeAsync("MarkChatAsRead", chatId);
+            else
+                await _apiService.PostAsync<object, ReadMessagesResponse>($"api/message-read/{chatId}/read", new { });
         }
         catch { }
     }
@@ -103,27 +102,14 @@ public partial class MainView
 
     private void OnReceiptPresenceOnline(string userId) { if (!string.IsNullOrWhiteSpace(userId)) Dispatcher.InvokeAsync(UpdateMessageReceiptsUi); }
     private void OnReceiptPresenceOffline(string userId) { if (!string.IsNullOrWhiteSpace(userId)) Dispatcher.InvokeAsync(UpdateMessageReceiptsUi); }
-
-    private void PrepareCurrentRecipients(ChatModel chat)
-    {
-        _currentRecipientIds.Clear();
-        if (chat.IsGroup) { _ = LoadGroupRecipientsAsync(chat.Id); return; }
-        var other = chat.OtherUserId(AuthState.UserId);
-        if (!string.IsNullOrWhiteSpace(other)) _currentRecipientIds.Add(other);
-    }
+    private void PrepareCurrentRecipients(ChatModel chat) { _currentRecipientIds.Clear(); if (chat.IsGroup) { _ = LoadGroupRecipientsAsync(chat.Id); return; } var other = chat.OtherUserId(AuthState.UserId); if (!string.IsNullOrWhiteSpace(other)) _currentRecipientIds.Add(other); }
 
     private async Task LoadGroupRecipientsAsync(int chatId)
     {
         try
         {
             var members = await _apiService.GetAsync<List<GroupRecipientModel>>($"api/Chat/{chatId}/members") ?? [];
-            await Dispatcher.InvokeAsync(() =>
-            {
-                _currentRecipientIds.Clear();
-                foreach (var member in members)
-                    if (!string.Equals(member.UserId, AuthState.UserId, StringComparison.OrdinalIgnoreCase)) _currentRecipientIds.Add(member.UserId);
-                UpdateMessageReceiptsUi();
-            });
+            await Dispatcher.InvokeAsync(() => { _currentRecipientIds.Clear(); foreach (var member in members) if (!string.Equals(member.UserId, AuthState.UserId, StringComparison.OrdinalIgnoreCase)) _currentRecipientIds.Add(member.UserId); UpdateMessageReceiptsUi(); });
         }
         catch { }
     }
@@ -138,20 +124,11 @@ public partial class MainView
             var readers = _messageReaders.TryGetValue(messageId, out var set) ? set : [];
             var seen = _currentRecipientIds.Count > 0 && _currentRecipientIds.All(readers.Contains);
             var state = seen ? "seen" : anyRecipientOnline ? "delivered" : "sent";
-            if (FindReceiptText(border) is TextBlock receipt)
-            {
-                receipt.Text = state is "seen" or "delivered" ? "✓✓" : "✓";
-                receipt.Foreground = state == "seen" ? Brushes.DeepSkyBlue : Brushes.White;
-            }
+            if (FindReceiptText(border) is TextBlock receipt) { receipt.Text = state is "seen" or "delivered" ? "✓✓" : "✓"; receipt.Foreground = state == "seen" ? Brushes.DeepSkyBlue : Brushes.White; }
         }
     }
 
-    private static TextBlock? FindReceiptText(Border border)
-    {
-        if (border.Child is not StackPanel panel) return null;
-        return panel.Children.OfType<TextBlock>().FirstOrDefault(x => Equals(x.Tag, "receipt"));
-    }
-
+    private static TextBlock? FindReceiptText(Border border) => border.Child is StackPanel panel ? panel.Children.OfType<TextBlock>().FirstOrDefault(x => Equals(x.Tag, "receipt")) : null;
     private sealed class MessagesReadEvent { public int ChatId { get; set; } public string ReaderUserId { get; set; } = string.Empty; public List<int> MessageIds { get; set; } = []; }
     private sealed class ReadMessagesResponse { public int ChatId { get; set; } public List<int> MessageIds { get; set; } = []; }
     private sealed class GroupRecipientModel { public string UserId { get; set; } = string.Empty; }
