@@ -38,6 +38,11 @@ public class ApiService
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", AuthState.Token);
     }
 
+    public async Task<TResponse?> PostAsync<TResponse>(string endpoint, object data)
+    {
+        return await PostAsync<object, TResponse>(endpoint, data);
+    }
+
     public async Task<TResponse?> PostAsync<TRequest, TResponse>(string endpoint, TRequest data)
     {
         AddAuthorization();
