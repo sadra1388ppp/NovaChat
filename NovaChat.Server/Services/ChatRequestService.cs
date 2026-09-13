@@ -34,9 +34,23 @@ CREATE TABLE IF NOT EXISTS `ChatRequests` (
     CONSTRAINT `FK_ChatRequests_Target` FOREIGN KEY (`TargetUserId`) REFERENCES `Users`(`Id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;", cancellationToken);
 
+        // The original unique index included Status itself. That incorrectly made a pair
+        // unable to have more than one historical Accepted/Rejected request. We only need
+        // uniqueness while a request is Pending, so the generated key is NULL for completed requests.
         await _db.Database.ExecuteSqlRawAsync(@"
 ALTER TABLE `ChatRequests`
-    ADD UNIQUE INDEX IF NOT EXISTS `UX_ChatRequests_Pending` (`RequesterUserId`, `TargetUserId`, `Status`);", cancellationToken);
+    DROP INDEX `UX_ChatRequests_Pending`;", cancellationToken);
+
+        await _db.Database.ExecuteSqlRawAsync(@"
+ALTER TABLE `ChatRequests`
+    ADD COLUMN IF NOT EXISTS `PendingPairKey` VARCHAR(64)
+        GENERATED ALWAYS AS (
+            CASE
+                WHEN `Status` = 'Pending' THEN CONCAT(`RequesterUserId`, '-', `TargetUserId`)
+                ELSE NULL
+            END
+        ) STORED,
+    ADD UNIQUE INDEX IF NOT EXISTS `UX_ChatRequests_Pending` (`PendingPairKey`);", cancellationToken);
     }
 
     public async Task<(bool Success, string Message, ChatRequestDto? Request)> CreateAsync(long requesterId, string username, CancellationToken cancellationToken = default)
@@ -127,7 +141,7 @@ ORDER BY r.CreatedAt DESC, r.Id DESC", userId).ToListAsync(cancellationToken);
         await EnsureSchemaAsync(cancellationToken);
 
         var strategy = _db.Database.CreateExecutionStrategy();
-        return await strategy.ExecuteAsync(async () =>
+        return await strategy.ExecuteAsync<(bool Success, string Message, ChatRequestDto? Request, Chat? Chat)>(async () =>
         {
             await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
             var row = await LoadRowAsync(requestId, cancellationToken);
@@ -137,11 +151,13 @@ ORDER BY r.CreatedAt DESC, r.Id DESC", userId).ToListAsync(cancellationToken);
 
             var chat = await _chatService.CreatePrivateChatAsync(row.RequesterUserId, row.TargetUserId);
             if (chat == null) return (false, "The conversation could not be created.", null, null);
+
             var now = DateTime.UtcNow;
             await _db.Database.ExecuteSqlInterpolatedAsync($@"
 UPDATE `ChatRequests`
 SET `Status` = {"Accepted"}, `RespondedAt` = {now}, `ChatId` = {chat.Id}
 WHERE `Id` = {requestId} AND `Status` = {"Pending"};", cancellationToken);
+
             row.Status = "Accepted";
             row.RespondedAt = now;
             row.ChatId = chat.Id;
