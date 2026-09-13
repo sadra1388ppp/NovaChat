@@ -43,6 +43,7 @@ public class MessageModel
 
 public class ChatHistoryResponse { public List<MessageModel> Messages { get; set; } = []; public bool HasMore { get; set; } public int? NextBeforeMessageId { get; set; } }
 public class CreateChatRequest { public string Username { get; set; } = string.Empty; }
-public class CreateChatResponse { public string Message { get; set; } = string.Empty; public ChatModel? Chat { get; set; } }
+public class CreateChatResponse { public string Message { get; set; } = string.Empty; public ChatModel? Chat { get; set; } public bool RequestPending { get; set; } public long? RequestId { get; set; } }
 public class CreateGroupRequest { public string Name { get; set; } = string.Empty; public List<string> Usernames { get; set; } = []; }
-public class CreateGroupResponse { public string Message { get; set; } = string.Empty; public ChatModel? Chat { get; set; } }
+public class CreateGroupResponse { public string Message { get; set; } = string.Empty; public ChatModel? Chat { get; set; }
+}
