@@ -122,8 +122,6 @@ public class UserService
         if (await _context.Users.AsNoTracking().AnyAsync(u => u.PhoneNumber == phoneNumber && u.Id != userId)) return Fail("This phone number is already registered.");
         var oldUsername = user.Username;
         user.Username = newUsername; user.DisplayName = dto.DisplayName; user.Email = dto.Email; user.PhoneNumber = phoneNumber; user.Bio = dto.Bio;
-        user.MessagePrivacy = NormalizeMessagePrivacy(dto.MessagePrivacy);
-        user.AllowGroupAdds = dto.AllowGroupAdds;
         await _context.SaveChangesAsync();
         if (!string.Equals(oldUsername, newUsername, StringComparison.Ordinal))
         {
@@ -203,7 +201,7 @@ public class UserService
     private static string NormalizeMessagePrivacy(string? value) => string.Equals(value?.Trim(), "Requests", StringComparison.OrdinalIgnoreCase) ? "Requests" : "Everybody";
     private static List<string> ParseMembers(string? members) => string.IsNullOrWhiteSpace(members) ? [] : members.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
     private static RegisterResult Fail(string message) => new() { Success = false, Message = message };
-    private UserResponseDto ToUserResponse(User user, bool includePhoneNumber = false) => new() { Id = user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), Username = user.Username, DisplayName = user.DisplayName, Email = user.Email, PhoneNumber = includePhoneNumber ? user.PhoneNumber : null, Bio = user.Bio, AvatarUrl = user.AvatarUrl, IsOnline = _presenceService.IsOnline(user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)), LastSeenAt = user.LastSeenAt, CreatedAt = user.CreatedAt, MessagePrivacy = NormalizeMessagePrivacy(user.MessagePrivacy), AllowGroupAdds = user.AllowGroupAdds };
+    private UserResponseDto ToUserResponse(User user, bool includePhoneNumber = false) => new() { Id = user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), Username = user.Username, DisplayName = user.DisplayName, Email = user.Email, PhoneNumber = includePhoneNumber ? user.PhoneNumber : null, Bio = user.Bio, AvatarUrl = user.AvatarUrl, IsOnline = _presenceService.IsOnline(user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)), LastSeenAt = user.LastSeenAt, CreatedAt = user.CreatedAt };
     private static bool TryNormalizePhoneNumber(string? input, out string normalized)
     {
         normalized = string.Empty; if (string.IsNullOrWhiteSpace(input)) return false;
