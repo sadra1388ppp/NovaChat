@@ -56,6 +56,14 @@ public static class MessageDtoMapper
             Content = message.Content,
             SentAt = message.SentAt
         };
+
+        if (E2eeMediaMessageEnvelope.TryParse(message.Content, out _))
+        {
+            dto.MessageType = "e2ee-media";
+            dto.AttachmentUrl = $"/api/ChatMedia/{message.Id}";
+            return dto;
+        }
+
         if (MediaMessageEnvelope.TryParse(message.Content, out var media) && media != null)
         {
             dto.MessageType = media.Type;
@@ -67,6 +75,7 @@ public static class MessageDtoMapper
             var icon = media.Type switch { "image" => "📷", "voice" => "🎙", _ => "📎" };
             dto.Content = $"{icon} {media.FileName}\u200B{message.Id}";
         }
+
         return dto;
     }
 }
