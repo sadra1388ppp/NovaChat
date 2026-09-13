@@ -1,4 +1,3 @@
-using NovaChat.Server.Services;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
@@ -13,7 +12,7 @@ public sealed class ChatPrivacyMiddleware(RequestDelegate next)
     {
         if (!HttpMethods.IsPost(context.Request.Method) ||
             !context.Request.Path.Equals("/api/Chat", StringComparison.OrdinalIgnoreCase) ||
-            !context.User.Identity?.IsAuthenticated == true)
+            context.User.Identity?.IsAuthenticated != true)
         {
             await _next(context);
             return;
