@@ -15,16 +15,10 @@ public partial class ProfileView
     private bool _privacyUiInjected;
     private bool _privacyBusy;
 
-    static ProfileView()
+    private void InitializePrivacyUi()
     {
-        EventManager.RegisterClassHandler(typeof(ProfileView), FrameworkElement.LoadedEvent, new RoutedEventHandler(ProfileViewPrivacyLoaded));
-    }
-
-    private static async void ProfileViewPrivacyLoaded(object sender, RoutedEventArgs e)
-    {
-        if (sender is not ProfileView view) return;
-        view.InjectPrivacyControls();
-        await view.LoadPrivacySettingsAsync();
+        InjectPrivacyControls();
+        _ = LoadPrivacySettingsAsync();
     }
 
     private void InjectPrivacyControls()
