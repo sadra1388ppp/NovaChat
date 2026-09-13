@@ -71,11 +71,8 @@ public partial class AllChatsView
                     encryptedMedia,
                     async () =>
                     {
-                        var bytes = await _apiService.GetBytesAsync($"api/OwnerChat/{item.Chat.Id}/media/{message.Id}");
-                        if (bytes == null || bytes.Length == 0) return bytes;
-                        return encryptedMedia
-                            ? await _ownerEnhancedE2ee.DecryptMediaBytesAsync(rawContent, bytes)
-                            : bytes;
+                        if (encryptedMedia) return null;
+                        return await _apiService.GetBytesAsync($"api/OwnerMedia/{item.Chat.Id}/{message.Id}");
                     });
 
                 MessagesList.Items.Add(element);
