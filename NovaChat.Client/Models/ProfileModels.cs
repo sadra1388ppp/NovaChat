@@ -14,6 +14,8 @@ public class ProfileModel
     public bool IsOnline { get; set; }
     public DateTime? LastSeenAt { get; set; }
     public DateTime CreatedAt { get; set; }
+    public string MessagePrivacy { get; set; } = "Everybody";
+    public bool AllowGroupAdds { get; set; } = true;
 }
 
 public class UpdateProfileRequest
@@ -23,8 +25,9 @@ public class UpdateProfileRequest
     public string PhoneNumber { get; set; } = string.Empty;
     public string? Bio { get; set; }
     public string? NewUsername { get; set; }
+    public string MessagePrivacy { get; set; } = "Everybody";
+    public bool AllowGroupAdds { get; set; } = true;
 
-    // Backward-compatible alias for the existing profile UI. It maps to Username and is not serialized.
     [JsonIgnore]
     public string? NewUserId
     {
