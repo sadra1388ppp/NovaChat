@@ -107,6 +107,21 @@ ORDER BY r.CreatedAt ASC, r.Id ASC", userId).ToListAsync(cancellationToken);
         return rows.Select(ToDto).ToList();
     }
 
+    public async Task<List<ChatRequestDto>> GetOutgoingAsync(long userId, CancellationToken cancellationToken = default)
+    {
+        await EnsureSchemaAsync(cancellationToken);
+        var rows = await _db.Database.SqlQueryRaw<ChatRequestRow>(@"
+SELECT r.Id, r.RequesterUserId, r.TargetUserId, r.Status, r.CreatedAt, r.RespondedAt, r.ChatId,
+       ru.Username AS RequesterUsername, ru.DisplayName AS RequesterDisplayName,
+       tu.Username AS TargetUsername, tu.DisplayName AS TargetDisplayName
+FROM ChatRequests r
+JOIN Users ru ON ru.Id = r.RequesterUserId
+JOIN Users tu ON tu.Id = r.TargetUserId
+WHERE r.RequesterUserId = {0} AND r.Status = 'Pending'
+ORDER BY r.CreatedAt DESC, r.Id DESC", userId).ToListAsync(cancellationToken);
+        return rows.Select(ToDto).ToList();
+    }
+
     public async Task<(bool Success, string Message, ChatRequestDto? Request, Chat? Chat)> AcceptAsync(long requestId, long userId, CancellationToken cancellationToken = default)
     {
         await EnsureSchemaAsync(cancellationToken);
