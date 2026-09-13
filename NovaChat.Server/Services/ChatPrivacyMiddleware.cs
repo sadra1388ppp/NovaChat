@@ -11,7 +11,7 @@ public sealed class ChatPrivacyMiddleware(RequestDelegate next)
     public async Task InvokeAsync(HttpContext context, ChatService chats, ChatRequestService requests)
     {
         if (!HttpMethods.IsPost(context.Request.Method) ||
-            !context.Request.Path.Equals("/api/Chat", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(context.Request.Path.Value, "/api/Chat", StringComparison.OrdinalIgnoreCase) ||
             context.User.Identity?.IsAuthenticated != true)
         {
             await _next(context);
