@@ -11,6 +11,8 @@ public partial class MainView
 {
     private static bool _chatRequestUiRegistered;
     private DispatcherTimer? _chatRequestTimer;
+    private StackPanel? _conversationRequestsPanel;
+    private TextBlock? _conversationRequestsHeader;
     private bool _chatRequestBusy;
 
     private static void RegisterChatRequestHandlers()
@@ -102,11 +104,33 @@ public partial class MainView
         finally { _chatRequestBusy = false; }
     }
 
+    private void EnsureConversationChatRequestsUi()
+    {
+        if (_conversationRequestsPanel != null && _conversationRequestsHeader != null) return;
+        if (ChatsList.Parent is not StackPanel parent) return;
+        var chatListIndex = parent.Children.IndexOf(ChatsList);
+        if (chatListIndex < 0) return;
+
+        _conversationRequestsHeader = new TextBlock
+        {
+            Text = "CHAT REQUESTS",
+            FontSize = 10,
+            FontWeight = FontWeights.Bold,
+            Foreground = (Brush)FindResource("PrimaryBrush"),
+            Margin = new Thickness(0, 0, 0, 8),
+            Visibility = Visibility.Collapsed
+        };
+        _conversationRequestsPanel = new StackPanel { Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 10) };
+        parent.Children.Insert(chatListIndex, _conversationRequestsHeader);
+        parent.Children.Insert(chatListIndex + 1, _conversationRequestsPanel);
+    }
+
     private async Task RefreshConversationChatRequestsAsync()
     {
         if (_chatRequestBusy || !AuthState.IsAuthenticated) return;
         try
         {
+            await Dispatcher.InvokeAsync(EnsureConversationChatRequestsUi);
             var incoming = await _apiService.GetAsync<List<ConversationChatRequestModel>>("api/ChatRequests/incoming") ?? [];
             var outgoing = await _apiService.GetAsync<List<ConversationChatRequestModel>>("api/ChatRequests/outgoing") ?? [];
             var items = new List<ConversationChatRequestItem>(incoming.Count + outgoing.Count);
@@ -118,7 +142,7 @@ public partial class MainView
                     RequestId = request.Id,
                     DisplayName = string.IsNullOrWhiteSpace(request.RequesterDisplayName) ? request.RequesterUsername : request.RequesterDisplayName,
                     Username = request.RequesterUsername,
-                    Summary = "This person wants to start a conversation with you.",
+                    Summary = "Someone sent you a chat request.",
                     IsIncoming = true
                 });
             }
@@ -136,17 +160,65 @@ public partial class MainView
             }
 
             items.Sort((a, b) => b.RequestId.CompareTo(a.RequestId));
-            await Dispatcher.InvokeAsync(() =>
-            {
-                ChatRequestsList.ItemsSource = items;
-                ChatRequestsHeader.Visibility = items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-                ChatRequestsList.Visibility = items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-                NoChatsText.Margin = items.Count > 0 ? new Thickness(0, 10, 0, 0) : new Thickness(0, 10, 0, 0);
-            });
+            await Dispatcher.InvokeAsync(() => RenderConversationChatRequests(items));
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Conversation chat request refresh failed: {ex.Message}");
+        }
+    }
+
+    private void RenderConversationChatRequests(List<ConversationChatRequestItem> items)
+    {
+        EnsureConversationChatRequestsUi();
+        if (_conversationRequestsPanel == null || _conversationRequestsHeader == null) return;
+
+        _conversationRequestsPanel.Children.Clear();
+        var visible = items.Count > 0;
+        _conversationRequestsHeader.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        _conversationRequestsPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        if (!visible) return;
+
+        foreach (var request in items)
+        {
+            var card = new Border
+            {
+                Padding = new Thickness(10),
+                Background = (Brush)FindResource("InputBackgroundBrush"),
+                BorderBrush = (Brush)FindResource("BorderBrush"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(13),
+                Margin = new Thickness(0, 0, 0, 7)
+            };
+            var root = new Grid();
+            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(38) });
+            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var avatar = new Border { Width = 34, Height = 34, CornerRadius = new CornerRadius(12), Background = (Brush)FindResource("SelectedChatBrush"), VerticalAlignment = VerticalAlignment.Top };
+            avatar.Child = new TextBlock { Text = request.Initials, Foreground = (Brush)FindResource("PrimaryBrush"), FontSize = 11, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            root.Children.Add(avatar);
+
+            var content = new StackPanel { Margin = new Thickness(9, 0, 0, 0) };
+            content.Children.Add(new TextBlock { Text = request.DisplayName, FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush"), TextTrimming = TextTrimming.CharacterEllipsis });
+            content.Children.Add(new TextBlock { Text = $"@{request.Username}", FontSize = 10, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 1, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis });
+            content.Children.Add(new TextBlock { Text = request.Summary, FontSize = 10, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 5, 0, 0), TextWrapping = TextWrapping.Wrap });
+
+            if (request.IsIncoming)
+            {
+                var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
+                var reject = new Button { Content = "Reject", Height = 28, Padding = new Thickness(9, 0, 9, 0), Margin = new Thickness(0, 0, 6, 0), Style = (Style)FindResource("SecondaryButtonStyle"), DataContext = request };
+                var accept = new Button { Content = "Accept", Height = 28, Padding = new Thickness(9, 0, 9, 0), Style = (Style)FindResource("PrimaryButtonStyle"), DataContext = request };
+                reject.Click += RejectConversationRequestButton_Click;
+                accept.Click += AcceptConversationRequestButton_Click;
+                actions.Children.Add(reject);
+                actions.Children.Add(accept);
+                content.Children.Add(actions);
+            }
+
+            Grid.SetColumn(content, 1);
+            root.Children.Add(content);
+            card.Child = root;
+            _conversationRequestsPanel.Children.Add(card);
         }
     }
 
@@ -155,7 +227,8 @@ public partial class MainView
         if (sender is not Button { DataContext: ConversationChatRequestItem request } || request.RequestId <= 0) return;
         try
         {
-            await _apiService.PostAsync<object, RequestActionResponse>($"api/ChatRequests/{request.RequestId}/accept", new { });
+            var result = await _apiService.PostAsync<object, RequestActionResponse>($"api/ChatRequests/{request.RequestId}/accept", new { });
+            if (result == null) return;
             await LoadChatsAsync();
             await RefreshConversationChatRequestsAsync();
         }
@@ -170,7 +243,8 @@ public partial class MainView
         if (sender is not Button { DataContext: ConversationChatRequestItem request } || request.RequestId <= 0) return;
         try
         {
-            await _apiService.PostAsync<object, RequestActionResponse>($"api/ChatRequests/{request.RequestId}/reject", new { });
+            var result = await _apiService.PostAsync<object, RequestActionResponse>($"api/ChatRequests/{request.RequestId}/reject", new { });
+            if (result == null) return;
             await RefreshConversationChatRequestsAsync();
         }
         catch (Exception ex)
@@ -195,7 +269,6 @@ public partial class MainView
         public string Username { get; set; } = string.Empty;
         public string Summary { get; set; } = string.Empty;
         public bool IsIncoming { get; set; }
-        public Visibility ActionsVisibility => IsIncoming ? Visibility.Visible : Visibility.Collapsed;
         public string Initials
         {
             get
