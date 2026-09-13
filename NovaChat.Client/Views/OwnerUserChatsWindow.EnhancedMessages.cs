@@ -70,11 +70,8 @@ public partial class OwnerUserChatsWindow
                     encryptedMedia,
                     async () =>
                     {
-                        var bytes = await _apiService.GetBytesAsync($"api/OwnerChat/{chat.Id}/media/{message.Id}");
-                        if (bytes == null || bytes.Length == 0) return bytes;
-                        return encryptedMedia
-                            ? await _ownerEnhancedE2ee.DecryptMediaBytesAsync(rawContent, bytes)
-                            : bytes;
+                        if (encryptedMedia) return null;
+                        return await _apiService.GetBytesAsync($"api/OwnerMedia/{chat.Id}/{message.Id}");
                     });
 
                 MessagesPanel.Children.Add(element);
