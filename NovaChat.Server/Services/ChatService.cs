@@ -15,6 +15,22 @@ public class ChatService
     public Task<User?> GetUserByUsernameAsync(string username) => _context.Users.FirstOrDefaultAsync(u => u.Username == username.Trim().ToLowerInvariant());
     public Task SaveChangesAsync() => _context.SaveChangesAsync();
 
+    public async Task<Chat?> FindPrivateChatAsync(long firstUserId, long secondUserId)
+    {
+        if (firstUserId <= 0 || secondUserId <= 0 || firstUserId == secondUserId) return null;
+        var names = await _context.Users.AsNoTracking()
+            .Where(u => u.Id == firstUserId || u.Id == secondUserId)
+            .OrderBy(u => u.Id)
+            .Select(u => u.Username)
+            .ToListAsync();
+        if (names.Count != 2) return null;
+        return (await _context.Chats
+            .Where(c => c.Type == ChatType.Private && !c.IsDeleted)
+            .OrderByDescending(c => c.Id)
+            .ToListAsync())
+            .FirstOrDefault(c => HasExactlyMembers(c.Members, names));
+    }
+
     public async Task<Chat?> CreatePrivateChatAsync(long currentUserId, long otherUserId)
     {
         if (currentUserId <= 0 || otherUserId <= 0 || currentUserId == otherUserId) return null;
@@ -60,6 +76,7 @@ public class ChatService
         if (!normalized.Contains(creator.Username)) normalized.Insert(0, creator.Username);
         var users = await _context.Users.Where(u => normalized.Contains(u.Username)).ToListAsync();
         if (users.Count != normalized.Count || users.Count < 2) return null;
+        if (users.Any(u => u.Id != creatorId && !u.AllowGroupAdds)) return null;
 
         var chat = new Chat { Type = ChatType.Group, Name = name, Members = string.Join(", ", normalized), CreatedByUserId = creatorId, IsDeleted = false, DeletedAt = null };
         _context.Chats.Add(chat);
@@ -72,7 +89,6 @@ public class ChatService
     {
         var username = await _context.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => u.Username).FirstOrDefaultAsync();
         if (string.IsNullOrWhiteSpace(username)) return [];
-
         var chats = await _context.Chats.AsNoTracking().Where(c => !c.IsDeleted && (c.Members == username || c.Members.StartsWith(username + ", ") || c.Members.Contains(", " + username + ", ") || c.Members.EndsWith(", " + username))).OrderByDescending(c => c.CreatedAt).ThenByDescending(c => c.Id).ToListAsync();
         foreach (var chat in chats)
         {
@@ -156,17 +172,9 @@ public class ChatService
     public async Task<Message?> SendMessageAsync(int chatId, long senderId, string content)
     {
         if (string.IsNullOrWhiteSpace(content) || !await CanAccessChatAsync(chatId, senderId)) return null;
-
         var sender = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == senderId);
         if (sender == null) return null;
-
-        var message = new Message
-        {
-            ChatId = chatId,
-            SenderId = sender.Username,
-            Content = content.Trim()
-        };
-
+        var message = new Message { ChatId = chatId, SenderId = sender.Username, Content = content.Trim() };
         _context.Messages.Add(message);
         await _context.SaveChangesAsync();
         return message;
@@ -196,13 +204,11 @@ public class ChatService
     }
 
     public Task<Message?> GetLastMessageAsync(int chatId) => _context.Messages.AsNoTracking().Where(m => m.ChatId == chatId && !m.DeletedForEveryone).OrderByDescending(m => m.SentAt).ThenByDescending(m => m.Id).FirstOrDefaultAsync();
-
     public async Task<Message?> GetLastMessageAsync(int chatId, long viewerUserId)
     {
         var messages = await _context.Messages.AsNoTracking().Where(m => m.ChatId == chatId && !m.DeletedForEveryone).OrderByDescending(m => m.SentAt).ThenByDescending(m => m.Id).Take(100).ToListAsync();
         return messages.FirstOrDefault(m => !IsDeletedForUser(m, viewerUserId));
     }
-
     public Task<Message?> GetMessageByIdAsync(int messageId) => _context.Messages.AsNoTracking().FirstOrDefaultAsync(m => m.Id == messageId);
 
     public async Task<List<ChatMember>> GetMembersAsync(int chatId)
@@ -222,7 +228,7 @@ public class ChatService
         if (!await IsGroupAsync(chatId) || !await CanAccessChatAsync(chatId, actorId) || !await UserExistsAsync(userId)) return false;
         var target = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
         var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId && !c.IsDeleted);
-        if (target == null || chat == null) return false;
+        if (target == null || chat == null || !target.AllowGroupAdds) return false;
         var members = ParseMembers(chat.Members).ToList();
         if (!members.Contains(target.Username, StringComparer.OrdinalIgnoreCase))
         {
@@ -291,7 +297,6 @@ public class ChatService
     }
 
     public Task<int?> GetMessageChatIdAsync(int messageId) => _context.Messages.Where(m => m.Id == messageId).Select(m => (int?)m.ChatId).FirstOrDefaultAsync();
-
     private Task<bool> IsGroupAsync(int chatId) => _context.Chats.AnyAsync(c => c.Id == chatId && c.Type == ChatType.Group && !c.IsDeleted);
     private static bool HasExactlyMembers(string stored, IReadOnlyCollection<string> expected) { var actual = ParseMembers(stored).ToHashSet(StringComparer.OrdinalIgnoreCase); return actual.Count == expected.Count && expected.All(actual.Contains); }
     private static IEnumerable<string> ParseMembers(string members) => (members ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase);
