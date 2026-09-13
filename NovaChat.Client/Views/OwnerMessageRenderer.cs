@@ -1,5 +1,4 @@
 using NovaChat.Client.Services;
-using System.Drawing;
 using System.Globalization;
 using System.Media;
 using System.Windows;
@@ -7,7 +6,8 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Brush = System.Windows.Media.Brush;
-using Color = System.Windows.Media.Color;
+using Brushes = System.Windows.Media.Brushes;
+using IOPath = System.IO.Path;
 
 namespace NovaChat.Client.Views;
 
@@ -137,7 +137,7 @@ internal static class OwnerMessageRenderer
 
     private static FrameworkElement BuildImage(FrameworkElement owner, string? fileName, long? fileSize, byte[] bytes)
     {
-        var image = new Image
+        var image = new System.Windows.Controls.Image
         {
             Source = CreateBitmap(bytes),
             Width = 260,
@@ -161,8 +161,8 @@ internal static class OwnerMessageRenderer
 
     private static FrameworkElement BuildVoice(FrameworkElement owner, string? fileName, long? fileSize, double? durationSeconds, byte[] bytes)
     {
-        var path = Path.Combine(Path.GetTempPath(), "NovaChat", $"owner-voice-{Guid.NewGuid():N}.wav");
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var path = IOPath.Combine(IOPath.GetTempPath(), "NovaChat", $"owner-voice-{Guid.NewGuid():N}.wav");
+        Directory.CreateDirectory(IOPath.GetDirectoryName(path)!);
         File.WriteAllBytes(path, bytes);
 
         var player = new SoundPlayer(path);
@@ -276,7 +276,7 @@ internal static class OwnerMessageRenderer
             if (contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)) return "image";
             if (contentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase)) return "voice";
         }
-        var extension = Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant();
+        var extension = IOPath.GetExtension(fileName ?? string.Empty).ToLowerInvariant();
         return extension is ".jpg" or ".jpeg" or ".png" or ".webp" or ".gif" ? "image" :
             extension == ".wav" ? "voice" : "file";
     }
