@@ -127,7 +127,7 @@ public partial class MainView
 
     private async Task RefreshConversationChatRequestsAsync()
     {
-        if (_chatRequestBusy || !AuthState.IsAuthenticated) return;
+        if (!AuthState.IsAuthenticated) return;
         try
         {
             await Dispatcher.InvokeAsync(EnsureConversationChatRequestsUi);
