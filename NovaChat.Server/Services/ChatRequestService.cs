@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using NovaChat.Server.Data;
 using NovaChat.Server.DTOs;
 using NovaChat.Server.Entities;
-using System.Data;
 
 namespace NovaChat.Server.Services;
 
@@ -28,11 +27,16 @@ CREATE TABLE IF NOT EXISTS `ChatRequests` (
     `RespondedAt` DATETIME(6) NULL,
     `ChatId` INT NULL,
     PRIMARY KEY (`Id`),
+    UNIQUE KEY `UX_ChatRequests_Pending` (`RequesterUserId`, `TargetUserId`, `Status`),
     INDEX `IX_ChatRequests_Target_Status` (`TargetUserId`, `Status`),
     INDEX `IX_ChatRequests_Requester_Status` (`RequesterUserId`, `Status`),
     CONSTRAINT `FK_ChatRequests_Requester` FOREIGN KEY (`RequesterUserId`) REFERENCES `Users`(`Id`) ON DELETE CASCADE,
     CONSTRAINT `FK_ChatRequests_Target` FOREIGN KEY (`TargetUserId`) REFERENCES `Users`(`Id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;", cancellationToken);
+
+        await _db.Database.ExecuteSqlRawAsync(@"
+ALTER TABLE `ChatRequests`
+    ADD UNIQUE INDEX IF NOT EXISTS `UX_ChatRequests_Pending` (`RequesterUserId`, `TargetUserId`, `Status`);", cancellationToken);
     }
 
     public async Task<(bool Success, string Message, ChatRequestDto? Request)> CreateAsync(long requesterId, string username, CancellationToken cancellationToken = default)
@@ -56,9 +60,22 @@ CREATE TABLE IF NOT EXISTS `ChatRequests` (
         }
 
         var now = DateTime.UtcNow;
-        await _db.Database.ExecuteSqlInterpolatedAsync($@"
+        try
+        {
+            await _db.Database.ExecuteSqlInterpolatedAsync($@"
 INSERT INTO `ChatRequests` (`RequesterUserId`,`TargetUserId`,`Status`,`CreatedAt`)
 VALUES ({requester.Id},{target.Id},{"Pending"},{now});", cancellationToken);
+        }
+        catch (Exception exception) when (exception is MySqlConnector.MySqlException { Number: 1062 })
+        {
+            var currentPending = await _db.Database.SqlQueryRaw<long>(
+                "SELECT `Id` AS `Value` FROM `ChatRequests` WHERE `RequesterUserId` = {0} AND `TargetUserId` = {1} AND `Status` = 'Pending' ORDER BY `Id` DESC LIMIT 1",
+                requester.Id, target.Id).FirstOrDefaultAsync(cancellationToken);
+            if (currentPending > 0)
+                return (true, "Chat request is already pending.", await GetByIdAsync(currentPending, cancellationToken));
+            throw;
+        }
+
         var id = await _db.Database.SqlQueryRaw<long>("SELECT LAST_INSERT_ID() AS `Value`").SingleAsync(cancellationToken);
         var result = new ChatRequestDto
         {
