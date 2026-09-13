@@ -21,18 +21,10 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="TextBox">
                         <Grid>
-                            <Border x:Name="Box"
-                                    CornerRadius="14"
-                                    Background="{TemplateBinding Background}"
-                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="{TemplateBinding BorderThickness}">
+                            <Border x:Name="Box" CornerRadius="14" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
                                 <ScrollViewer x:Name="PART_ContentHost" Margin="0" VerticalAlignment="Center"/>
                             </Border>
-                            <Border x:Name="FocusGlow"
-                                    CornerRadius="14"
-                                    BorderBrush="#00D4A373"
-                                    BorderThickness="1"
-                                    IsHitTestVisible="False"/>
+                            <Border x:Name="FocusGlow" CornerRadius="14" BorderBrush="#00D4A373" BorderThickness="1" IsHitTestVisible="False"/>
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -65,18 +57,10 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="PasswordBox">
                         <Grid>
-                            <Border x:Name="Box"
-                                    CornerRadius="14"
-                                    Background="{TemplateBinding Background}"
-                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="{TemplateBinding BorderThickness}">
+                            <Border x:Name="Box" CornerRadius="14" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
                                 <ScrollViewer x:Name="PART_ContentHost" Margin="0" VerticalAlignment="Center"/>
                             </Border>
-                            <Border x:Name="FocusGlow"
-                                    CornerRadius="14"
-                                    BorderBrush="#00D4A373"
-                                    BorderThickness="1"
-                                    IsHitTestVisible="False"/>
+                            <Border x:Name="FocusGlow" CornerRadius="14" BorderBrush="#00D4A373" BorderThickness="1" IsHitTestVisible="False"/>
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -119,11 +103,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Surface"
-                                CornerRadius="16"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}">
+                        <Border x:Name="Surface" CornerRadius="16" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
                             <Grid>
                                 <Border CornerRadius="15" Margin="1" Background="#18FFFFFF" BorderBrush="#24FFFFFF" BorderThickness="1"/>
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -206,45 +186,21 @@
 
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <Grid MinHeight="820" Margin="24,34">
-                <Border Width="560"
-                        Padding="40"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        Background="#1CFFFFFF"
-                        BorderBrush="#3AFFFFFF"
-                        BorderThickness="1"
-                        CornerRadius="30">
+                <Border Width="560" Padding="40" HorizontalAlignment="Center" VerticalAlignment="Center" Background="#1CFFFFFF" BorderBrush="#3AFFFFFF" BorderThickness="1" CornerRadius="30">
                     <Border.Effect>
                         <DropShadowEffect Color="#000000" BlurRadius="30" ShadowDepth="12" Opacity="0.38"/>
                     </Border.Effect>
-
                     <StackPanel>
                         <Border Width="64" Height="64" CornerRadius="20" Background="#D4A373" HorizontalAlignment="Center">
                             <TextBlock Text="N" Foreground="White" FontSize="30" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
-
-                        <TextBlock Text="Create your NovaChat account"
-                                   FontSize="29"
-                                   FontWeight="SemiBold"
-                                   Foreground="#FFFFFF"
-                                   HorizontalAlignment="Center"
-                                   Margin="0,20,0,7"
-                                   TextAlignment="Center"/>
-                        <TextBlock Text="Set up your profile and start chatting in one place."
-                                   FontSize="13"
-                                   Foreground="#BFC3CA"
-                                   HorizontalAlignment="Center"
-                                   Margin="0,0,0,26"
-                                   TextWrapping="Wrap"
-                                   TextAlignment="Center"/>
+                        <TextBlock Text="Create your NovaChat account" FontSize="29" FontWeight="SemiBold" Foreground="#FFFFFF" HorizontalAlignment="Center" Margin="0,20,0,7" TextAlignment="Center"/>
+                        <TextBlock Text="Set up your profile and start chatting in one place." FontSize="13" Foreground="#BFC3CA" HorizontalAlignment="Center" Margin="0,0,0,26" TextWrapping="Wrap" TextAlignment="Center"/>
 
                         <TextBlock Text="Username" Style="{StaticResource FieldLabel}"/>
                         <TextBox x:Name="UsernameTextBox" Style="{StaticResource GlassTextBox}" Height="48" TextChanged="UsernameTextBox_TextChanged"/>
                         <TextBlock x:Name="UsernameDuplicateText" Text="This username is already taken." Style="{StaticResource DuplicateWarning}"/>
-                        <TextBlock Text="Use 3–32 letters, numbers, dot, underscore or hyphen."
-                                   Foreground="#9097A3"
-                                   FontSize="10.5"
-                                   Margin="0,5,0,15"/>
+                        <TextBlock Text="Use 3–32 letters, numbers, dot, underscore or hyphen." Foreground="#9097A3" FontSize="10.5" Margin="0,5,0,15"/>
 
                         <TextBlock Text="Password" Style="{StaticResource FieldLabel}"/>
                         <PasswordBox x:Name="PasswordBox" Style="{StaticResource GlassPasswordBox}" Height="48" Margin="0,0,0,15"/>
@@ -259,24 +215,14 @@
 
                         <TextBlock Text="Phone Number" Style="{StaticResource FieldLabel}"/>
                         <Grid>
-                            <TextBox x:Name="PhoneNumberTextBox"
-                                     Style="{StaticResource GlassTextBox}"
-                                     Height="48"
-                                     PreviewTextInput="PhoneNumberTextBox_PreviewTextInput"
-                                     TextChanged="PhoneNumberTextBox_TextChanged"
-                                     DataObject.Pasting="PhoneNumberTextBox_Pasting"/>
+                            <TextBox x:Name="PhoneNumberTextBox" Style="{StaticResource GlassTextBox}" Height="48" PreviewTextInput="PhoneNumberTextBox_PreviewTextInput" TextChanged="PhoneNumberTextBox_TextChanged" DataObject.Pasting="PhoneNumberTextBox_Pasting"/>
                             <TextBlock x:Name="PhoneHintText" Text="09987654321" Style="{StaticResource PhoneHint}"/>
                         </Grid>
                         <TextBlock x:Name="PhoneDuplicateText" Text="This phone number is already registered." Style="{StaticResource DuplicateWarning}"/>
                         <TextBlock x:Name="PhoneValidationText" Text="Phone number must contain exactly 11 digits and start with 0." Style="{StaticResource DuplicateWarning}"/>
 
                         <TextBlock Text="Privacy" Foreground="#E4E6EA" FontSize="12" FontWeight="SemiBold" Margin="0,21,0,9"/>
-                        <Border Padding="14"
-                                Background="#15FFFFFF"
-                                BorderBrush="#35FFFFFF"
-                                BorderThickness="1"
-                                CornerRadius="15"
-                                Margin="0,0,0,9">
+                        <Border Padding="14" Background="#15FFFFFF" BorderBrush="#35FFFFFF" BorderThickness="1" CornerRadius="15" Margin="0,0,0,9">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -284,74 +230,30 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
                                     <TextBlock Text="Who can message me?" FontSize="13" FontWeight="SemiBold" Foreground="#FFFFFF"/>
-                                    <TextBlock Text="Choose whether new people can start chats directly or need your approval."
-                                               FontSize="10.5"
-                                               Foreground="#BFC3CA"
-                                               Margin="0,4,0,0"
-                                               TextWrapping="Wrap"/>
+                                    <TextBlock Text="Choose whether new people can start chats directly or need your approval." FontSize="10.5" Foreground="#BFC3CA" Margin="0,4,0,0" TextWrapping="Wrap"/>
                                 </StackPanel>
-                                <ComboBox x:Name="RegistrationMessagePrivacyBox"
-                                          Style="{StaticResource GlassComboBox}"
-                                          ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=UserControl}, Path=DataContext}"
-                                          SelectedIndex="0">
+                                <ComboBox x:Name="RegistrationMessagePrivacyBox" Style="{StaticResource GlassComboBox}" SelectedIndex="0">
                                     <ComboBoxItem Content="Everybody"/>
                                     <ComboBoxItem Content="Requests only"/>
                                 </ComboBox>
                             </Grid>
                         </Border>
 
-                        <Border Padding="14"
-                                Background="#15FFFFFF"
-                                BorderBrush="#35FFFFFF"
-                                BorderThickness="1"
-                                CornerRadius="15">
-                            <CheckBox x:Name="RegistrationAllowGroupAddsBox"
-                                      IsChecked="True"
-                                      Foreground="#FFFFFF">
+                        <Border Padding="14" Background="#15FFFFFF" BorderBrush="#35FFFFFF" BorderThickness="1" CornerRadius="15">
+                            <CheckBox x:Name="RegistrationAllowGroupAddsBox" IsChecked="True" Foreground="#FFFFFF">
                                 <StackPanel Margin="8,0,0,0">
                                     <TextBlock Text="Allow other people to add me to groups" FontSize="13" FontWeight="SemiBold"/>
-                                    <TextBlock Text="Turn this off to prevent direct group additions."
-                                               FontSize="10.5"
-                                               Foreground="#BFC3CA"
-                                               Margin="0,4,0,0"
-                                               TextWrapping="Wrap"/>
+                                    <TextBlock Text="Turn this off to prevent direct group additions." FontSize="10.5" Foreground="#BFC3CA" Margin="0,4,0,0" TextWrapping="Wrap"/>
                                 </StackPanel>
                             </CheckBox>
                         </Border>
 
-                        <TextBlock x:Name="RegistrationErrorTextBlock"
-                                   Visibility="Collapsed"
-                                   Foreground="#FF7A7A"
-                                   FontSize="12.5"
-                                   FontWeight="SemiBold"
-                                   TextWrapping="Wrap"
-                                   TextAlignment="Center"
-                                   Margin="0,17,0,0"/>
-                        <TextBlock x:Name="RegistrationSuccessTextBlock"
-                                   Visibility="Collapsed"
-                                   Foreground="#89E6A7"
-                                   FontSize="12.5"
-                                   FontWeight="SemiBold"
-                                   TextWrapping="Wrap"
-                                   TextAlignment="Center"
-                                   Margin="0,17,0,0"/>
+                        <TextBlock x:Name="RegistrationErrorTextBlock" Visibility="Collapsed" Foreground="#FF7A7A" FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap" TextAlignment="Center" Margin="0,17,0,0"/>
+                        <TextBlock x:Name="RegistrationSuccessTextBlock" Visibility="Collapsed" Foreground="#89E6A7" FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap" TextAlignment="Center" Margin="0,17,0,0"/>
 
-                        <Button x:Name="RegisterButton"
-                                Content="Create account"
-                                Height="52"
-                                Margin="0,18,0,0"
-                                Style="{StaticResource GlassCreateButton}"
-                                IsDefault="True"
-                                Click="RegisterButton_Click"/>
-
-                        <TextBlock Text="Already have an account?"
-                                   HorizontalAlignment="Center"
-                                   Foreground="#9FA4AE"
-                                   Margin="0,22,0,4"/>
-                        <Button Content="Back to sign in"
-                                Height="38"
-                                Style="{StaticResource GlassBackButton}"
-                                Click="BackToLoginButton_Click"/>
+                        <Button x:Name="RegisterButton" Content="Create account" Height="52" Margin="0,18,0,0" Style="{StaticResource GlassCreateButton}" IsDefault="True" Click="RegisterButton_Click"/>
+                        <TextBlock Text="Already have an account?" HorizontalAlignment="Center" Foreground="#9FA4AE" Margin="0,22,0,4"/>
+                        <Button Content="Back to sign in" Height="38" Style="{StaticResource GlassBackButton}" Click="BackToLoginButton_Click"/>
                     </StackPanel>
                 </Border>
             </Grid>
