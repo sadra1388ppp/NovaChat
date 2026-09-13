@@ -79,15 +79,41 @@
             </Setter>
         </Style>
 
-        <Style x:Key="GlassComboBox" TargetType="ComboBox">
-            <Setter Property="Height" Value="42"/>
-            <Setter Property="Width" Value="154"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="Foreground" Value="#1E2126"/>
-            <Setter Property="Background" Value="#F3F4F6"/>
-            <Setter Property="BorderBrush" Value="#D9DDE4"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="10,0"/>
+        <Style x:Key="PrivacyRadioButton" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Surface" Padding="12" CornerRadius="12" Background="#10FFFFFF" BorderBrush="#28FFFFFF" BorderThickness="1">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="24"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Width="18" Height="18" CornerRadius="9" BorderBrush="#7F8792" BorderThickness="1.5" VerticalAlignment="Top" HorizontalAlignment="Left">
+                                    <Ellipse x:Name="Dot" Width="8" Height="8" Fill="#D4A373" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <ContentPresenter Grid.Column="1" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="#18FFFFFF"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="#55D4A373"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="#22D4A373"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="#FFD4A373"/>
+                                <Setter TargetName="Dot" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <Style x:Key="GlassCreateButton" TargetType="Button">
@@ -185,7 +211,7 @@
         </Border>
 
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-            <Grid MinHeight="820" Margin="24,34">
+            <Grid MinHeight="860" Margin="24,34">
                 <Border Width="560" Padding="40" HorizontalAlignment="Center" VerticalAlignment="Center" Background="#1CFFFFFF" BorderBrush="#3AFFFFFF" BorderThickness="1" CornerRadius="30">
                     <Border.Effect>
                         <DropShadowEffect Color="#000000" BlurRadius="30" ShadowDepth="12" Opacity="0.38"/>
@@ -223,20 +249,24 @@
 
                         <TextBlock Text="Privacy" Foreground="#E4E6EA" FontSize="12" FontWeight="SemiBold" Margin="0,21,0,9"/>
                         <Border Padding="14" Background="#15FFFFFF" BorderBrush="#35FFFFFF" BorderThickness="1" CornerRadius="15" Margin="0,0,0,9">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
-                                    <TextBlock Text="Who can message me?" FontSize="13" FontWeight="SemiBold" Foreground="#FFFFFF"/>
-                                    <TextBlock Text="Choose whether new people can start chats directly or need your approval." FontSize="10.5" Foreground="#BFC3CA" Margin="0,4,0,0" TextWrapping="Wrap"/>
-                                </StackPanel>
-                                <ComboBox x:Name="RegistrationMessagePrivacyBox" Style="{StaticResource GlassComboBox}" SelectedIndex="0">
-                                    <ComboBoxItem Content="Everybody"/>
-                                    <ComboBoxItem Content="Requests only"/>
-                                </ComboBox>
-                            </Grid>
+                            <StackPanel>
+                                <TextBlock Text="Who can message you?" FontSize="14" FontWeight="SemiBold" Foreground="#FFFFFF"/>
+                                <TextBlock x:Name="RegistrationMessagePrivacyDescription" Text="Anyone can start a conversation with you directly." FontSize="10.5" Foreground="#BFC3CA" Margin="0,5,0,12" TextWrapping="Wrap"/>
+
+                                <RadioButton x:Name="RegistrationMessageEverybodyRadio" GroupName="RegistrationMessagePrivacy" IsChecked="True" Style="{StaticResource PrivacyRadioButton}" Checked="RegistrationMessagePrivacyChanged">
+                                    <StackPanel>
+                                        <TextBlock Text="Everyone"/>
+                                        <TextBlock Text="New people can message you directly." FontSize="10.5" FontWeight="Normal" Foreground="#AEB5BF" Margin="0,3,0,0"/>
+                                    </StackPanel>
+                                </RadioButton>
+                                <RadioButton x:Name="RegistrationMessageRequestsRadio" GroupName="RegistrationMessagePrivacy" Style="{StaticResource PrivacyRadioButton}" Checked="RegistrationMessagePrivacyChanged">
+                                    <StackPanel>
+                                        <TextBlock Text="People you approve"/>
+                                        <TextBlock Text="New conversations arrive as requests until you approve them." FontSize="10.5" FontWeight="Normal" Foreground="#AEB5BF" Margin="0,3,0,0" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </RadioButton>
+                                <TextBlock x:Name="RegistrationMessagePrivacyStatus" Text="Everyone can message you" FontSize="10.5" Foreground="#D4A373" FontWeight="SemiBold" Margin="0,1,0,0"/>
+                            </StackPanel>
                         </Border>
 
                         <Border Padding="14" Background="#15FFFFFF" BorderBrush="#35FFFFFF" BorderThickness="1" CornerRadius="15">
@@ -248,8 +278,23 @@
                             </CheckBox>
                         </Border>
 
+                        <Border x:Name="RegistrationSuccessCard" Visibility="Collapsed" Padding="14" Background="#182F8F46" BorderBrush="#6089E6A7" BorderThickness="1" CornerRadius="15" Margin="0,17,0,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Width="34" Height="34" CornerRadius="17" Background="#3A89E6A7" VerticalAlignment="Top" Margin="0,0,11,0">
+                                    <TextBlock Text="✓" Foreground="#89E6A7" FontSize="19" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="Account created successfully" Foreground="#B7F3C8" FontSize="13.5" FontWeight="Bold"/>
+                                    <TextBlock x:Name="RegistrationSuccessTextBlock" Text="Your NovaChat account is ready." Foreground="#BDE7C8" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
                         <TextBlock x:Name="RegistrationErrorTextBlock" Visibility="Collapsed" Foreground="#FF7A7A" FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap" TextAlignment="Center" Margin="0,17,0,0"/>
-                        <TextBlock x:Name="RegistrationSuccessTextBlock" Visibility="Collapsed" Foreground="#89E6A7" FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap" TextAlignment="Center" Margin="0,17,0,0"/>
 
                         <Button x:Name="RegisterButton" Content="Create account" Height="52" Margin="0,18,0,0" Style="{StaticResource GlassCreateButton}" IsDefault="True" Click="RegisterButton_Click"/>
                         <TextBlock Text="Already have an account?" HorizontalAlignment="Center" Foreground="#9FA4AE" Margin="0,22,0,4"/>
