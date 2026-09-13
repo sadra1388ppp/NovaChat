@@ -11,7 +11,6 @@ public partial class MainView
 {
     private static bool _chatRequestUiRegistered;
     private DispatcherTimer? _chatRequestTimer;
-    private readonly HashSet<long> _notifiedChatRequestIds = [];
     private bool _chatRequestBusy;
 
     private static void RegisterChatRequestHandlers()
@@ -36,9 +35,9 @@ public partial class MainView
     {
         if (sender is not MainView view || view._chatRequestTimer != null) return;
         view._chatRequestTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
-        view._chatRequestTimer.Tick += async (_, _) => await view.PollIncomingChatRequestsAsync();
+        view._chatRequestTimer.Tick += async (_, _) => await view.RefreshConversationChatRequestsAsync();
         view._chatRequestTimer.Start();
-        await view.PollIncomingChatRequestsAsync();
+        await view.RefreshConversationChatRequestsAsync();
     }
 
     private async Task OpenChatRequestFlowAsync()
@@ -84,7 +83,7 @@ public partial class MainView
             }
             if (result.RequestPending)
             {
-                MessageBox.Show("Your chat request has been sent. You can start messaging after the other person accepts it.", "Chat Request Sent", MessageBoxButton.OK, MessageBoxImage.Information);
+                await RefreshConversationChatRequestsAsync();
                 return;
             }
             if (result.Chat == null)
@@ -103,53 +102,110 @@ public partial class MainView
         finally { _chatRequestBusy = false; }
     }
 
-    private async Task PollIncomingChatRequestsAsync()
+    private async Task RefreshConversationChatRequestsAsync()
     {
         if (_chatRequestBusy || !AuthState.IsAuthenticated) return;
         try
         {
-            var requests = await _apiService.GetAsync<List<IncomingChatRequestModel>>("api/ChatRequests/incoming");
-            foreach (var request in requests ?? [])
+            var incoming = await _apiService.GetAsync<List<ConversationChatRequestModel>>("api/ChatRequests/incoming") ?? [];
+            var outgoing = await _apiService.GetAsync<List<ConversationChatRequestModel>>("api/ChatRequests/outgoing") ?? [];
+            var items = new List<ConversationChatRequestItem>(incoming.Count + outgoing.Count);
+
+            foreach (var request in incoming)
             {
-                if (!_notifiedChatRequestIds.Add(request.Id)) continue;
-                await ShowIncomingChatRequestAsync(request);
+                items.Add(new ConversationChatRequestItem
+                {
+                    RequestId = request.Id,
+                    DisplayName = string.IsNullOrWhiteSpace(request.RequesterDisplayName) ? request.RequesterUsername : request.RequesterDisplayName,
+                    Username = request.RequesterUsername,
+                    Summary = "This person wants to start a conversation with you.",
+                    IsIncoming = true
+                });
             }
+
+            foreach (var request in outgoing)
+            {
+                items.Add(new ConversationChatRequestItem
+                {
+                    RequestId = request.Id,
+                    DisplayName = string.IsNullOrWhiteSpace(request.TargetDisplayName) ? request.TargetUsername : request.TargetDisplayName,
+                    Username = request.TargetUsername,
+                    Summary = "Chat request sent · Waiting for approval.",
+                    IsIncoming = false
+                });
+            }
+
+            items.Sort((a, b) => b.RequestId.CompareTo(a.RequestId));
+            await Dispatcher.InvokeAsync(() =>
+            {
+                ChatRequestsList.ItemsSource = items;
+                ChatRequestsHeader.Visibility = items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+                ChatRequestsList.Visibility = items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+                NoChatsText.Margin = items.Count > 0 ? new Thickness(0, 10, 0, 0) : new Thickness(0, 10, 0, 0);
+            });
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Chat request polling failed: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Conversation chat request refresh failed: {ex.Message}");
         }
     }
 
-    private async Task ShowIncomingChatRequestAsync(IncomingChatRequestModel request)
+    private async void AcceptConversationRequestButton_Click(object sender, RoutedEventArgs e)
     {
-        var requester = string.IsNullOrWhiteSpace(request.RequesterDisplayName) ? $"@{request.RequesterUsername}" : $"{request.RequesterDisplayName} (@{request.RequesterUsername})";
-        var result = MessageBox.Show($"{requester} wants to start a private conversation with you.\n\nAccept to create the chat, or Reject to decline it.", "New Chat Request", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.Yes);
+        if (sender is not Button { DataContext: ConversationChatRequestItem request } || request.RequestId <= 0) return;
         try
         {
-            if (result == MessageBoxResult.Yes)
-            {
-                await _apiService.PostAsync<object, RequestActionResponse>($"api/ChatRequests/{request.Id}/accept", new { });
-                MessageBox.Show("Chat request accepted. The new conversation is now available.", "Chat Request", MessageBoxButton.OK, MessageBoxImage.Information);
-                await LoadChatsAsync();
-            }
-            else
-            {
-                await _apiService.PostAsync<object, RequestActionResponse>($"api/ChatRequests/{request.Id}/reject", new { });
-            }
+            await _apiService.PostAsync<object, RequestActionResponse>($"api/ChatRequests/{request.RequestId}/accept", new { });
+            await LoadChatsAsync();
+            await RefreshConversationChatRequestsAsync();
         }
         catch (Exception ex)
         {
-            _notifiedChatRequestIds.Remove(request.Id);
-            MessageBox.Show($"Could not process the chat request.\n\n{ex.Message}", "Chat Request", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show($"Could not accept the chat request.\n\n{ex.Message}", "Chat Request", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
-    private sealed class IncomingChatRequestModel
+    private async void RejectConversationRequestButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { DataContext: ConversationChatRequestItem request } || request.RequestId <= 0) return;
+        try
+        {
+            await _apiService.PostAsync<object, RequestActionResponse>($"api/ChatRequests/{request.RequestId}/reject", new { });
+            await RefreshConversationChatRequestsAsync();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Could not reject the chat request.\n\n{ex.Message}", "Chat Request", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private sealed class ConversationChatRequestModel
     {
         public long Id { get; set; }
         public string RequesterUsername { get; set; } = string.Empty;
         public string RequesterDisplayName { get; set; } = string.Empty;
+        public string TargetUsername { get; set; } = string.Empty;
+        public string TargetDisplayName { get; set; } = string.Empty;
+    }
+
+    private sealed class ConversationChatRequestItem
+    {
+        public long RequestId { get; set; }
+        public string DisplayName { get; set; } = string.Empty;
+        public string Username { get; set; } = string.Empty;
+        public string Summary { get; set; } = string.Empty;
+        public bool IsIncoming { get; set; }
+        public Visibility ActionsVisibility => IsIncoming ? Visibility.Visible : Visibility.Collapsed;
+        public string Initials
+        {
+            get
+            {
+                var value = string.IsNullOrWhiteSpace(DisplayName) ? Username : DisplayName.Trim();
+                if (string.IsNullOrWhiteSpace(value)) return "?";
+                var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                return parts.Length >= 2 ? $"{parts[0][0]}{parts[1][0]}".ToUpperInvariant() : value[..Math.Min(2, value.Length)].ToUpperInvariant();
+            }
+        }
     }
 
     private sealed class RequestActionResponse
