@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using NovaChat.Server.Entities;
-using NovaChat.Server.Services;
+using Microsoft.EntityFrameworkCore;
+using NovaChat.Server.Data;
 using System.Security.Claims;
 
 namespace NovaChat.Server.Controllers;
@@ -9,43 +9,48 @@ namespace NovaChat.Server.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/Privacy")]
-public sealed class PrivacyController(UserService users) : ControllerBase
+public sealed class PrivacyController(AppDbContext db) : ControllerBase
 {
-    private readonly UserService _users = users;
+    private readonly AppDbContext _db = db;
 
     [HttpGet]
     public async Task<IActionResult> Get(CancellationToken cancellationToken)
     {
         if (!TryGetUserId(out var userId)) return Unauthorized();
-        var profile = await _users.GetUserByIdAsync(userId.ToString(), true);
-        return profile == null ? NotFound(new { message = "User not found." }) : Ok(new { messagePrivacy = profile.MessagePrivacy, allowGroupAdds = profile.AllowGroupAdds });
+        var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == userId, cancellationToken);
+        if (user == null) return NotFound(new { message = "User not found." });
+
+        return Ok(new
+        {
+            messagePrivacy = NormalizeMessagePrivacy(user.MessagePrivacy),
+            allowGroupAdds = user.AllowGroupAdds
+        });
     }
 
     [HttpPut]
-    public async Task<IActionResult> Update(UpdatePrivacyRequest request)
+    public async Task<IActionResult> Update(UpdatePrivacyRequest request, CancellationToken cancellationToken)
     {
         if (!TryGetUserId(out var userId)) return Unauthorized();
-        var dto = new NovaChat.Server.DTOs.UpdateUserDto { DisplayName = "x", Email = "x@example.invalid", PhoneNumber = "00000000000", MessagePrivacy = request.MessagePrivacy, AllowGroupAdds = request.AllowGroupAdds };
-        // Update privacy directly to avoid requiring profile identity fields in this dedicated endpoint.
-        var result = await ApplyAsync(userId, request);
-        return result.Success ? Ok(new { message = "Privacy settings updated.", messagePrivacy = result.MessagePrivacy, allowGroupAdds = result.AllowGroupAdds }) : BadRequest(new { message = result.Error });
-    }
+        var user = await _db.Users.FirstOrDefaultAsync(x => x.Id == userId, cancellationToken);
+        if (user == null) return NotFound(new { message = "User not found." });
 
-    private async Task<(bool Success, string? Error, string MessagePrivacy, bool AllowGroupAdds)> ApplyAsync(long userId, UpdatePrivacyRequest request)
-    {
-        var dbField = HttpContext.RequestServices.GetRequiredService<Microsoft.EntityFrameworkCore.DbContext>();
-        var db = dbField as Microsoft.EntityFrameworkCore.DbContext;
-        var concrete = HttpContext.RequestServices.GetRequiredService<NovaChat.Server.Data.AppDbContext>();
-        var user = await concrete.Users.FirstOrDefaultAsync(u => u.Id == userId);
-        if (user == null) return (false, "User not found.", "Everybody", true);
-        var privacy = string.Equals(request.MessagePrivacy?.Trim(), "Requests", StringComparison.OrdinalIgnoreCase) ? "Requests" : "Everybody";
-        user.MessagePrivacy = privacy;
+        user.MessagePrivacy = NormalizeMessagePrivacy(request.MessagePrivacy);
         user.AllowGroupAdds = request.AllowGroupAdds;
-        await concrete.SaveChangesAsync();
-        return (true, null, privacy, user.AllowGroupAdds);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return Ok(new
+        {
+            message = "Privacy settings updated.",
+            messagePrivacy = user.MessagePrivacy,
+            allowGroupAdds = user.AllowGroupAdds
+        });
     }
 
-    private bool TryGetUserId(out long userId) => long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out userId) && userId > 0;
+    private static string NormalizeMessagePrivacy(string? value) =>
+        string.Equals(value?.Trim(), "Requests", StringComparison.OrdinalIgnoreCase) ? "Requests" : "Everybody";
+
+    private bool TryGetUserId(out long userId) =>
+        long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out userId) && userId > 0;
 
     public sealed class UpdatePrivacyRequest
     {
