@@ -14,6 +14,8 @@
     <SolidColorBrush x:Key="MyMessageBrush" Color="#5B5FEF"/>
     <SolidColorBrush x:Key="SuccessBrush" Color="#38C98A"/>
     <SolidColorBrush x:Key="DangerBrush" Color="#F06A6A"/>
+    <SolidColorBrush x:Key="InfoBrush" Color="#8C94FF"/>
+    <SolidColorBrush x:Key="WarningBrush" Color="#F0B44C"/>
 
     <Style x:Key="PrimaryButtonStyle" TargetType="Button">
         <Setter Property="Foreground" Value="White"/><Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="16,0"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Cursor" Value="Hand"/>
