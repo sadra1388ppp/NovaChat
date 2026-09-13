@@ -25,7 +25,6 @@ namespace NovaChat.Client
         {
             _isOwner = false;
             _pendingChatUsername = null;
-
             NotificationService.Dispose();
 
             if (_mainView != null)
@@ -43,17 +42,8 @@ namespace NovaChat.Client
             MainContainer.Children.Add(loginView);
         }
 
-        private void HandleNormalUserLogin()
-        {
-            _isOwner = false;
-            ShowMain();
-        }
-
-        private void HandleOwnerLogin()
-        {
-            _isOwner = true;
-            ShowMain();
-        }
+        private void HandleNormalUserLogin() { _isOwner = false; ShowMain(); }
+        private void HandleOwnerLogin() { _isOwner = true; ShowMain(); }
 
         public void ShowRegister()
         {
@@ -66,14 +56,12 @@ namespace NovaChat.Client
         public void ShowMain()
         {
             MainContainer.Children.Clear();
-
             if (_mainView == null)
             {
                 _mainView = new MainView();
                 _mainView.ProfileRequested += ShowProfile;
                 _mainView.SettingsRequested += ShowSettings;
             }
-
             _mainView.SetOwnerMode(_isOwner);
             MainContainer.Children.Add(_mainView);
 
@@ -94,7 +82,6 @@ namespace NovaChat.Client
         public void ShowManageUsers()
         {
             if (!_isOwner) return;
-
             MainContainer.Children.Clear();
             ManageUsersView manageUsersView = new ManageUsersView();
             manageUsersView.BackToChatRequested += ShowMain;
@@ -140,25 +127,14 @@ namespace NovaChat.Client
         private static readonly object ToastLock = new();
         private static readonly List<NovaToastWindow> OpenToasts = [];
 
-        public static System.Windows.MessageBoxResult Show(string messageBoxText) =>
-            Show(null, messageBoxText, "NovaChat", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information, System.Windows.MessageBoxResult.OK);
+        public static System.Windows.MessageBoxResult Show(string messageBoxText) => Show(null, messageBoxText, "NovaChat", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information, System.Windows.MessageBoxResult.OK);
+        public static System.Windows.MessageBoxResult Show(string messageBoxText, string caption) => Show(null, messageBoxText, caption, System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information, System.Windows.MessageBoxResult.OK);
+        public static System.Windows.MessageBoxResult Show(string messageBoxText, string caption, System.Windows.MessageBoxButton button) => Show(null, messageBoxText, caption, button, System.Windows.MessageBoxImage.None, GetDefault(button));
+        public static System.Windows.MessageBoxResult Show(string messageBoxText, string caption, System.Windows.MessageBoxButton button, System.Windows.MessageBoxImage icon) => Show(null, messageBoxText, caption, button, icon, GetDefault(button));
+        public static System.Windows.MessageBoxResult Show(string messageBoxText, string caption, System.Windows.MessageBoxButton button, System.Windows.MessageBoxImage icon, System.Windows.MessageBoxResult defaultResult) => Show(null, messageBoxText, caption, button, icon, defaultResult);
+        public static System.Windows.MessageBoxResult Show(Window owner, string messageBoxText, string caption, System.Windows.MessageBoxButton button, System.Windows.MessageBoxImage icon) => Show(owner, messageBoxText, caption, button, icon, GetDefault(button));
 
-        public static System.Windows.MessageBoxResult Show(string messageBoxText, string caption) =>
-            Show(null, messageBoxText, caption, System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information, System.Windows.MessageBoxResult.OK);
-
-        public static System.Windows.MessageBoxResult Show(string messageBoxText, string caption, System.Windows.MessageBoxButton button) =>
-            Show(null, messageBoxText, caption, button, System.Windows.MessageBoxImage.None, GetDefault(button));
-
-        public static System.Windows.MessageBoxResult Show(string messageBoxText, string caption, System.Windows.MessageBoxButton button, System.Windows.MessageBoxImage icon) =>
-            Show(null, messageBoxText, caption, button, icon, GetDefault(button));
-
-        public static System.Windows.MessageBoxResult Show(string messageBoxText, string caption, System.Windows.MessageBoxButton button, System.Windows.MessageBoxImage icon, System.Windows.MessageBoxResult defaultResult) =>
-            Show(null, messageBoxText, caption, button, icon, defaultResult);
-
-        public static System.Windows.MessageBoxResult Show(Window owner, string messageBoxText, string caption, System.Windows.MessageBoxButton button, System.Windows.MessageBoxImage icon) =>
-            Show(owner, messageBoxText, caption, button, icon, GetDefault(button));
-
-        public static System.Windows.MessageBoxResult Show(Window owner, string messageBoxText, string caption, System.Windows.MessageBoxButton button, System.Windows.MessageBoxImage icon, System.Windows.MessageBoxResult defaultResult)
+        public static System.Windows.MessageBoxResult Show(Window? owner, string messageBoxText, string caption, System.Windows.MessageBoxButton button, System.Windows.MessageBoxImage icon, System.Windows.MessageBoxResult defaultResult)
         {
             if (button == System.Windows.MessageBoxButton.OK)
             {
@@ -178,11 +154,23 @@ namespace NovaChat.Client
                 lock (ToastLock)
                 {
                     OpenToasts.Add(toast);
-                    toast.Closed += (_, _) => OpenToasts.Remove(toast);
+                    toast.Closed += (_, _) =>
+                    {
+                        lock (ToastLock)
+                        {
+                            OpenToasts.Remove(toast);
+                            RepositionToasts();
+                        }
+                    };
                     toast.SetSlot(OpenToasts.Count - 1);
                 }
                 toast.Show();
             });
+        }
+
+        private static void RepositionToasts()
+        {
+            for (var i = 0; i < OpenToasts.Count; i++) OpenToasts[i].SetSlot(i);
         }
 
         private static System.Windows.MessageBoxResult ShowConfirmation(Window? owner, string caption, string message, System.Windows.MessageBoxButton button, System.Windows.MessageBoxImage icon, System.Windows.MessageBoxResult defaultResult)
@@ -209,11 +197,12 @@ namespace NovaChat.Client
         private readonly DispatcherTimer _timer;
         private readonly TranslateTransform _translate = new(40, 0);
         private int _slot;
+        private bool _isClosing;
 
         public NovaToastWindow(Window? owner, string title, string message, System.Windows.MessageBoxImage icon)
         {
             _owner = owner ?? Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? Application.Current?.MainWindow;
-            Owner = _owner;
+            if (_owner != null) Owner = _owner;
             Width = 380;
             SizeToContent = SizeToContent.Height;
             MaxHeight = 170;
@@ -312,15 +301,16 @@ namespace NovaChat.Client
             Top = anchor.Top + Math.Max(0, anchor.ActualHeight - ActualHeight - 24 - _slot * (ActualHeight + 10));
         }
 
-        private async void CloseWithAnimation()
+        private void CloseWithAnimation()
         {
+            if (_isClosing) return;
+            _isClosing = true;
             _timer.Stop();
             var fade = new DoubleAnimation(0, TimeSpan.FromMilliseconds(180));
             fade.Completed += (_, _) => Close();
             BeginAnimation(OpacityProperty, fade);
             var slide = new DoubleAnimation(24, TimeSpan.FromMilliseconds(180)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn } };
             _translate.BeginAnimation(TranslateTransform.XProperty, slide);
-            await Task.Delay(190);
         }
 
         private static string IconText(System.Windows.MessageBoxImage icon) => icon switch
@@ -338,7 +328,8 @@ namespace NovaChat.Client
 
         public NovaConfirmWindow(Window? owner, string title, string message, System.Windows.MessageBoxButton buttons, System.Windows.MessageBoxImage icon, System.Windows.MessageBoxResult defaultResult)
         {
-            Owner = owner ?? Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? Application.Current?.MainWindow;
+            if (owner != null) Owner = owner;
+            else if (Application.Current?.MainWindow != null && Application.Current.MainWindow != this) Owner = Application.Current.MainWindow;
             Width = 500;
             Height = 305;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -363,7 +354,7 @@ namespace NovaChat.Client
             var badge = new Border { Width = 52, Height = 52, CornerRadius = new CornerRadius(17) };
             badge.SetResourceReference(Border.BackgroundProperty, "PrimarySoftBrush");
             var badgeText = new TextBlock { Text = IconText(icon), FontSize = 24, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            badgeText.SetResourceReference(TextBlock.ForegroundProperty, icon == System.Windows.MessageBoxImage.Error ? "DangerBrush" : "PrimaryBrush");
+            badgeText.SetResourceReference(TextBlock.ForegroundProperty, icon == System.Windows.MessageBoxImage.Error ? "DangerBrush" : icon == System.Windows.MessageBoxImage.Warning ? "WarningBrush" : "PrimaryBrush");
             badge.Child = badgeText;
             header.Children.Add(badge);
             var heading = new StackPanel { Margin = new Thickness(14, 1, 0, 0), VerticalAlignment = VerticalAlignment.Center };
@@ -373,7 +364,6 @@ namespace NovaChat.Client
             Grid.SetRow(header, 0); root.Children.Add(header);
 
             var separator = new Border { Height = 1, Margin = new Thickness(0, 18, 0, 14) }; separator.SetResourceReference(Border.BackgroundProperty, "BorderBrush"); Grid.SetRow(separator, 1); root.Children.Add(separator);
-
             var body = new TextBlock { Text = message, FontSize = 13, LineHeight = 21, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Top }; body.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush"); Grid.SetRow(body, 2); root.Children.Add(body);
 
             var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 18, 0, 0) };
@@ -382,7 +372,7 @@ namespace NovaChat.Client
                 var button = new Button { Content = spec.Text, Width = spec.Width, Height = 40, Margin = new Thickness(spec.IsFirst ? 0 : 8, 0, 0, 0), Style = GetButtonStyle(spec.Result) };
                 button.Click += (_, _) => { ResultSelected?.Invoke(spec.Result); DialogResult = spec.Result != System.Windows.MessageBoxResult.Cancel; };
                 button.IsDefault = spec.Result == defaultResult;
-                button.IsCancel = spec.Result == System.Windows.MessageBoxResult.Cancel || spec.Result == System.Windows.MessageBoxResult.No;
+                button.IsCancel = spec.Result == System.Windows.MessageBoxResult.Cancel;
                 actions.Children.Add(button);
                 if (button.IsDefault) button.Dispatcher.BeginInvoke(() => button.Focus());
             }
@@ -391,12 +381,18 @@ namespace NovaChat.Client
             card.Child = root;
             Content = card;
 
-            KeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Escape) { ResultSelected?.Invoke(System.Windows.MessageBoxResult.Cancel); DialogResult = false; } };
+            KeyDown += (_, e) =>
+            {
+                if (e.Key != System.Windows.Input.Key.Escape) return;
+                var escapeResult = buttons == System.Windows.MessageBoxButton.YesNo ? System.Windows.MessageBoxResult.No : System.Windows.MessageBoxResult.Cancel;
+                ResultSelected?.Invoke(escapeResult);
+                DialogResult = escapeResult != System.Windows.MessageBoxResult.Cancel;
+            };
             Loaded += (_, _) => Opacity = 1;
         }
 
         private Style? GetButtonStyle(System.Windows.MessageBoxResult result) => Application.Current?.FindResource(
-            result is System.Windows.MessageBoxResult.Yes or System.Windows.MessageBoxResult.OK ? "PrimaryButtonStyle" : result == System.Windows.MessageBoxResult.No ? "DangerButtonStyle" : "SecondaryButtonStyle") as Style;
+            result is System.Windows.MessageBoxResult.Yes or System.Windows.MessageBoxResult.OK ? "PrimaryButtonStyle" : result == System.Windows.MessageBoxResult.No ? "SecondaryButtonStyle" : "SecondaryButtonStyle") as Style;
 
         private static IEnumerable<(string Text, System.Windows.MessageBoxResult Result, bool IsFirst, double Width)> BuildButtonSpecs(System.Windows.MessageBoxButton button) => button switch
         {
