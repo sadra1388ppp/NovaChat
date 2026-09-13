@@ -12,6 +12,4 @@ public class UserResponseDto
     public bool IsOnline { get; set; }
     public DateTime? LastSeenAt { get; set; }
     public DateTime CreatedAt { get; set; }
-    public string MessagePrivacy { get; set; } = "Everybody";
-    public bool AllowGroupAdds { get; set; } = true;
 }
