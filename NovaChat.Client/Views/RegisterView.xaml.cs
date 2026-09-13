@@ -52,7 +52,16 @@ namespace NovaChat.Client.Views
                 if (username.Length < 3 || username.Length > 32) { ShowRegistrationError("Username must be 3 to 32 characters."); return; }
                 if (phoneNumber.Length != 11 || phoneNumber[0] != '0' || !phoneNumber.All(ch => ch >= '0' && ch <= '9')) { ShowRegistrationError("Phone number must contain exactly 11 digits and start with 0."); return; }
                 RegisterButton.IsEnabled = false;
-                var request = new RegisterRequest { Username = username, DisplayName = displayName, Email = email, PhoneNumber = phoneNumber, Password = password };
+                var request = new RegisterRequest
+                {
+                    Username = username,
+                    DisplayName = displayName,
+                    Email = email,
+                    PhoneNumber = phoneNumber,
+                    Password = password,
+                    MessagePrivacy = GetRegistrationMessagePrivacy(),
+                    AllowGroupAdds = GetRegistrationAllowGroupAdds()
+                };
                 var result = await _apiService.PostAsync<RegisterRequest, RegisterResponse>("api/User/register", request);
                 if (result == null) { ShowRegistrationError("Registration failed. Please check the entered information and try again."); return; }
                 if (!result.Message.Contains("success", StringComparison.OrdinalIgnoreCase)) { ShowRegistrationError(result.Message); return; }
