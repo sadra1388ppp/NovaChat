@@ -15,6 +15,7 @@ namespace NovaChat.Client.Views
         private readonly ApiService _apiService;
         private int _registrationInProgress;
         private CancellationTokenSource? _availabilityCts;
+        private bool _suppressRegistrationStatusReset;
 
         public event Action? BackToLoginRequested;
 
@@ -26,19 +27,22 @@ namespace NovaChat.Client.Views
 
         private async void UsernameTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            HideRegistrationStatus();
+            if (!_suppressRegistrationStatusReset)
+                HideRegistrationStatus();
             await CheckAvailabilityAsync();
         }
 
         private async void EmailTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            HideRegistrationStatus();
+            if (!_suppressRegistrationStatusReset)
+                HideRegistrationStatus();
             await CheckAvailabilityAsync();
         }
 
         private async void PhoneNumberTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            HideRegistrationStatus();
+            if (!_suppressRegistrationStatusReset)
+                HideRegistrationStatus();
             PhoneHintText.Visibility = string.IsNullOrEmpty(PhoneNumberTextBox.Text) ? Visibility.Visible : Visibility.Collapsed;
             ValidatePhoneNumber();
             await CheckAvailabilityAsync();
@@ -187,15 +191,24 @@ namespace NovaChat.Client.Views
                     return;
                 }
 
-                ShowRegistrationSuccess("Account created successfully. You can now create another account or return to sign in.");
-                PasswordBox.Clear();
-                UsernameTextBox.Clear();
-                DisplayNameTextBox.Clear();
-                EmailTextBox.Clear();
-                PhoneNumberTextBox.Clear();
-                RegistrationMessagePrivacyBox.SelectedIndex = 0;
-                RegistrationAllowGroupAddsBox.IsChecked = true;
-                UsernameTextBox.Focus();
+                _suppressRegistrationStatusReset = true;
+                try
+                {
+                    PasswordBox.Clear();
+                    UsernameTextBox.Clear();
+                    DisplayNameTextBox.Clear();
+                    EmailTextBox.Clear();
+                    PhoneNumberTextBox.Clear();
+                    RegistrationMessageEverybodyRadio.IsChecked = true;
+                    RegistrationAllowGroupAddsBox.IsChecked = true;
+                }
+                finally
+                {
+                    _suppressRegistrationStatusReset = false;
+                }
+
+                RegistrationMessagePrivacyChanged(this, new RoutedEventArgs());
+                ShowRegistrationSuccess("Your NovaChat account is ready. You can create another account or return to sign in.");
             }
             catch (HttpRequestException ex)
             {
@@ -221,16 +234,17 @@ namespace NovaChat.Client.Views
 
         private void ShowRegistrationError(string message)
         {
-            RegistrationSuccessTextBlock.Visibility = Visibility.Collapsed;
+            RegistrationSuccessCard.Visibility = Visibility.Collapsed;
             RegistrationErrorTextBlock.Text = message;
             RegistrationErrorTextBlock.Visibility = Visibility.Visible;
         }
 
         private void ShowRegistrationSuccess(string message)
         {
+            RegistrationErrorTextBlock.Text = string.Empty;
             RegistrationErrorTextBlock.Visibility = Visibility.Collapsed;
             RegistrationSuccessTextBlock.Text = message;
-            RegistrationSuccessTextBlock.Visibility = Visibility.Visible;
+            RegistrationSuccessCard.Visibility = Visibility.Visible;
         }
 
         private void HideRegistrationStatus()
@@ -238,7 +252,7 @@ namespace NovaChat.Client.Views
             RegistrationErrorTextBlock.Text = string.Empty;
             RegistrationErrorTextBlock.Visibility = Visibility.Collapsed;
             RegistrationSuccessTextBlock.Text = string.Empty;
-            RegistrationSuccessTextBlock.Visibility = Visibility.Collapsed;
+            RegistrationSuccessCard.Visibility = Visibility.Collapsed;
         }
 
         private static string ExtractApiMessage(string exceptionMessage)
