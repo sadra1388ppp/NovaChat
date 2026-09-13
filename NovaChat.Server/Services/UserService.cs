@@ -28,6 +28,7 @@ public class UserService
         var username = dto.Username.Trim().ToLowerInvariant();
         var email = dto.Email.Trim();
         var displayName = dto.DisplayName.Trim();
+        var messagePrivacy = NormalizeMessagePrivacy(dto.MessagePrivacy);
         if (!UsernameRegex.IsMatch(username)) return Fail("Username must be 3 to 32 characters and may contain only letters, numbers, dot, underscore and hyphen.");
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(displayName) || string.IsNullOrWhiteSpace(dto.Password)) return Fail("All registration fields are required.");
         if (!TryNormalizePhoneNumber(dto.PhoneNumber, out var phoneNumber)) return Fail("Phone number must contain exactly 11 digits and start with 0.");
@@ -41,9 +42,23 @@ public class UserService
             var createdAt = DateTime.UtcNow;
             var passwordHash = _passwordHashService.HashPassword(dto.Password);
             await _context.Database.ExecuteSqlInterpolatedAsync($@"
-                INSERT INTO `Users` (`Id`, `Username`, `DisplayName`, `Email`, `PhoneNumber`, `PasswordHash`, `Bio`, `AvatarUrl`, `LastSeenAt`, `CreatedAt`)
-                VALUES ({userId}, {username}, {displayName}, {email}, {phoneNumber}, {passwordHash}, {string.Empty}, {null}, {null}, {createdAt})");
-            var user = new User { Id = userId, Username = username, DisplayName = displayName, Email = email, PhoneNumber = phoneNumber, PasswordHash = passwordHash, Bio = string.Empty, AvatarUrl = null, LastSeenAt = null, CreatedAt = createdAt };
+                INSERT INTO `Users` (`Id`, `Username`, `DisplayName`, `Email`, `PhoneNumber`, `PasswordHash`, `Bio`, `AvatarUrl`, `LastSeenAt`, `CreatedAt`, `MessagePrivacy`, `AllowGroupAdds`)
+                VALUES ({userId}, {username}, {displayName}, {email}, {phoneNumber}, {passwordHash}, {string.Empty}, {null}, {null}, {createdAt}, {messagePrivacy}, {dto.AllowGroupAdds})");
+            var user = new User
+            {
+                Id = userId,
+                Username = username,
+                DisplayName = displayName,
+                Email = email,
+                PhoneNumber = phoneNumber,
+                PasswordHash = passwordHash,
+                Bio = string.Empty,
+                AvatarUrl = null,
+                LastSeenAt = null,
+                CreatedAt = createdAt,
+                MessagePrivacy = messagePrivacy,
+                AllowGroupAdds = dto.AllowGroupAdds
+            };
             return new RegisterResult { Success = true, Message = "User registered successfully.", User = ToUserResponse(user) };
         }
         catch (DbUpdateException exception) when (exception.InnerException is MySqlException { Number: 1062 })
@@ -68,18 +83,10 @@ public class UserService
     {
         var login = dto.Login.Trim();
         if (string.IsNullOrWhiteSpace(login)) return null;
-
         User? user = null;
-
-        if (TryNormalizePhoneNumber(login, out var phoneNumber))
-            user = await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber);
-
-        if (user == null)
-            user = await _context.Users.FirstOrDefaultAsync(u => u.Username == login.ToLowerInvariant());
-
-        if (user == null)
-            user = await _context.Users.FirstOrDefaultAsync(u => u.Email == login);
-
+        if (TryNormalizePhoneNumber(login, out var phoneNumber)) user = await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber);
+        if (user == null) user = await _context.Users.FirstOrDefaultAsync(u => u.Username == login.ToLowerInvariant());
+        if (user == null) user = await _context.Users.FirstOrDefaultAsync(u => u.Email == login);
         if (user == null) return null;
         if (!_passwordHashService.VerifyPassword(user, user.PasswordHash, dto.Password, out var needsRehash)) return null;
         if (needsRehash) { user.PasswordHash = _passwordHashService.HashPassword(dto.Password); await _context.SaveChangesAsync(); }
@@ -99,7 +106,7 @@ public class UserService
         long.TryParse(currentUserId, out var excludedId);
         var pattern = $"%{query}%";
         var users = await _context.Users.AsNoTracking().Where(u => u.Id != excludedId && (EF.Functions.Like(u.Username, pattern) || EF.Functions.Like(u.DisplayName, pattern) || EF.Functions.Like(u.Email, pattern))).OrderBy(u => u.DisplayName).Take(30).ToListAsync();
-        return users.Select(u => ToUserResponse(u)).ToList();
+        return users.Select(ToUserResponse).ToList();
     }
 
     public async Task<RegisterResult> UpdateUserAsync(string id, UpdateUserDto dto)
@@ -113,7 +120,11 @@ public class UserService
         if (await _context.Users.AsNoTracking().AnyAsync(u => u.Username == newUsername && u.Id != userId)) return Fail("This username is already taken.");
         if (await _context.Users.AsNoTracking().AnyAsync(u => u.Email == dto.Email && u.Id != userId)) return Fail("This Email is already registered.");
         if (await _context.Users.AsNoTracking().AnyAsync(u => u.PhoneNumber == phoneNumber && u.Id != userId)) return Fail("This phone number is already registered.");
-        var oldUsername = user.Username; user.Username = newUsername; user.DisplayName = dto.DisplayName; user.Email = dto.Email; user.PhoneNumber = phoneNumber; user.Bio = dto.Bio; await _context.SaveChangesAsync();
+        var oldUsername = user.Username;
+        user.Username = newUsername; user.DisplayName = dto.DisplayName; user.Email = dto.Email; user.PhoneNumber = phoneNumber; user.Bio = dto.Bio;
+        user.MessagePrivacy = NormalizeMessagePrivacy(dto.MessagePrivacy);
+        user.AllowGroupAdds = dto.AllowGroupAdds;
+        await _context.SaveChangesAsync();
         if (!string.Equals(oldUsername, newUsername, StringComparison.Ordinal))
         {
             var chats = await _context.Chats.ToListAsync();
@@ -189,9 +200,10 @@ public class UserService
         if (maxId == long.MaxValue) throw new InvalidOperationException("No more user IDs are available."); return maxId + 1;
     }
 
+    private static string NormalizeMessagePrivacy(string? value) => string.Equals(value?.Trim(), "Requests", StringComparison.OrdinalIgnoreCase) ? "Requests" : "Everybody";
     private static List<string> ParseMembers(string? members) => string.IsNullOrWhiteSpace(members) ? [] : members.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
     private static RegisterResult Fail(string message) => new() { Success = false, Message = message };
-    private UserResponseDto ToUserResponse(User user, bool includePhoneNumber = false) => new() { Id = user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), Username = user.Username, DisplayName = user.DisplayName, Email = user.Email, PhoneNumber = includePhoneNumber ? user.PhoneNumber : null, Bio = user.Bio, AvatarUrl = user.AvatarUrl, IsOnline = _presenceService.IsOnline(user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)), LastSeenAt = user.LastSeenAt, CreatedAt = user.CreatedAt };
+    private UserResponseDto ToUserResponse(User user, bool includePhoneNumber = false) => new() { Id = user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), Username = user.Username, DisplayName = user.DisplayName, Email = user.Email, PhoneNumber = includePhoneNumber ? user.PhoneNumber : null, Bio = user.Bio, AvatarUrl = user.AvatarUrl, IsOnline = _presenceService.IsOnline(user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)), LastSeenAt = user.LastSeenAt, CreatedAt = user.CreatedAt, MessagePrivacy = NormalizeMessagePrivacy(user.MessagePrivacy), AllowGroupAdds = user.AllowGroupAdds };
     private static bool TryNormalizePhoneNumber(string? input, out string normalized)
     {
         normalized = string.Empty; if (string.IsNullOrWhiteSpace(input)) return false;
