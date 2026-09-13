@@ -324,20 +324,4 @@ public partial class OwnerUserChatsWindow : Window
         public string? Message { get; set; }
         public MessageModel? Data { get; set; }
     }
-
-    private sealed class MessageModel
-    {
-        public int Id { get; set; }
-        public int ChatId { get; set; }
-        public string SenderId { get; set; } = string.Empty;
-        public string SenderName { get; set; } = string.Empty;
-        public string Content { get; set; } = string.Empty;
-        public DateTime SentAt { get; set; }
-        public string MessageType { get; set; } = "text";
-        public string? AttachmentUrl { get; set; }
-        public string? FileName { get; set; }
-        public string? ContentType { get; set; }
-        public long? FileSize { get; set; }
-        public double? DurationSeconds { get; set; }
-    }
 }
