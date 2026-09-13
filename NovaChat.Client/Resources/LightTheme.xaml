@@ -14,6 +14,8 @@
     <SolidColorBrush x:Key="MyMessageBrush" Color="#5B5FEF"/>
     <SolidColorBrush x:Key="SuccessBrush" Color="#22A06B"/>
     <SolidColorBrush x:Key="DangerBrush" Color="#D64545"/>
+    <SolidColorBrush x:Key="InfoBrush" Color="#4F67D8"/>
+    <SolidColorBrush x:Key="WarningBrush" Color="#C68A18"/>
 
     <Style x:Key="PrimaryButtonStyle" TargetType="Button">
         <Setter Property="Foreground" Value="White"/><Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/>
