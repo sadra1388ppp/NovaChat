@@ -39,7 +39,7 @@ public partial class OwnerUserChatsWindow
         try
         {
             await _ownerEnhancedE2ee.InitializeAsync(_apiService);
-            var history = await _apiService.GetAsync<OwnerMessagesResponse>($"api/OwnerChat/{chat.Id}/messages?pageSize=1000");
+            var history = await _apiService.GetAsync<EnhancedOwnerMessagesResponse>($"api/OwnerChat/{chat.Id}/messages?pageSize=1000");
             var messages = history?.Messages ?? [];
 
             MessagesPanel.Children.Clear();
@@ -88,13 +88,19 @@ public partial class OwnerUserChatsWindow
                 });
             }
 
-            Dispatcher.BeginInvoke(
-                System.Windows.Threading.DispatcherPriority.Loaded,
-                new Action(() => MessagesScrollViewer.ScrollToEnd()));
+            await Dispatcher.InvokeAsync(
+                () => MessagesScrollViewer.ScrollToEnd(),
+                System.Windows.Threading.DispatcherPriority.Loaded);
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Enhanced User Manager message rendering failed: {ex}");
         }
+    }
+
+    private sealed class EnhancedOwnerMessagesResponse
+    {
+        public List<MessageModel> Messages { get; set; } = [];
+        public int Count { get; set; }
     }
 }
