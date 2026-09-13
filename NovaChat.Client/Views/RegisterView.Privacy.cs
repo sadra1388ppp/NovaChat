@@ -17,13 +17,19 @@ public partial class RegisterView
     {
         if (RegistrationMessageEverybodyRadio?.IsChecked == true)
         {
-            RegistrationMessagePrivacyDescription.Text = "Anyone can start a conversation with you directly.";
-            RegistrationMessagePrivacyStatus.Text = "Everyone can message you";
+            if (RegistrationMessagePrivacyDescription != null)
+                RegistrationMessagePrivacyDescription.Text = "Anyone can start a conversation with you directly.";
+
+            if (RegistrationMessagePrivacyStatus != null)
+                RegistrationMessagePrivacyStatus.Text = "Everyone can message you";
         }
         else if (RegistrationMessageRequestsRadio?.IsChecked == true)
         {
-            RegistrationMessagePrivacyDescription.Text = "New conversations arrive as requests until you approve them.";
-            RegistrationMessagePrivacyStatus.Text = "New conversations require approval";
+            if (RegistrationMessagePrivacyDescription != null)
+                RegistrationMessagePrivacyDescription.Text = "New conversations arrive as requests until you approve them.";
+
+            if (RegistrationMessagePrivacyStatus != null)
+                RegistrationMessagePrivacyStatus.Text = "New conversations require approval";
         }
     }
 }
