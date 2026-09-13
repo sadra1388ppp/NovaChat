@@ -79,12 +79,11 @@ public partial class ChatController : ControllerBase
                     skippedUsernames.Add(user.Username);
             }
 
-            if (eligibleUsernames.Count == 0)
-                return BadRequest(new { message = "No eligible members were selected. At least one selected user must allow group additions." });
-
+            // An empty eligible list is valid: the service will create the group
+            // for its creator and simply omit all protected selected users.
             var chat = await _chatService.CreateGroupChatAsync(userId, dto.Name, eligibleUsernames);
             if (chat == null)
-                return BadRequest(new { message = "The group could not be created. Check the group name and eligible usernames." });
+                return BadRequest(new { message = "The group could not be created. Check the group name and your account." });
 
             var mapped = MapChat(chat, null);
             await _hub.Clients.Users(RecipientIds(chat)).SendAsync("ChatCreated", mapped);
