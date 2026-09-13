@@ -23,9 +23,4 @@ public class UpdateUserDto
     [StringLength(32, MinimumLength = 3)]
     [RegularExpression("^[a-zA-Z0-9_.-]+$", ErrorMessage = "Username may contain only letters, numbers, dot, underscore and hyphen.")]
     public string? NewUsername { get; set; }
-
-    [StringLength(20)]
-    public string MessagePrivacy { get; set; } = "Everybody";
-
-    public bool AllowGroupAdds { get; set; } = true;
 }
