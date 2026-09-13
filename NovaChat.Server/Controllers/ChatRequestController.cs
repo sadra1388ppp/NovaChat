@@ -50,8 +50,14 @@ public sealed class ChatRequestController(ChatRequestService requests, ChatServi
         if (!TryGetUserId(out var userId)) return Unauthorized();
         var result = await _requests.AcceptAsync(requestId, userId, cancellationToken);
         if (!result.Success) return BadRequest(new { message = result.Message });
-        var chat = result.Chat!;
-        await _hub.Clients.Users(new[] { chat.User1Id?.ToString() ?? string.Empty, chat.User2Id?.ToString() ?? string.Empty }.Where(x => !string.IsNullOrWhiteSpace(x))).SendAsync("ChatCreated", new
+        if (result.Chat == null) return Problem(statusCode: 500, title: "Chat request accepted but the conversation was not returned.");
+
+        var chat = result.Chat;
+        await _hub.Clients.Users(new[]
+        {
+            chat.User1Id?.ToString() ?? string.Empty,
+            chat.User2Id?.ToString() ?? string.Empty
+        }.Where(x => !string.IsNullOrWhiteSpace(x))).SendAsync("ChatCreated", new
         {
             Id = chat.Id,
             Type = chat.Type,
