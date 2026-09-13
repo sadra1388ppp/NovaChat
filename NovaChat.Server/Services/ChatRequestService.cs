@@ -125,24 +125,29 @@ ORDER BY r.CreatedAt DESC, r.Id DESC", userId).ToListAsync(cancellationToken);
     public async Task<(bool Success, string Message, ChatRequestDto? Request, Chat? Chat)> AcceptAsync(long requestId, long userId, CancellationToken cancellationToken = default)
     {
         await EnsureSchemaAsync(cancellationToken);
-        await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
-        var row = await LoadRowAsync(requestId, cancellationToken);
-        if (row == null) return (false, "Chat request not found.", null, null);
-        if (row.TargetUserId != userId) return (false, "You cannot respond to this request.", null, null);
-        if (!string.Equals(row.Status, "Pending", StringComparison.OrdinalIgnoreCase)) return (false, "This request is no longer pending.", ToDto(row), null);
 
-        var chat = await _chatService.CreatePrivateChatAsync(row.RequesterUserId, row.TargetUserId);
-        if (chat == null) return (false, "The conversation could not be created.", null, null);
-        var now = DateTime.UtcNow;
-        await _db.Database.ExecuteSqlInterpolatedAsync($@"
+        var strategy = _db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+            var row = await LoadRowAsync(requestId, cancellationToken);
+            if (row == null) return (false, "Chat request not found.", null, null);
+            if (row.TargetUserId != userId) return (false, "You cannot respond to this request.", null, null);
+            if (!string.Equals(row.Status, "Pending", StringComparison.OrdinalIgnoreCase)) return (false, "This request is no longer pending.", ToDto(row), null);
+
+            var chat = await _chatService.CreatePrivateChatAsync(row.RequesterUserId, row.TargetUserId);
+            if (chat == null) return (false, "The conversation could not be created.", null, null);
+            var now = DateTime.UtcNow;
+            await _db.Database.ExecuteSqlInterpolatedAsync($@"
 UPDATE `ChatRequests`
 SET `Status` = {"Accepted"}, `RespondedAt` = {now}, `ChatId` = {chat.Id}
 WHERE `Id` = {requestId} AND `Status` = {"Pending"};", cancellationToken);
-        row.Status = "Accepted";
-        row.RespondedAt = now;
-        row.ChatId = chat.Id;
-        await transaction.CommitAsync(cancellationToken);
-        return (true, "Chat request accepted.", ToDto(row), chat);
+            row.Status = "Accepted";
+            row.RespondedAt = now;
+            row.ChatId = chat.Id;
+            await transaction.CommitAsync(cancellationToken);
+            return (true, "Chat request accepted.", ToDto(row), chat);
+        });
     }
 
     public async Task<(bool Success, string Message, ChatRequestDto? Request)> RejectAsync(long requestId, long userId, CancellationToken cancellationToken = default)
