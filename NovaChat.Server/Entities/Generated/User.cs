@@ -15,6 +15,8 @@ public partial class User
     public string? AvatarUrl { get; set; }
     public DateTime? LastSeenAt { get; set; }
     public DateTime CreatedAt { get; set; }
+    public string MessagePrivacy { get; set; } = "Everybody";
+    public bool AllowGroupAdds { get; set; } = true;
 
     public virtual ICollection<Chat> ChatCreatedByUsers { get; set; } = new List<Chat>();
     public virtual ICollection<Contact> ContactContactUsers { get; set; } = new List<Contact>();
