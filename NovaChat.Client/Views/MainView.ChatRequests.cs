@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Threading;
 using NovaChat.Client.Models;
 using NovaChat.Client.Services;
@@ -17,14 +18,8 @@ public partial class MainView
     {
         if (_chatRequestUiRegistered) return;
         _chatRequestUiRegistered = true;
-        EventManager.RegisterClassHandler(
-            typeof(Button),
-            Button.ClickEvent,
-            new RoutedEventHandler(OnMainViewChatButtonClicked));
-        EventManager.RegisterClassHandler(
-            typeof(MainView),
-            FrameworkElement.LoadedEvent,
-            new RoutedEventHandler(OnMainViewChatRequestsLoaded));
+        EventManager.RegisterClassHandler(typeof(Button), Button.ClickEvent, new RoutedEventHandler(OnMainViewChatButtonClicked));
+        EventManager.RegisterClassHandler(typeof(MainView), FrameworkElement.LoadedEvent, new RoutedEventHandler(OnMainViewChatRequestsLoaded));
     }
 
     private static async void OnMainViewChatButtonClicked(object sender, RoutedEventArgs e)
@@ -33,7 +28,6 @@ public partial class MainView
         var content = button.Content?.ToString();
         if (content is not ("＋   New conversation" or "＋   Start a new chat")) return;
         if (FindAncestor<MainView>(button) is not MainView view) return;
-
         e.Handled = true;
         await view.OpenChatRequestFlowAsync();
     }
@@ -88,19 +82,16 @@ public partial class MainView
                 MessageBox.Show("The server returned no response.", "New Conversation", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
-
             if (result.RequestPending)
             {
                 MessageBox.Show("Your chat request has been sent. You can start messaging after the other person accepts it.", "Chat Request Sent", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
-
             if (result.Chat == null)
             {
                 MessageBox.Show(string.IsNullOrWhiteSpace(result.Message) ? "The conversation could not be created." : result.Message, "New Conversation", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
-
             await LoadChatsAsync();
             var item = _chats.FirstOrDefault(x => x.Chat.Id == result.Chat.Id);
             if (item != null) await OpenChatAsync(item.Chat);
@@ -109,10 +100,7 @@ public partial class MainView
         {
             MessageBox.Show($"Could not start the conversation.\n\n{ex.Message}", "New Conversation", MessageBoxButton.OK, MessageBoxImage.Error);
         }
-        finally
-        {
-            _chatRequestBusy = false;
-        }
+        finally { _chatRequestBusy = false; }
     }
 
     private async Task PollIncomingChatRequestsAsync()
@@ -123,8 +111,7 @@ public partial class MainView
             var requests = await _apiService.GetAsync<List<IncomingChatRequestModel>>("api/ChatRequests/incoming");
             foreach (var request in requests ?? [])
             {
-                if (_notifiedChatRequestIds.Contains(request.Id)) continue;
-                _notifiedChatRequestIds.Add(request.Id);
+                if (!_notifiedChatRequestIds.Add(request.Id)) continue;
                 await ShowIncomingChatRequestAsync(request);
             }
         }
@@ -136,16 +123,8 @@ public partial class MainView
 
     private async Task ShowIncomingChatRequestAsync(IncomingChatRequestModel request)
     {
-        var requester = string.IsNullOrWhiteSpace(request.RequesterDisplayName)
-            ? $"@{request.RequesterUsername}"
-            : $"{request.RequesterDisplayName} (@{request.RequesterUsername})";
-        var result = MessageBox.Show(
-            $"{requester} wants to start a private conversation with you.\n\nAccept to create the chat, or Reject to decline it.",
-            "New Chat Request",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question,
-            MessageBoxResult.Yes);
-
+        var requester = string.IsNullOrWhiteSpace(request.RequesterDisplayName) ? $"@{request.RequesterUsername}" : $"{request.RequesterDisplayName} (@{request.RequesterUsername})";
+        var result = MessageBox.Show($"{requester} wants to start a private conversation with you.\n\nAccept to create the chat, or Reject to decline it.", "New Chat Request", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.Yes);
         try
         {
             if (result == MessageBoxResult.Yes)
