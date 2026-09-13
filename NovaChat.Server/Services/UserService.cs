@@ -106,7 +106,7 @@ public class UserService
         long.TryParse(currentUserId, out var excludedId);
         var pattern = $"%{query}%";
         var users = await _context.Users.AsNoTracking().Where(u => u.Id != excludedId && (EF.Functions.Like(u.Username, pattern) || EF.Functions.Like(u.DisplayName, pattern) || EF.Functions.Like(u.Email, pattern))).OrderBy(u => u.DisplayName).Take(30).ToListAsync();
-        return users.Select(ToUserResponse).ToList();
+        return users.Select(user => ToUserResponse(user)).ToList();
     }
 
     public async Task<RegisterResult> UpdateUserAsync(string id, UpdateUserDto dto)
