@@ -24,6 +24,13 @@ public sealed class ChatRequestController(ChatRequestService requests, ChatServi
         return Ok(await _requests.GetIncomingAsync(userId, cancellationToken));
     }
 
+    [HttpGet("outgoing")]
+    public async Task<IActionResult> Outgoing(CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        return Ok(await _requests.GetOutgoingAsync(userId, cancellationToken));
+    }
+
     [HttpPost]
     public async Task<IActionResult> Create(CreateChatRequestDto dto, CancellationToken cancellationToken)
     {
@@ -31,9 +38,9 @@ public sealed class ChatRequestController(ChatRequestService requests, ChatServi
         var result = await _requests.CreateAsync(userId, dto.Username, cancellationToken);
         if (!result.Success) return BadRequest(new { message = result.Message });
         if (result.Request == null) return Ok(new { message = result.Message, chat = (object?)null, requestPending = false });
-        var recipients = await _chats.GetUserByUsernameAsync(result.Request.TargetUsername);
-        if (recipients != null)
-            await _hub.Clients.User(recipients.Id.ToString()).SendAsync("ChatRequestReceived", result.Request, cancellationToken);
+        var recipient = await _chats.GetUserByUsernameAsync(result.Request.TargetUsername);
+        if (recipient != null)
+            await _hub.Clients.User(recipient.Id.ToString()).SendAsync("ChatRequestReceived", result.Request, cancellationToken);
         return Ok(new { message = result.Message, requestPending = true, requestId = result.Request.Id, chat = (object?)null });
     }
 
