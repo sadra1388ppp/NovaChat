@@ -29,8 +29,13 @@ public partial class ProfileView
 
     private void InjectPrivacyControls()
     {
-        if (_privacyUiInjected || PresenceSummaryText.Parent is not Grid presenceGrid || presenceGrid.Parent is not Border privacyBorder || privacyBorder.Child is not StackPanel securityPanel)
+        if (_privacyUiInjected ||
+            PresenceSummaryText.Parent is not Grid presenceGrid ||
+            presenceGrid.Parent is not Border presenceBorder ||
+            presenceBorder.Parent is not StackPanel securityPanel)
+        {
             return;
+        }
 
         var privacyHeader = new TextBlock
         {
