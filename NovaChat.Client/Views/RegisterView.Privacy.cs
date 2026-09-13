@@ -49,20 +49,8 @@ public partial class RegisterView
         messageGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         messageGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var messageStack = new StackPanel();
-        messageStack.Children.Add(new TextBlock
-        {
-            Text = "Who can message me?",
-            FontWeight = FontWeights.SemiBold,
-            Foreground = (Brush)FindResource("TextBrush")
-        });
-        messageStack.Children.Add(new TextBlock
-        {
-            Text = "Everybody can start a chat, or require your approval first.",
-            FontSize = 11,
-            Foreground = (Brush)FindResource("SecondaryTextBrush"),
-            Margin = new Thickness(0, 3, 8, 0),
-            TextWrapping = TextWrapping.Wrap
-        });
+        messageStack.Children.Add(new TextBlock { Text = "Who can message me?", FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush") });
+        messageStack.Children.Add(new TextBlock { Text = "Everybody can start a chat, or require your approval first.", FontSize = 11, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 3, 8, 0), TextWrapping = TextWrapping.Wrap });
         messageGrid.Children.Add(messageStack);
         _registrationMessagePrivacyBox = new ComboBox
         {
@@ -94,7 +82,7 @@ public partial class RegisterView
                 Children =
                 {
                     new TextBlock { Text = "Allow other people to add me to groups", FontWeight = FontWeights.SemiBold },
-                    new TextBlock { Text = "Turn this off to require an invite decision before joining a group.", FontSize = 11, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 3, 0, 0), TextWrapping = TextWrapping.Wrap }
+                    new TextBlock { Text = "Turn this off to prevent direct group additions.", FontSize = 11, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 3, 0, 0), TextWrapping = TextWrapping.Wrap }
                 }
             }
         };
