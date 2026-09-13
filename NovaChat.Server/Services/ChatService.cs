@@ -69,19 +69,55 @@ public class ChatService
     {
         name = NormalizeGroupName(name);
         if (string.IsNullOrWhiteSpace(name) || name.Length > 128) return null;
-        var normalized = usernames.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim().ToLowerInvariant()).Distinct().ToList();
-        if (normalized.Count == 0) return null;
+
+        var normalized = (usernames ?? [])
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim().ToLowerInvariant())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
         var creator = await _context.Users.FirstOrDefaultAsync(u => u.Id == creatorId);
         if (creator == null) return null;
-        if (!normalized.Contains(creator.Username)) normalized.Insert(0, creator.Username);
-        var users = await _context.Users.Where(u => normalized.Contains(u.Username)).ToListAsync();
-        if (users.Count != normalized.Count || users.Count < 2) return null;
-        if (users.Any(u => u.Id != creatorId && !u.AllowGroupAdds)) return null;
 
-        var chat = new Chat { Type = ChatType.Group, Name = name, Members = string.Join(", ", normalized), CreatedByUserId = creatorId, IsDeleted = false, DeletedAt = null };
+        // The creator is always included. Group privacy applies only to other selected users.
+        if (!normalized.Contains(creator.Username, StringComparer.OrdinalIgnoreCase))
+            normalized.Insert(0, creator.Username);
+
+        var users = await _context.Users
+            .Where(u => normalized.Contains(u.Username))
+            .ToListAsync();
+
+        if (!users.Any(u => u.Id == creatorId)) return null;
+
+        // Defense in depth: re-check privacy at the service boundary. A protected
+        // member is skipped rather than being allowed to abort the whole group creation.
+        var eligibleUsers = users
+            .Where(u => u.Id == creatorId || u.AllowGroupAdds)
+            .ToList();
+
+        var eligibleUsernames = eligibleUsers
+            .OrderBy(u => u.Id == creatorId ? 0 : 1)
+            .ThenBy(u => u.Username)
+            .Select(u => u.Username)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (!eligibleUsernames.Contains(creator.Username, StringComparer.OrdinalIgnoreCase))
+            eligibleUsernames.Insert(0, creator.Username);
+
+        var chat = new Chat
+        {
+            Type = ChatType.Group,
+            Name = name,
+            Members = string.Join(", ", eligibleUsernames),
+            CreatedByUserId = creatorId,
+            IsDeleted = false,
+            DeletedAt = null
+        };
+
         _context.Chats.Add(chat);
         await _context.SaveChangesAsync();
-        PopulateCompatibilityMembers(chat, users);
+        PopulateCompatibilityMembers(chat, eligibleUsers);
         return chat;
     }
 
