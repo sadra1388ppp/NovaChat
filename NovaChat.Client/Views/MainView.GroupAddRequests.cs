@@ -18,7 +18,6 @@ public partial class MainView
     private sealed class GroupAddRequestUiBootstrap
     {
         private static bool _registered;
-
         public GroupAddRequestUiBootstrap()
         {
             if (_registered) return;
@@ -26,7 +25,6 @@ public partial class MainView
             EventManager.RegisterClassHandler(typeof(MainView), FrameworkElement.LoadedEvent, new RoutedEventHandler(OnMainViewLoaded));
             EventManager.RegisterClassHandler(typeof(Button), Button.ClickEvent, new RoutedEventHandler(OnAddMemberButtonClicked));
         }
-
         private static async void OnMainViewLoaded(object sender, RoutedEventArgs e)
         {
             if (sender is not MainView view) return;
@@ -34,11 +32,9 @@ public partial class MainView
             view.StartGroupAddRequestWatcher();
             await view.RefreshGroupAddRequestsAsync();
         }
-
         private static async void OnAddMemberButtonClicked(object sender, RoutedEventArgs e)
         {
-            if (e.OriginalSource is not Button button) return;
-            if (!string.Equals(button.Content?.ToString(), "＋  Add member", StringComparison.Ordinal)) return;
+            if (e.OriginalSource is not Button button || !string.Equals(button.Content?.ToString(), "＋  Add member", StringComparison.Ordinal)) return;
             var view = _activeMainViewForGroupRequests;
             if (view == null) return;
             e.Handled = true;
@@ -60,16 +56,7 @@ public partial class MainView
         if (ChatsList.Parent is not StackPanel parent) return;
         var chatListIndex = parent.Children.IndexOf(ChatsList);
         if (chatListIndex < 0) return;
-
-        _groupAddRequestsHeader = new TextBlock
-        {
-            Text = "GROUP REQUESTS",
-            FontSize = 10,
-            FontWeight = FontWeights.Bold,
-            Foreground = (Brush)FindResource("PrimaryBrush"),
-            Margin = new Thickness(0, 0, 0, 8),
-            Visibility = Visibility.Collapsed
-        };
+        _groupAddRequestsHeader = new TextBlock { Text = "GROUP REQUESTS", FontSize = 10, FontWeight = FontWeights.Bold, Foreground = (Brush)FindResource("PrimaryBrush"), Margin = new Thickness(0, 0, 0, 8), Visibility = Visibility.Collapsed };
         _groupAddRequestsPanel = new StackPanel { Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 10) };
         parent.Children.Insert(chatListIndex, _groupAddRequestsHeader);
         parent.Children.Insert(chatListIndex + 1, _groupAddRequestsPanel);
@@ -86,14 +73,8 @@ public partial class MainView
             var outgoing = await _apiService.GetAsync<List<GroupAddRequestClientModel>>("api/GroupAddRequests/outgoing") ?? [];
             await Dispatcher.InvokeAsync(() => RenderGroupAddRequests(incoming, outgoing));
         }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Group add request refresh failed: {ex.Message}");
-        }
-        finally
-        {
-            _groupAddRequestBusy = false;
-        }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Group add request refresh failed: {ex.Message}"); }
+        finally { _groupAddRequestBusy = false; }
     }
 
     private void RenderGroupAddRequests(List<GroupAddRequestClientModel> incoming, List<GroupAddRequestClientModel> outgoing)
@@ -108,55 +89,34 @@ public partial class MainView
 
         foreach (var request in incoming)
         {
-            var card = new Border
-            {
-                Padding = new Thickness(10),
-                Background = (Brush)FindResource("InputBackgroundBrush"),
-                BorderBrush = (Brush)FindResource("BorderBrush"),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(13),
-                Margin = new Thickness(0, 0, 0, 7)
-            };
             var content = new StackPanel();
             content.Children.Add(new TextBlock { Text = request.GroupName, FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush") });
-            content.Children.Add(new TextBlock { Text = $"@{request.RequesterUsername} wants to add you", FontSize = 10, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 2, 0, 0), TextWrapping = TextWrapping.Wrap });
+            content.Children.Add(new TextBlock { Text = $"@{request.RequesterUsername} wants to add you to this group.", FontSize = 10, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 2, 0, 0), TextWrapping = TextWrapping.Wrap });
             var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
-            var reject = new Button { Content = "Reject", Height = 28, Padding = new Thickness(9, 0, 9, 0), Margin = new Thickness(0, 0, 6, 0), Style = (Style)FindResource("SecondaryButtonStyle"), Tag = request.Id };
-            var accept = new Button { Content = "Accept", Height = 28, Padding = new Thickness(9, 0, 9, 0), Style = (Style)FindResource("PrimaryButtonStyle"), Tag = request.Id };
+            var reject = new Button { Content = "Reject", Height = 28, Padding = new Thickness(9, 0, 9, 0), Margin = new Thickness(0, 0, 6, 0), Style = (Style)FindResource("SecondaryButtonStyle") };
+            var accept = new Button { Content = "Accept", Height = 28, Padding = new Thickness(9, 0, 9, 0), Style = (Style)FindResource("PrimaryButtonStyle") };
             reject.Click += async (_, _) => await RespondToGroupAddRequestAsync(request, false);
             accept.Click += async (_, _) => await RespondToGroupAddRequestAsync(request, true);
-            actions.Children.Add(reject); actions.Children.Add(accept); content.Children.Add(actions); card.Child = content; _groupAddRequestsPanel.Children.Add(card);
+            actions.Children.Add(reject); actions.Children.Add(accept); content.Children.Add(actions);
+            var card = new Border { Padding = new Thickness(10), Background = (Brush)FindResource("InputBackgroundBrush"), BorderBrush = (Brush)FindResource("BorderBrush"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(13), Margin = new Thickness(0, 0, 0, 7), Child = content };
+            _groupAddRequestsPanel.Children.Add(card);
         }
 
         foreach (var request in outgoing)
         {
-            var card = new Border
-            {
-                Padding = new Thickness(10),
-                Background = (Brush)FindResource("InputBackgroundBrush"),
-                BorderBrush = (Brush)FindResource("BorderBrush"),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(13),
-                Margin = new Thickness(0, 0, 0, 7)
-            };
-            card.Child = new StackPanel
-            {
-                Children =
-                {
-                    new TextBlock { Text = request.GroupName, FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush") },
-                    new TextBlock { Text = $"Waiting for @{request.TargetUsername} to approve the group invite.", FontSize = 10, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 2, 0, 0), TextWrapping = TextWrapping.Wrap }
-                }
-            };
-            _groupAddRequestsPanel.Children.Add(card);
+            var content = new StackPanel();
+            content.Children.Add(new TextBlock { Text = request.GroupName, FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush") });
+            content.Children.Add(new TextBlock { Text = $"Waiting for @{request.TargetUsername} to accept the group request.", FontSize = 10, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 2, 0, 0), TextWrapping = TextWrapping.Wrap });
+            _groupAddRequestsPanel.Children.Add(new Border { Padding = new Thickness(10), Background = (Brush)FindResource("InputBackgroundBrush"), BorderBrush = (Brush)FindResource("BorderBrush"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(13), Margin = new Thickness(0, 0, 0, 7), Child = content });
         }
     }
 
     private async Task OpenGroupAddMemberRequestFlowAsync()
     {
         if (!AuthState.IsAuthenticated || !_currentChatId.HasValue || !IsCurrentGroupChat) return;
-        var username = PromptText("Add Member", "Username", string.Empty, Window.GetWindow(this));
+        if (Window.GetWindow(this) is not Window owner) return;
+        var username = PromptText("Add Member", "Username", string.Empty, owner);
         if (string.IsNullOrWhiteSpace(username)) return;
-
         try
         {
             var normalized = username.Trim().ToLowerInvariant();
@@ -170,13 +130,11 @@ public partial class MainView
 
             var result = await _apiService.PostAsync<object, GroupAddRequestActionResponse>($"api/GroupAddRequests/{_currentChatId.Value}", new { Username = candidate.Username });
             if (result == null) return;
-
             var message = result.RequestPending
                 ? $"@{candidate.Username} does not allow people to add them to groups.\n\nA request was sent. They must accept it before they are added to the group."
                 : result.Message;
             System.Windows.MessageBox.Show(message, "Add Member", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
             await RefreshGroupAddRequestsAsync();
-            if (!result.RequestPending) await RefreshGroupMembersAsync(await GetGroupMembersAsync(_currentChatId.Value));
         }
         catch (Exception ex)
         {
@@ -198,10 +156,7 @@ public partial class MainView
                 System.Windows.MessageBox.Show($"You were added to '{request.GroupName}'.", "Group Request", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
             }
         }
-        catch (Exception ex)
-        {
-            System.Windows.MessageBox.Show(ex.Message, "Group Request", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
-        }
+        catch (Exception ex) { System.Windows.MessageBox.Show(ex.Message, "Group Request", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning); }
     }
 
     private sealed class GroupAddRequestClientModel
