@@ -15,7 +15,7 @@ public sealed class ChatRequestService(AppDbContext db, ChatService chatService)
         await _db.Database.ExecuteSqlRawAsync(@"
 ALTER TABLE `Users`
     ADD COLUMN IF NOT EXISTS `MessagePrivacy` VARCHAR(20) NOT NULL DEFAULT 'Everybody',
-    ADD COLUMN IF NOT EXISTS `AllowGroupAdds` TINYINT(1) NOT NULL DEFAULT 1;", cancellationToken);
+    ADD COLUMN IF NOT EXISTS `AllowGroupAdds` VARCHAR(5) NOT NULL DEFAULT 'true';", cancellationToken);
 
         await _db.Database.ExecuteSqlRawAsync(@"
 CREATE TABLE IF NOT EXISTS `ChatRequests` (
@@ -34,9 +34,6 @@ CREATE TABLE IF NOT EXISTS `ChatRequests` (
     CONSTRAINT `FK_ChatRequests_Target` FOREIGN KEY (`TargetUserId`) REFERENCES `Users`(`Id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;", cancellationToken);
 
-        // The original unique index included Status itself. That incorrectly made a pair
-        // unable to have more than one historical Accepted/Rejected request. We only need
-        // uniqueness while a request is Pending, so the generated key is NULL for completed requests.
         await _db.Database.ExecuteSqlRawAsync(@"
 ALTER TABLE `ChatRequests`
     DROP INDEX `UX_ChatRequests_Pending`;", cancellationToken);
@@ -73,7 +70,7 @@ ALTER TABLE `ChatRequests`
             return (true, "Chat request is already pending.", current);
         }
 
-        var now = DateTime.UtcNow;
+        var now = IranTime.Now;
         try
         {
             await _db.Database.ExecuteSqlInterpolatedAsync($@"
@@ -152,7 +149,7 @@ ORDER BY r.CreatedAt DESC, r.Id DESC", userId).ToListAsync(cancellationToken);
             var chat = await _chatService.CreatePrivateChatAsync(row.RequesterUserId, row.TargetUserId);
             if (chat == null) return (false, "The conversation could not be created.", null, null);
 
-            var now = DateTime.UtcNow;
+            var now = IranTime.Now;
             await _db.Database.ExecuteSqlInterpolatedAsync($@"
 UPDATE `ChatRequests`
 SET `Status` = {"Accepted"}, `RespondedAt` = {now}, `ChatId` = {chat.Id}
@@ -173,7 +170,7 @@ WHERE `Id` = {requestId} AND `Status` = {"Pending"};", cancellationToken);
         if (row == null) return (false, "Chat request not found.", null);
         if (row.TargetUserId != userId) return (false, "You cannot respond to this request.", null);
         if (!string.Equals(row.Status, "Pending", StringComparison.OrdinalIgnoreCase)) return (false, "This request is no longer pending.", ToDto(row));
-        var now = DateTime.UtcNow;
+        var now = IranTime.Now;
         await _db.Database.ExecuteSqlInterpolatedAsync($@"
 UPDATE `ChatRequests` SET `Status` = {"Rejected"}, `RespondedAt` = {now}
 WHERE `Id` = {requestId} AND `Status` = {"Pending"};", cancellationToken);
