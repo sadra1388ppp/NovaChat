@@ -1,5 +1,10 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
@@ -10,9 +15,8 @@ namespace NovaChat.Client
 {
     public partial class MainWindow : Window
     {
-        private bool _isOwner;
-        private string? _pendingChatUsername;
         private MainView? _mainView;
+        private readonly ApiService _apiService = new();
 
         public MainWindow()
         {
@@ -21,104 +25,74 @@ namespace NovaChat.Client
             ShowLogin();
         }
 
-        public void ShowLogin()
+        private void LoadLightTheme()
         {
-            _isOwner = false;
-            _pendingChatUsername = null;
-            NotificationService.Dispose();
-
-            if (_mainView != null)
+            try
             {
-                MainContainer.Children.Remove(_mainView);
-                _mainView = null;
+                Resources.MergedDictionaries.Clear();
+                Resources.MergedDictionaries.Add(new ResourceDictionary
+                {
+                    Source = new Uri("Themes/LightTheme.xaml", UriKind.Relative)
+                });
             }
-
-            MainContainer.Children.Clear();
-
-            LoginView loginView = new LoginView();
-            loginView.CreateAccountRequested += ShowRegister;
-            loginView.LoginSuccessful += HandleNormalUserLogin;
-            loginView.OwnerLoginSuccessful += HandleOwnerLogin;
-            MainContainer.Children.Add(loginView);
+            catch
+            {
+                // Keep the default WPF resources if the theme cannot be loaded.
+            }
         }
 
-        private void HandleNormalUserLogin() { _isOwner = false; ShowMain(); }
-        private void HandleOwnerLogin() { _isOwner = true; ShowMain(); }
-
-        public void ShowRegister()
+        private void ShowLogin()
         {
             MainContainer.Children.Clear();
-            RegisterView registerView = new RegisterView();
-            registerView.BackToLoginRequested += ShowLogin;
-            MainContainer.Children.Add(registerView);
+            NotificationService.Dispose();
+            _mainView = null;
+
+            var login = new LoginView(_apiService)
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch
+            };
+            login.LoginSucceeded += ShowMain;
+            MainContainer.Children.Add(login);
         }
 
-        public void ShowMain()
+        private void ShowMain()
         {
             MainContainer.Children.Clear();
+
             if (_mainView == null)
             {
                 _mainView = new MainView();
                 _mainView.ProfileRequested += ShowProfile;
                 _mainView.SettingsRequested += ShowSettings;
             }
-            _mainView.SetOwnerMode(_isOwner);
+
             MainContainer.Children.Add(_mainView);
-
-            if (!string.IsNullOrWhiteSpace(_pendingChatUsername))
-            {
-                var username = _pendingChatUsername;
-                _pendingChatUsername = null;
-                _mainView.Loaded += OpenPendingChatOnce;
-
-                async void OpenPendingChatOnce(object? sender, RoutedEventArgs e)
-                {
-                    _mainView!.Loaded -= OpenPendingChatOnce;
-                    await _mainView.OpenChatWithUsernameAsync(username);
-                }
-            }
+            _mainView.SetOwnerMode(false);
+            _mainView.ActivateMainContent();
+            NotificationService.Initialize(this);
         }
 
-        public void ShowManageUsers()
-        {
-            if (!_isOwner) return;
-            MainContainer.Children.Clear();
-            ManageUsersView manageUsersView = new ManageUsersView();
-            manageUsersView.BackToChatRequested += ShowMain;
-            MainContainer.Children.Add(manageUsersView);
-        }
-
-        public void ShowProfile()
+        private void ShowProfile()
         {
             MainContainer.Children.Clear();
-            ProfileView profileView = new ProfileView();
-            profileView.BackToChatRequested += ShowMain;
-            profileView.ContactsRequested += ShowContacts;
-            profileView.SessionExpired += ShowLogin;
-            MainContainer.Children.Add(profileView);
+            var profile = new ProfileView();
+            profile.BackRequested += ShowMain;
+            MainContainer.Children.Add(profile);
         }
 
-        public void ShowContacts()
+        private void ShowSettings()
         {
             MainContainer.Children.Clear();
-            ContactsView contactsView = new ContactsView();
-            contactsView.BackToChatRequested += ShowMain;
-            contactsView.ChatRequested += username => { _pendingChatUsername = username; ShowMain(); };
-            MainContainer.Children.Add(contactsView);
+            var settings = new SettingsView();
+            settings.BackRequested += ShowMain;
+            MainContainer.Children.Add(settings);
         }
 
-        public void ShowSettings()
+        protected override void OnClosed(EventArgs e)
         {
-            MainContainer.Children.Clear();
-            SettingsView settingsView = new SettingsView();
-            settingsView.BackToChatRequested += ShowMain;
-            MainContainer.Children.Add(settingsView);
-        }
-
-        private void LoadLightTheme()
-        {
-            Application.Current.Resources.MergedDictionaries.Clear();
-            Application.Current.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new System.Uri("Resources/LightTheme.xaml", System.UriKind.Relative) });
+            NotificationService.Dispose();
+            base.OnClosed(e);
         }
     }
 
@@ -215,8 +189,6 @@ namespace NovaChat.Client
             Background = Brushes.Transparent;
             Topmost = false;
             Opacity = 0;
-            RenderTransform = _translate;
-            RenderTransformOrigin = new Point(0.5, 0.5);
 
             var accentKey = icon switch
             {
@@ -231,7 +203,9 @@ namespace NovaChat.Client
                 CornerRadius = new CornerRadius(18),
                 BorderThickness = new Thickness(1),
                 Padding = new Thickness(16, 14, 12, 14),
-                Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 24, ShadowDepth = 8, Opacity = 0.22 }
+                Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 24, ShadowDepth = 8, Opacity = 0.22 },
+                RenderTransform = _translate,
+                RenderTransformOrigin = new Point(0.5, 0.5)
             };
             panel.SetResourceReference(Border.BackgroundProperty, "PanelBackgroundBrush");
             panel.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
@@ -288,37 +262,39 @@ namespace NovaChat.Client
 
         public void SetSlot(int slot)
         {
-            _slot = slot;
-            if (IsVisible) PositionWindow();
+            _slot = Math.Max(0, slot);
+            if (IsLoaded) PositionWindow();
         }
 
         private void PositionWindow()
         {
-            var anchor = _owner;
-            if (anchor == null) return;
+            var owner = _owner ?? Application.Current?.MainWindow;
+            if (owner == null || !owner.IsVisible) return;
+
             UpdateLayout();
-            Left = anchor.Left + Math.Max(0, anchor.ActualWidth - Width - 24);
-            Top = anchor.Top + Math.Max(0, anchor.ActualHeight - ActualHeight - 24 - _slot * (ActualHeight + 10));
+            var workingArea = SystemParameters.WorkArea;
+            Left = Math.Max(workingArea.Left, owner.Left + owner.ActualWidth - ActualWidth - 22);
+            Top = Math.Max(workingArea.Top, owner.Top + 22 + _slot * (ActualHeight + 12));
         }
 
         private void CloseWithAnimation()
         {
             if (_isClosing) return;
             _isClosing = true;
-            _timer.Stop();
-            var fade = new DoubleAnimation(0, TimeSpan.FromMilliseconds(180));
+            var fade = new DoubleAnimation(0, TimeSpan.FromMilliseconds(180)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn } };
             fade.Completed += (_, _) => Close();
             BeginAnimation(OpacityProperty, fade);
-            var slide = new DoubleAnimation(24, TimeSpan.FromMilliseconds(180)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn } };
+            var slide = new DoubleAnimation(40, TimeSpan.FromMilliseconds(180)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn } };
             _translate.BeginAnimation(TranslateTransform.XProperty, slide);
         }
 
         private static string IconText(System.Windows.MessageBoxImage icon) => icon switch
         {
-            System.Windows.MessageBoxImage.Error => "×",
-            System.Windows.MessageBoxImage.Warning => "!",
+            System.Windows.MessageBoxImage.Error => "!",
+            System.Windows.MessageBoxImage.Warning => "⚠",
+            System.Windows.MessageBoxImage.Information => "i",
             System.Windows.MessageBoxImage.Question => "?",
-            _ => "i"
+            _ => "•"
         };
     }
 
@@ -326,87 +302,60 @@ namespace NovaChat.Client
     {
         public event Action<System.Windows.MessageBoxResult>? ResultSelected;
 
-        public NovaConfirmWindow(Window? owner, string title, string message, System.Windows.MessageBoxButton buttons, System.Windows.MessageBoxImage icon, System.Windows.MessageBoxResult defaultResult)
+        public NovaConfirmWindow(Window? owner, string title, string message, System.Windows.MessageBoxButton button, System.Windows.MessageBoxImage icon, System.Windows.MessageBoxResult defaultResult)
         {
             if (owner != null) Owner = owner;
-            else if (Application.Current?.MainWindow != null && Application.Current.MainWindow != this) Owner = Application.Current.MainWindow;
-            Width = 500;
-            Height = 305;
-            WindowStartupLocation = WindowStartupLocation.CenterOwner;
+            Title = title;
+            Width = 420;
+            SizeToContent = SizeToContent.Height;
+            WindowStartupLocation = owner != null ? WindowStartupLocation.CenterOwner : WindowStartupLocation.CenterScreen;
             WindowStyle = WindowStyle.None;
             ResizeMode = ResizeMode.NoResize;
-            ShowInTaskbar = false;
-            AllowsTransparency = true;
             Background = Brushes.Transparent;
-            ShowActivated = true;
+            AllowsTransparency = true;
 
-            var card = new Border { CornerRadius = new CornerRadius(22), Padding = new Thickness(24), BorderThickness = new Thickness(1), Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 35, ShadowDepth = 12, Opacity = 0.25 } };
-            card.SetResourceReference(Border.BackgroundProperty, "PanelBackgroundBrush");
-            card.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
-
-            var root = new Grid();
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-            var header = new StackPanel { Orientation = Orientation.Horizontal };
-            var badge = new Border { Width = 52, Height = 52, CornerRadius = new CornerRadius(17) };
-            badge.SetResourceReference(Border.BackgroundProperty, "PrimarySoftBrush");
-            var badgeText = new TextBlock { Text = IconText(icon), FontSize = 24, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            badgeText.SetResourceReference(TextBlock.ForegroundProperty, icon == System.Windows.MessageBoxImage.Error ? "DangerBrush" : icon == System.Windows.MessageBoxImage.Warning ? "WarningBrush" : "PrimaryBrush");
-            badge.Child = badgeText;
-            header.Children.Add(badge);
-            var heading = new StackPanel { Margin = new Thickness(14, 1, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-            var headingText = new TextBlock { Text = title, FontSize = 20, FontWeight = FontWeights.Bold }; headingText.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush");
-            var subtitle = new TextBlock { Text = "Please confirm this action", FontSize = 11, Margin = new Thickness(0, 4, 0, 0) }; subtitle.SetResourceReference(TextBlock.ForegroundProperty, "SecondaryTextBrush");
-            heading.Children.Add(headingText); heading.Children.Add(subtitle); header.Children.Add(heading);
-            Grid.SetRow(header, 0); root.Children.Add(header);
-
-            var separator = new Border { Height = 1, Margin = new Thickness(0, 18, 0, 14) }; separator.SetResourceReference(Border.BackgroundProperty, "BorderBrush"); Grid.SetRow(separator, 1); root.Children.Add(separator);
-            var body = new TextBlock { Text = message, FontSize = 13, LineHeight = 21, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Top }; body.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush"); Grid.SetRow(body, 2); root.Children.Add(body);
-
-            var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 18, 0, 0) };
-            foreach (var spec in BuildButtonSpecs(buttons))
+            var panel = new Border
             {
-                var button = new Button { Content = spec.Text, Width = spec.Width, Height = 40, Margin = new Thickness(spec.IsFirst ? 0 : 8, 0, 0, 0), Style = GetButtonStyle(spec.Result) };
-                button.Click += (_, _) => { ResultSelected?.Invoke(spec.Result); DialogResult = spec.Result != System.Windows.MessageBoxResult.Cancel; };
-                button.IsDefault = spec.Result == defaultResult;
-                button.IsCancel = spec.Result == System.Windows.MessageBoxResult.Cancel;
-                actions.Children.Add(button);
-                if (button.IsDefault) button.Dispatcher.BeginInvoke(() => button.Focus());
-            }
-            Grid.SetRow(actions, 3); root.Children.Add(actions);
-
-            card.Child = root;
-            Content = card;
-
-            KeyDown += (_, e) =>
-            {
-                if (e.Key != System.Windows.Input.Key.Escape) return;
-                var escapeResult = buttons == System.Windows.MessageBoxButton.YesNo ? System.Windows.MessageBoxResult.No : System.Windows.MessageBoxResult.Cancel;
-                ResultSelected?.Invoke(escapeResult);
-                DialogResult = escapeResult != System.Windows.MessageBoxResult.Cancel;
+                CornerRadius = new CornerRadius(18),
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(22),
+                Margin = new Thickness(12),
+                Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 24, ShadowDepth = 8, Opacity = 0.22 }
             };
-            Loaded += (_, _) => Opacity = 1;
+            panel.SetResourceReference(Border.BackgroundProperty, "PanelBackgroundBrush");
+            panel.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
+
+            var stack = new StackPanel();
+            var titleText = new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeights.SemiBold };
+            titleText.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush");
+            var messageText = new TextBlock { Text = message, FontSize = 13, Margin = new Thickness(0, 10, 0, 18), TextWrapping = TextWrapping.Wrap };
+            messageText.SetResourceReference(TextBlock.ForegroundProperty, "SecondaryTextBrush");
+            stack.Children.Add(titleText);
+            stack.Children.Add(messageText);
+
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            foreach (var item in GetButtons(button))
+            {
+                var b = new Button { Content = item.text, MinWidth = 82, Margin = new Thickness(8, 0, 0, 0), Padding = new Thickness(14, 8, 14, 8), IsDefault = item.result == defaultResult };
+                b.Click += (_, _) =>
+                {
+                    ResultSelected?.Invoke(item.result);
+                    DialogResult = true;
+                    Close();
+                };
+                buttons.Children.Add(b);
+            }
+            stack.Children.Add(buttons);
+            panel.Child = stack;
+            Content = panel;
         }
 
-        private Style? GetButtonStyle(System.Windows.MessageBoxResult result) => Application.Current?.FindResource(result is System.Windows.MessageBoxResult.Yes or System.Windows.MessageBoxResult.OK ? "PrimaryButtonStyle" : result == System.Windows.MessageBoxResult.No ? "SecondaryButtonStyle" : "SecondaryButtonStyle") as Style;
-
-        private static IEnumerable<(string Text, System.Windows.MessageBoxResult Result, bool IsFirst, double Width)> BuildButtonSpecs(System.Windows.MessageBoxButton button) => button switch
+        private static IEnumerable<(string text, System.Windows.MessageBoxResult result)> GetButtons(System.Windows.MessageBoxButton button) => button switch
         {
-            System.Windows.MessageBoxButton.YesNo => [("No", System.Windows.MessageBoxResult.No, true, 92), ("Yes", System.Windows.MessageBoxResult.Yes, false, 108)],
-            System.Windows.MessageBoxButton.OKCancel => [("Cancel", System.Windows.MessageBoxResult.Cancel, true, 98), ("OK", System.Windows.MessageBoxResult.OK, false, 98)],
-            System.Windows.MessageBoxButton.YesNoCancel => [("Cancel", System.Windows.MessageBoxResult.Cancel, true, 98), ("No", System.Windows.MessageBoxResult.No, false, 92), ("Yes", System.Windows.MessageBoxResult.Yes, false, 108)],
-            _ => [("OK", System.Windows.MessageBoxResult.OK, true, 108)]
-        };
-
-        private static string IconText(System.Windows.MessageBoxImage icon) => icon switch
-        {
-            System.Windows.MessageBoxImage.Error => "×",
-            System.Windows.MessageBoxImage.Warning => "!",
-            System.Windows.MessageBoxImage.Question => "?",
-            _ => "i"
+            System.Windows.MessageBoxButton.YesNo => [("No", System.Windows.MessageBoxResult.No), ("Yes", System.Windows.MessageBoxResult.Yes)],
+            System.Windows.MessageBoxButton.OKCancel => [("Cancel", System.Windows.MessageBoxResult.Cancel), ("OK", System.Windows.MessageBoxResult.OK)],
+            System.Windows.MessageBoxButton.YesNoCancel => [("Cancel", System.Windows.MessageBoxResult.Cancel), ("No", System.Windows.MessageBoxResult.No), ("Yes", System.Windows.MessageBoxResult.Yes)],
+            _ => [("OK", System.Windows.MessageBoxResult.OK)]
         };
     }
 }
