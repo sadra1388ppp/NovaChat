@@ -237,6 +237,6 @@ public partial class MainView
         public int ChatId { get; }
         public GroupInfoDialogState(Window dialog, ChatModel chat, Grid chatAvatar, TextBlock titleText, TextBlock memberCountText, StackPanel memberStack, bool isOwner, bool canManage, int chatId) { Dialog = dialog; Chat = chat; ChatAvatar = chatAvatar; TitleText = titleText; MemberCountText = memberCountText; MemberStack = memberStack; IsOwner = isOwner; CanManage = canManage; ChatId = chatId; }
     }
-    private sealed class GroupMemberViewModel { public string UserId { get; set; } = string.Empty; public string Username { get; set; } = string.Empty; public string? AvatarUrl { get; set; } public string Role { get; set; } = "Member"; public DateTime JoinedAt { get; set; } }
+    private sealed class GroupMemberViewModel { public string UserId { get; set; } = string.Empty; public string Username { get; set; } = string.Empty; public string DisplayName { get; set; } = string.Empty; public string? AvatarUrl { get; set; } public string Role { get; set; } = "Member"; public DateTime JoinedAt { get; set; } }
     private sealed class GroupAvatarResult { public string Message { get; set; } = string.Empty; public ChatModel? Chat { get; set; } }
 }
