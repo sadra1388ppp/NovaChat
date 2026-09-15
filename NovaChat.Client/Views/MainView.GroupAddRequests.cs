@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
+using NovaChat.Client.Models;
 using NovaChat.Client.Services;
 
 namespace NovaChat.Client.Views;
@@ -14,6 +15,7 @@ public partial class MainView
     private StackPanel? _groupAddRequestsPanel;
     private TextBlock? _groupAddRequestsHeader;
     private bool _groupAddRequestBusy;
+    private bool _groupRequestEventsHooked;
 
     private sealed class GroupAddRequestUiBootstrap
     {
@@ -50,6 +52,64 @@ public partial class MainView
         _groupAddRequestTimer.Start();
     }
 
+    private void HookGroupRequestSignalREvents()
+    {
+        if (_groupRequestEventsHooked || _hubConnection?.State != Microsoft.AspNetCore.SignalR.HubConnectionState.Connected) return;
+        try
+        {
+            _hubConnection.On<GroupAddRequestClientModel>("GroupAddRequestAccepted", OnGroupAddRequestAccepted);
+            _hubConnection.On<GroupAddRequestClientModel>("GroupAddRequestRejected", OnGroupAddRequestRejected);
+            _groupRequestEventsHooked = true;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Group request SignalR hook failed: {ex}");
+        }
+    }
+
+    private async void OnGroupAddRequestAccepted(GroupAddRequestClientModel request)
+    {
+        if (request == null) return;
+        try
+        {
+            await Dispatcher.InvokeAsync(async () =>
+            {
+                await RefreshGroupAddRequestsAsync();
+                await LoadChatsAsync();
+                MessageBox.Show(
+                    $"@{request.TargetUsername} accepted the request and was added to '{request.GroupName}'.",
+                    "Group Request",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Group request accepted notification failed: {ex}");
+        }
+    }
+
+    private async void OnGroupAddRequestRejected(GroupAddRequestClientModel request)
+    {
+        if (request == null) return;
+        try
+        {
+            await Dispatcher.InvokeAsync(async () =>
+            {
+                await RefreshGroupAddRequestsAsync();
+                MessageBox.Show(
+                    $"@{request.TargetUsername} rejected the request to join '{request.GroupName}'.",
+                    "Group Request",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Group request rejected notification failed: {ex}");
+        }
+    }
+
     private void EnsureGroupAddRequestsUi()
     {
         if (_groupAddRequestsPanel != null && _groupAddRequestsHeader != null) return;
@@ -68,6 +128,7 @@ public partial class MainView
         _groupAddRequestBusy = true;
         try
         {
+            HookGroupRequestSignalREvents();
             await Dispatcher.InvokeAsync(EnsureGroupAddRequestsUi);
             var incoming = await _apiService.GetAsync<List<GroupAddRequestClientModel>>("api/GroupAddRequests/incoming") ?? [];
             var outgoing = await _apiService.GetAsync<List<GroupAddRequestClientModel>>("api/GroupAddRequests/outgoing") ?? [];
@@ -124,7 +185,7 @@ public partial class MainView
             var candidate = candidates.FirstOrDefault(x => string.Equals(x.Username, normalized, StringComparison.OrdinalIgnoreCase));
             if (candidate == null)
             {
-                System.Windows.MessageBox.Show($"User @{normalized} was not found.", "Add Member", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                MessageBox.Show($"User @{normalized} was not found.", "Add Member", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
@@ -133,12 +194,12 @@ public partial class MainView
             var message = result.RequestPending
                 ? $"@{candidate.Username} does not allow people to add them to groups.\n\nA request was sent. They must accept it before they are added to the group."
                 : result.Message;
-            System.Windows.MessageBox.Show(message, "Add Member", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+            MessageBox.Show(message, "Add Member", MessageBoxButton.OK, MessageBoxImage.Information);
             await RefreshGroupAddRequestsAsync();
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show($"Could not add the member.\n\n{ex.Message}", "Add Member", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            MessageBox.Show($"Could not add the member.\n\n{ex.Message}", "Add Member", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -153,10 +214,10 @@ public partial class MainView
             if (accept)
             {
                 await LoadChatsAsync();
-                System.Windows.MessageBox.Show($"You were added to '{request.GroupName}'.", "Group Request", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                MessageBox.Show($"You were added to '{request.GroupName}'.", "Group Request", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
-        catch (Exception ex) { System.Windows.MessageBox.Show(ex.Message, "Group Request", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning); }
+        catch (Exception ex) { MessageBox.Show(ex.Message, "Group Request", MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
 
     private sealed class GroupAddRequestClientModel
