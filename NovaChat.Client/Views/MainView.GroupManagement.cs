@@ -132,9 +132,33 @@ public partial class MainView
 
     private async Task AddGroupMemberAsync(GroupInfoDialogState state)
     {
-        var username = PromptText("Add Member", "Username", string.Empty, state.Dialog); if (string.IsNullOrWhiteSpace(username)) return;
-        try { await _apiService.PostAsync<object, object>($"api/Chat/{state.ChatId}/members", new { Username = username.Trim() }); await RefreshGroupMembersAsync(state); }
-        catch (Exception ex) { MessageBox.Show(ex.Message, "Add Member", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        var username = PromptText("Add Member", "Username", string.Empty, state.Dialog);
+        if (string.IsNullOrWhiteSpace(username)) return;
+
+        try
+        {
+            var normalizedUsername = username.Trim().ToLowerInvariant();
+            var candidates = await _apiService.GetAsync<List<GroupAddCandidate>>($"api/User/search?q={Uri.EscapeDataString(normalizedUsername)}") ?? [];
+            var candidate = candidates.FirstOrDefault(x => string.Equals(x.Username, normalizedUsername, StringComparison.OrdinalIgnoreCase));
+            if (candidate == null)
+            {
+                System.Windows.MessageBox.Show($"User @{normalizedUsername} was not found.", "Add Member", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                return;
+            }
+
+            if (!candidate.AllowGroupAdds)
+            {
+                System.Windows.MessageBox.Show($"@{candidate.Username} does not allow other people to add them to groups.\n\nAsk them to enable group additions in their privacy settings first.", "Add Member", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                return;
+            }
+
+            await _apiService.PostAsync<object, object>($"api/Chat/{state.ChatId}/members", new { Username = candidate.Username });
+            await RefreshGroupMembersAsync(state);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Add Member", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private async Task ChangeGroupPictureAsync(GroupInfoDialogState state)
@@ -199,6 +223,7 @@ public partial class MainView
     private Brush GetBrush(string key) => TryFindResource(key) as Brush ?? Brushes.Gray;
     private static string? PromptText(string title, string label, string initialValue, Window owner) { var dialog = new Window { Title = title, Width = 390, Height = 190, Owner = owner, WindowStartupLocation = WindowStartupLocation.CenterOwner, ResizeMode = ResizeMode.NoResize, Background = (Brush)Application.Current.FindResource("PanelBackgroundBrush") }; var panel = new StackPanel { Margin = new Thickness(20) }; panel.Children.Add(new TextBlock { Text = label, Foreground = (Brush)Application.Current.FindResource("TextBrush"), FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 7) }); var box = new TextBox { Height = 40, Text = initialValue, Padding = new Thickness(10), Background = (Brush)Application.Current.FindResource("InputBackgroundBrush"), Foreground = (Brush)Application.Current.FindResource("TextBrush"), BorderBrush = (Brush)Application.Current.FindResource("BorderBrush") }; panel.Children.Add(box); var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0) }; string? value = null; var cancel = new Button { Content = "Cancel", Width = 82, Height = 34, Margin = new Thickness(0, 0, 7, 0), Style = (Style)Application.Current.FindResource("SecondaryButtonStyle") }; cancel.Click += (_, _) => dialog.Close(); var ok = new Button { Content = "OK", Width = 82, Height = 34, Style = (Style)Application.Current.FindResource("PrimaryButtonStyle") }; ok.Click += (_, _) => { value = box.Text.Trim(); dialog.Close(); }; buttons.Children.Add(cancel); buttons.Children.Add(ok); panel.Children.Add(buttons); dialog.Content = panel; dialog.Loaded += (_, _) => { box.Focus(); box.SelectAll(); }; dialog.ShowDialog(); return value; }
 
+    private sealed class GroupAddCandidate { public string Id { get; set; } = string.Empty; public string Username { get; set; } = string.Empty; public bool AllowGroupAdds { get; set; } }
     private sealed class GroupInfoDialogState
     {
         public Window Dialog { get; }
@@ -212,6 +237,6 @@ public partial class MainView
         public int ChatId { get; }
         public GroupInfoDialogState(Window dialog, ChatModel chat, Grid chatAvatar, TextBlock titleText, TextBlock memberCountText, StackPanel memberStack, bool isOwner, bool canManage, int chatId) { Dialog = dialog; Chat = chat; ChatAvatar = chatAvatar; TitleText = titleText; MemberCountText = memberCountText; MemberStack = memberStack; IsOwner = isOwner; CanManage = canManage; ChatId = chatId; }
     }
-    private sealed class GroupMemberViewModel { public string UserId { get; set; } = string.Empty; public string Username { get; set; } = string.Empty; public string DisplayName { get; set; } = string.Empty; public string? AvatarUrl { get; set; } public string Role { get; set; } = "Member"; public DateTime JoinedAt { get; set; } }
+    private sealed class GroupMemberViewModel { public string UserId { get; set; } = string.Empty; public string Username { get; set; } = string.Empty; public string? AvatarUrl { get; set; } public string Role { get; set; } = "Member"; public DateTime JoinedAt { get; set; } }
     private sealed class GroupAvatarResult { public string Message { get; set; } = string.Empty; public ChatModel? Chat { get; set; } }
 }
