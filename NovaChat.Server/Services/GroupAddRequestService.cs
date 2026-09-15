@@ -1,16 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using NovaChat.Server.Data;
 using NovaChat.Server.DTOs;
+using NovaChat.Server.Entities;
 
 namespace NovaChat.Server.Services;
 
 public sealed class GroupAddRequestService(AppDbContext db)
 {
     private readonly AppDbContext _db = db;
-
-    private async Task EnsureSchemaAsync(CancellationToken cancellationToken)
-    {
-        await _db.Database.ExecuteSqlRawAsync(@"
+    private async Task EnsureSchemaAsync(CancellationToken cancellationToken) => await _db.Database.ExecuteSqlRawAsync(@"
 CREATE TABLE IF NOT EXISTS `GroupAddRequests` (
     `Id` BIGINT NOT NULL AUTO_INCREMENT,
     `GroupId` INT NOT NULL,
@@ -27,17 +25,15 @@ CREATE TABLE IF NOT EXISTS `GroupAddRequests` (
     CONSTRAINT `FK_GroupAddRequests_Requester` FOREIGN KEY (`RequesterUserId`) REFERENCES `Users`(`Id`) ON DELETE CASCADE,
     CONSTRAINT `FK_GroupAddRequests_Target` FOREIGN KEY (`TargetUserId`) REFERENCES `Users`(`Id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;", cancellationToken);
-    }
 
-    public async Task<(bool Success, string Message, GroupAddRequestDto? Request, bool AddedImmediately)> CreateAsync(
-        int groupId, long requesterId, string username, CancellationToken cancellationToken = default)
+    public async Task<(bool Success, string Message, GroupAddRequestDto? Request, bool AddedImmediately)> CreateAsync(int groupId, long requesterId, string username, CancellationToken cancellationToken = default)
     {
         await EnsureSchemaAsync(cancellationToken);
-        var group = await _db.Chats.AsNoTracking().FirstOrDefaultAsync(c => c.Id == groupId && c.Type == Entities.ChatType.Group && !c.IsDeleted, cancellationToken);
+        var group = await _db.Chats.AsNoTracking().FirstOrDefaultAsync(c => c.Id == groupId && c.Type == ChatType.Group && !c.IsDeleted, cancellationToken);
         var requester = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == requesterId, cancellationToken);
         var target = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Username == username.Trim().ToLowerInvariant(), cancellationToken);
         if (group == null || requester == null || target == null) return (false, "Group or user not found.", null, false);
-        if (!IsManager(group.CreatedByUserId, requesterId)) return (false, "Only the group owner can add members.", null, false);
+        if (group.CreatedByUserId != requesterId) return (false, "Only the group owner can add members.", null, false);
         if (target.Id == requesterId) return (false, "You are already the group owner.", null, false);
 
         var members = ParseMembers(group.Members);
@@ -46,7 +42,8 @@ CREATE TABLE IF NOT EXISTS `GroupAddRequests` (
         if (target.AllowGroupAdds)
         {
             members.Add(target.Username);
-            var trackedGroup = await _db.Chats.FirstAsync(c => c.Id == groupId, cancellationToken);
+            var trackedGroup = await _db.Chats.FirstOrDefaultAsync(c => c.Id == groupId && !c.IsDeleted, cancellationToken);
+            if (trackedGroup == null) return (false, "Group not found.", null, false);
             trackedGroup.Members = string.Join(", ", members);
             await _db.SaveChangesAsync(cancellationToken);
             return (true, $"@{target.Username} was added to the group.", null, true);
@@ -55,8 +52,7 @@ CREATE TABLE IF NOT EXISTS `GroupAddRequests` (
         var pending = await _db.Database.SqlQueryRaw<long>(
             "SELECT `Id` AS `Value` FROM `GroupAddRequests` WHERE `GroupId` = {0} AND `RequesterUserId` = {1} AND `TargetUserId` = {2} AND `Status` = 'Pending' ORDER BY `Id` DESC LIMIT 1",
             groupId, requesterId, target.Id).SingleOrDefaultAsync(cancellationToken);
-        if (pending > 0)
-            return (true, $"@{target.Username} has not allowed group additions. A request is already pending.", await GetByIdAsync(pending, cancellationToken), false);
+        if (pending > 0) return (true, $"@{target.Username} does not allow people to add them to groups. A request is already pending.", await GetByIdAsync(pending, cancellationToken), false);
 
         var now = IranTime.Now;
         try
@@ -70,13 +66,12 @@ VALUES ({groupId},{requesterId},{target.Id},{"Pending"},{now});", cancellationTo
             var current = await _db.Database.SqlQueryRaw<long>(
                 "SELECT `Id` AS `Value` FROM `GroupAddRequests` WHERE `GroupId` = {0} AND `RequesterUserId` = {1} AND `TargetUserId` = {2} AND `Status` = 'Pending' ORDER BY `Id` DESC LIMIT 1",
                 groupId, requesterId, target.Id).SingleOrDefaultAsync(cancellationToken);
-            if (current > 0) return (true, $"@{target.Username} has not allowed group additions. A request is already pending.", await GetByIdAsync(current, cancellationToken), false);
+            if (current > 0) return (true, $"@{target.Username} does not allow people to add them to groups. A request is already pending.", await GetByIdAsync(current, cancellationToken), false);
             throw;
         }
 
         var id = await _db.Database.SqlQueryRaw<long>("SELECT LAST_INSERT_ID() AS `Value`").SingleAsync(cancellationToken);
-        var request = await GetByIdAsync(id, cancellationToken);
-        return (true, $"@{target.Username} does not allow people to add them to groups. A request was sent.", request, false);
+        return (true, $"@{target.Username} does not allow people to add them to groups. A request was sent.", await GetByIdAsync(id, cancellationToken), false);
     }
 
     public async Task<List<GroupAddRequestDto>> GetIncomingAsync(long userId, CancellationToken cancellationToken = default)
@@ -119,7 +114,7 @@ ORDER BY r.CreatedAt DESC, r.Id DESC", userId).ToListAsync(cancellationToken);
         if (row.TargetUserId != userId) return (false, "You cannot respond to this request.", null, null);
         if (!string.Equals(row.Status, "Pending", StringComparison.OrdinalIgnoreCase)) return (false, "This request is no longer pending.", ToDto(row), row.GroupId);
 
-        var group = await _db.Chats.FirstOrDefaultAsync(c => c.Id == row.GroupId && c.Type == Entities.ChatType.Group && !c.IsDeleted, cancellationToken);
+        var group = await _db.Chats.FirstOrDefaultAsync(c => c.Id == row.GroupId && c.Type == ChatType.Group && !c.IsDeleted, cancellationToken);
         var target = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
         if (group == null || target == null) return (false, "The group no longer exists.", null, null);
 
@@ -157,11 +152,9 @@ WHERE `Id` = {requestId} AND `Status` = {"Pending"};", cancellationToken);
         return (true, "Group request rejected.", ToDto(row));
     }
 
-    private async Task<GroupAddRequestDto?> GetByIdAsync(long id, CancellationToken cancellationToken) =>
-        (await LoadRowAsync(id, cancellationToken)) is { } row ? ToDto(row) : null;
+    private async Task<GroupAddRequestDto?> GetByIdAsync(long id, CancellationToken cancellationToken) => (await LoadRowAsync(id, cancellationToken)) is { } row ? ToDto(row) : null;
 
-    private async Task<GroupAddRequestRow?> LoadRowAsync(long requestId, CancellationToken cancellationToken) =>
-        await _db.Database.SqlQueryRaw<GroupAddRequestRow>(@"
+    private async Task<GroupAddRequestRow?> LoadRowAsync(long requestId, CancellationToken cancellationToken) => await _db.Database.SqlQueryRaw<GroupAddRequestRow>(@"
 SELECT r.Id, r.GroupId, c.Name AS GroupName, r.RequesterUserId, r.TargetUserId, r.Status, r.CreatedAt, r.RespondedAt,
        ru.Username AS RequesterUsername, ru.DisplayName AS RequesterDisplayName,
        tu.Username AS TargetUsername, tu.DisplayName AS TargetDisplayName
@@ -172,8 +165,8 @@ JOIN Users tu ON tu.Id = r.TargetUserId
 WHERE r.Id = {0}
 LIMIT 1", requestId).SingleOrDefaultAsync(cancellationToken);
 
-    private static bool IsManager(long? ownerId, long userId) => ownerId == userId;
     private static List<string> ParseMembers(string members) => (members ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
     private static GroupAddRequestDto ToDto(GroupAddRequestRow row) => new()
     {
         Id = row.Id, GroupId = row.GroupId, GroupName = row.GroupName,
