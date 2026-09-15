@@ -21,6 +21,7 @@ builder.Services.AddScoped<JwtService>();
 builder.Services.AddScoped<AdminService>();
 builder.Services.AddScoped<ChatService>();
 builder.Services.AddScoped<ChatRequestService>();
+builder.Services.AddScoped<GroupAddRequestService>();
 builder.Services.AddScoped<MessageReadService>();
 builder.Services.AddScoped<E2eeDeviceService>();
 builder.Services.AddSingleton<PresenceService>();
