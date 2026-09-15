@@ -30,15 +30,16 @@ CREATE TABLE IF NOT EXISTS EncryptionDevices (
     public async Task UpsertAsync(long userId, string deviceId, string publicKeyPem, CancellationToken cancellationToken = default)
     {
         await EnsureSchemaAsync(cancellationToken);
+        var now = IranTime.Now;
         const string sql = @"
 INSERT INTO EncryptionDevices (DeviceId, UserId, PublicKeyPem, CreatedAt, LastSeenAt, RevokedAt)
-VALUES ({0}, {1}, {2}, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), NULL)
+VALUES ({0}, {1}, {2}, {3}, {3}, NULL)
 ON DUPLICATE KEY UPDATE
     UserId = VALUES(UserId),
     PublicKeyPem = VALUES(PublicKeyPem),
-    LastSeenAt = UTC_TIMESTAMP(6),
+    LastSeenAt = VALUES(LastSeenAt),
     RevokedAt = NULL;";
-        await _db.Database.ExecuteSqlRawAsync(sql, [deviceId, userId, publicKeyPem], cancellationToken);
+        await _db.Database.ExecuteSqlRawAsync(sql, [deviceId, userId, publicKeyPem, now], cancellationToken);
     }
 
     public async Task<List<E2eeDeviceRecord>> GetChatDevicesAsync(int chatId, long userId, CancellationToken cancellationToken = default)
@@ -113,7 +114,8 @@ ON DUPLICATE KEY UPDATE
     public async Task RevokeAsync(long userId, string deviceId, CancellationToken cancellationToken = default)
     {
         await EnsureSchemaAsync(cancellationToken);
-        const string sql = "UPDATE EncryptionDevices SET RevokedAt = UTC_TIMESTAMP(6) WHERE DeviceId = {0} AND UserId = {1};";
-        await _db.Database.ExecuteSqlRawAsync(sql, [deviceId, userId], cancellationToken);
+        var now = IranTime.Now;
+        const string sql = "UPDATE EncryptionDevices SET RevokedAt = {2} WHERE DeviceId = {0} AND UserId = {1};";
+        await _db.Database.ExecuteSqlRawAsync(sql, [deviceId, userId, now], cancellationToken);
     }
 }
