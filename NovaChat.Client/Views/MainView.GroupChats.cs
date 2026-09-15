@@ -85,10 +85,10 @@ public partial class MainView
     private static void RegisterGroupUiHandlers() { if (_groupUiRegistered) return; _groupUiRegistered = true; EventManager.RegisterClassHandler(typeof(MainView), FrameworkElement.LoadedEvent, new RoutedEventHandler(OnGroupUiLoaded)); }
     private void InstallGroupUi() { if (_createGroupButton != null) return; if (SearchTextBox.Parent is not Grid searchGrid || searchGrid.Parent is not Border searchBorder || searchBorder.Parent is not StackPanel panel) return; _createGroupButton = new Button { Content = "👥   New group", Height = 40, Margin = new Thickness(0, 6, 0, 0), HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left, Padding = new Thickness(10, 0, 10, 0), Style = (Style)FindResource("SecondaryButtonStyle") }; _createGroupButton.Click += CreateGroupButton_Click; panel.Children.Add(_createGroupButton); }
     private void StartGroupEventWatcher() { if (_groupEventTimer != null) return; _groupEventTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) }; _groupEventTimer.Tick += GroupEventTimer_Tick; _groupEventTimer.Start(); }
-    private async void GroupEventTimer_Tick(object? sender, EventArgs e) { if (_hubConnection?.State != HubConnectionState.Connected) return; if (!_groupEventsHooked) { try { _hubConnection.On<ChatModel>("ChatCreated", OnGroupCreatedFromServer); _hubConnection.On<ChatModel>("GroupUpdated", OnGroupUpdatedFromServer); _hubConnection.On<object>("ChatMemberRemoved", OnGroupMemberRemovedFromServer); _groupEventsHooked = true; } catch { } } RefreshGroupOnlineStatus(); }
-    private async void OnGroupCreatedFromServer(ChatModel chat) { if (chat == null || chat.Id <= 0) return; await Dispatcher.InvokeAsync(async () => { try { await LoadChatsAsync(); } catch { } }); }
-    private async void OnGroupUpdatedFromServer(ChatModel chat) { if (chat == null || chat.Id <= 0) return; await Dispatcher.InvokeAsync(async () => { try { var item = _chats.FirstOrDefault(x => x.Chat.Id == chat.Id); if (item != null) item.Chat.AvatarUrl = chat.AvatarUrl; await LoadChatsAsync(); if (_currentChatId == chat.Id) await RefreshCurrentGroupAvatarAsync(); } catch { } }); }
-    private async void OnGroupMemberRemovedFromServer(object _) { await Dispatcher.InvokeAsync(async () => { try { await LoadChatsAsync(); } catch { } }); }
+    private async void GroupEventTimer_Tick(object? sender, EventArgs e) { if (_groupCreationBusy) return; if (_hubConnection?.State != HubConnectionState.Connected) return; if (!_groupEventsHooked) { try { _hubConnection.On<ChatModel>("ChatCreated", OnGroupCreatedFromServer); _hubConnection.On<ChatModel>("GroupUpdated", OnGroupUpdatedFromServer); _hubConnection.On<object>("ChatMemberRemoved", OnGroupMemberRemovedFromServer); _groupEventsHooked = true; } catch { } } RefreshGroupOnlineStatus(); }
+    private async void OnGroupCreatedFromServer(ChatModel chat) { if (_groupCreationBusy || chat == null || chat.Id <= 0) return; await Dispatcher.InvokeAsync(async () => { if (_groupCreationBusy) return; try { await LoadChatsAsync(); } catch { } }); }
+    private async void OnGroupUpdatedFromServer(ChatModel chat) { if (_groupCreationBusy || chat == null || chat.Id <= 0) return; await Dispatcher.InvokeAsync(async () => { if (_groupCreationBusy) return; try { var item = _chats.FirstOrDefault(x => x.Chat.Id == chat.Id); if (item != null) item.Chat.AvatarUrl = chat.AvatarUrl; await LoadChatsAsync(); if (_currentChatId == chat.Id) await RefreshCurrentGroupAvatarAsync(); } catch { } }); }
+    private async void OnGroupMemberRemovedFromServer(object _) { if (_groupCreationBusy) return; await Dispatcher.InvokeAsync(async () => { if (_groupCreationBusy) return; try { await LoadChatsAsync(); } catch { } }); }
 
     private async void CreateGroupButton_Click(object? sender, RoutedEventArgs e)
     {
@@ -119,8 +119,6 @@ public partial class MainView
                 var created = response.Chat;
                 if (created == null || created.Id <= 0) throw new InvalidOperationException(response.Message ?? "The server did not return the created group.");
 
-                // The server deliberately creates the group only with eligible users.
-                // Protected selected users are converted into explicit group-add requests now.
                 var requestFailures = new List<string>();
                 foreach (var username in response.SkippedUsernames.Distinct(StringComparer.OrdinalIgnoreCase))
                 {
@@ -134,8 +132,6 @@ public partial class MainView
 
                 await LoadChatsAsync();
                 dialog.Close();
-                var fresh = _chats.FirstOrDefault(x => x.Chat.Id == created.Id)?.Chat ?? created;
-                await OpenChatAsync(fresh);
 
                 if (response.SkippedUsernames.Count > 0)
                 {
