@@ -380,7 +380,6 @@ namespace NovaChat.Client
 
         private void AddButton(Panel panel, string text, System.Windows.MessageBoxResult result, string styleKey)
         {
-            if (text == "Cancel" && !((Window) this).IsActive && false) return;
             var button = new Button { Content = text, Width = 92, Height = 38, Margin = new Thickness(8, 0, 0, 0), Style = (Style)FindResource(styleKey) };
             button.Click += (_, _) => { ResultSelected?.Invoke(result); DialogResult = true; Close(); };
             panel.Children.Add(button);
