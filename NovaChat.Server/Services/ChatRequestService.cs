@@ -63,7 +63,7 @@ ALTER TABLE `ChatRequests`
 
         var pending = await _db.Database.SqlQueryRaw<long>(
             "SELECT `Id` AS `Value` FROM `ChatRequests` WHERE `RequesterUserId` = {0} AND `TargetUserId` = {1} AND `Status` = 'Pending' ORDER BY `Id` DESC LIMIT 1",
-            requester.Id, target.Id).FirstOrDefaultAsync(cancellationToken);
+            requester.Id, target.Id).SingleOrDefaultAsync(cancellationToken);
         if (pending > 0)
         {
             var current = await GetByIdAsync(pending, cancellationToken);
@@ -81,7 +81,7 @@ VALUES ({requester.Id},{target.Id},{"Pending"},{now});", cancellationToken);
         {
             var currentPending = await _db.Database.SqlQueryRaw<long>(
                 "SELECT `Id` AS `Value` FROM `ChatRequests` WHERE `RequesterUserId` = {0} AND `TargetUserId` = {1} AND `Status` = 'Pending' ORDER BY `Id` DESC LIMIT 1",
-                requester.Id, target.Id).FirstOrDefaultAsync(cancellationToken);
+                requester.Id, target.Id).SingleOrDefaultAsync(cancellationToken);
             if (currentPending > 0)
                 return (true, "Chat request is already pending.", await GetByIdAsync(currentPending, cancellationToken));
             throw;
@@ -192,7 +192,7 @@ FROM ChatRequests r
 JOIN Users ru ON ru.Id = r.RequesterUserId
 JOIN Users tu ON tu.Id = r.TargetUserId
 WHERE r.Id = {0}
-LIMIT 1", requestId).FirstOrDefaultAsync(cancellationToken);
+LIMIT 1", requestId).SingleOrDefaultAsync(cancellationToken);
     }
 
     private static ChatRequestDto ToDto(ChatRequestRow row) => new()
