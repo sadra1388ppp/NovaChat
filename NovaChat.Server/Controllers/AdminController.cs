@@ -82,7 +82,7 @@ public class AdminController : ControllerBase
     }
 
     [HttpGet("overview")]
-    public async Task<IActionResult> GetOverview() => Ok(new { status = "Online", users = await _db.Users.CountAsync(), serverTime = DateTime.UtcNow });
+    public async Task<IActionResult> GetOverview() => Ok(new { status = "Online", users = await _db.Users.CountAsync(), serverTime = IranTime.Now });
 
     [HttpGet("settings")]
     public IActionResult GetSettings() => Ok(new { serverName = "NovaChat Server", ownerAccess = true, status = "Online" });
