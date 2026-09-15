@@ -107,13 +107,8 @@ public partial class MainView
 
         var selectedUsers = new Dictionary<string, GroupUserSearchModel>(StringComparer.OrdinalIgnoreCase);
         var root = new Grid { Margin = new Thickness(26) };
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        for (var i = 0; i < 7; i++) root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions[5].Height = new GridLength(1, GridUnitType.Star);
 
         var headerGrid = new Grid { Margin = new Thickness(0, 0, 0, 16) };
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(52) });
@@ -148,16 +143,15 @@ public partial class MainView
         searchGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         searchGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var searchBox = new TextBox { Height = 44, Padding = new Thickness(38, 0, 44, 0), VerticalContentAlignment = VerticalAlignment.Center, FontSize = 13.5, ToolTip = "Search by username or display name" };
-        var searchIcon = new TextBlock { Text = "⌕", FontSize = 23, Foreground = (Brush)FindResource("SecondaryTextBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false, Margin = new Thickness(10, 0, 0, 1) };
+        var searchIcon = new TextBlock { Text = "⌕", FontSize = 23, Foreground = (Brush)FindResource("SecondaryTextBrush"), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false, Margin = new Thickness(12, 0, 0, 1) };
         var searchHost = new Grid(); searchHost.Children.Add(searchBox); searchHost.Children.Add(searchIcon); Grid.SetColumn(searchHost, 0); searchGrid.Children.Add(searchHost);
         var clearSearch = new Button { Content = "Clear", Height = 36, Margin = new Thickness(9, 4, 0, 4), Padding = new Thickness(13, 0, 13, 0), Style = (Style)FindResource("SecondaryButtonStyle") };
         clearSearch.Click += (_, _) => searchBox.Clear(); Grid.SetColumn(clearSearch, 1); searchGrid.Children.Add(clearSearch);
         searchPanel.Children.Add(searchLabel); searchPanel.Children.Add(searchGrid); Grid.SetRow(searchPanel, 5); root.Children.Add(searchPanel);
 
-        var membersList = new ListBox { BorderThickness = new Thickness(0), Background = Brushes.Transparent, Padding = new Thickness(0), ScrollViewer = { VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
-        Grid.SetRow(membersList, 5); root.Children.Remove(searchPanel); root.Children.Add(searchPanel); Grid.SetRow(membersList, 6);
-
-        var resultHost = new Grid();
+        var resultHost = new Grid { Margin = new Thickness(0, 0, 0, 0) };
+        var membersList = new ListBox { BorderThickness = new Thickness(0), Background = Brushes.Transparent, Padding = new Thickness(0) };
+        ScrollViewer.SetVerticalScrollBarVisibility(membersList, ScrollBarVisibility.Auto);
         var loadingText = new TextBlock { Text = "", FontSize = 12, Foreground = (Brush)FindResource("SecondaryTextBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
         resultHost.Children.Add(membersList); resultHost.Children.Add(loadingText);
         Grid.SetRow(resultHost, 6); root.Children.Add(resultHost);
@@ -178,7 +172,7 @@ public partial class MainView
                 var chipGrid = new Grid(); chipGrid.ColumnDefinitions.Add(new ColumnDefinition()); chipGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 var text = new TextBlock { Text = $"@{user.Username}", FontSize = 11.5, Foreground = (Brush)FindResource("TextBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 7, 0) };
                 var remove = new Button { Content = "×", Width = 22, Height = 22, FontSize = 14, Padding = new Thickness(0), Background = Brushes.Transparent, BorderThickness = new Thickness(0), Foreground = (Brush)FindResource("SecondaryTextBrush") };
-                remove.Click += (_, _) => { selectedUsers.Remove(user.Username); UpdateSelectedMembersUi(); RefreshGroupUserSearchAsync(searchBox.Text, membersList, selectedUsers, loadingText); };
+                remove.Click += (_, _) => { selectedUsers.Remove(user.Username); UpdateSelectedMembersUi(); _ = RefreshGroupUserSearchAsync(searchBox.Text, membersList, selectedUsers, loadingText); };
                 chipGrid.Children.Add(text); Grid.SetColumn(remove, 1); chipGrid.Children.Add(remove); chip.Child = chipGrid; selectedPanel.Children.Add(chip);
             }
             selectedCount.Text = $"{selectedUsers.Count} selected";
@@ -269,8 +263,8 @@ public partial class MainView
 
                 var info = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 12, 0) };
                 var display = new TextBlock { Text = string.IsNullOrWhiteSpace(user.DisplayName) ? user.Username : user.DisplayName, FontSize = 13.5, FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush") };
-                var username = new TextBlock { Text = $"@{user.Username}", FontSize = 11.5, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 2, 0, 0) };
-                info.Children.Add(display); info.Children.Add(username); Grid.SetColumn(info, 1); row.Children.Add(info);
+                var usernameText = new TextBlock { Text = $"@{user.Username}", FontSize = 11.5, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 2, 0, 0) };
+                info.Children.Add(display); info.Children.Add(usernameText); Grid.SetColumn(info, 1); row.Children.Add(info);
 
                 var status = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
                 var dot = new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = user.IsOnline ? Brushes.LimeGreen : Brushes.Gray, Margin = new Thickness(0, 0, 5, 0) };
@@ -295,7 +289,7 @@ public partial class MainView
     private void UpdateGroupUserRowVisual(Grid row, bool selected)
     {
         row.Opacity = selected ? 1 : 0.9;
-        row.SetValue(Control.BackgroundProperty, selected ? FindResource("PrimarySoftBrush") : Brushes.Transparent);
+        row.Background = selected ? (Brush)FindResource("PrimarySoftBrush") : Brushes.Transparent;
     }
 
     private static string BuildUserInitials(string? displayName, string? username)
