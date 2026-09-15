@@ -318,7 +318,7 @@ public class ChatService
         var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId && !c.IsDeleted);
         if (chat == null) return false;
         chat.IsDeleted = true;
-        chat.DeletedAt = DateTime.UtcNow;
+        chat.DeletedAt = IranTime.Now;
         await _context.SaveChangesAsync();
         return true;
     }
