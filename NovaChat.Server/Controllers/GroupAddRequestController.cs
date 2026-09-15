@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using NovaChat.Server.DTOs;
 using NovaChat.Server.Hubs;
 using NovaChat.Server.Services;
 using System.Security.Claims;
