@@ -142,6 +142,9 @@ public partial class MainView
         var searchGrid = new Grid { Height = 44 };
         searchGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         searchGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var membersList = new ListBox { BorderThickness = new Thickness(0), Background = Brushes.Transparent, Padding = new Thickness(0) };
+        ScrollViewer.SetVerticalScrollBarVisibility(membersList, ScrollBarVisibility.Auto);
+        var loadingText = new TextBlock { Text = "", FontSize = 12, Foreground = (Brush)FindResource("SecondaryTextBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
         var searchBox = new TextBox { Height = 44, Padding = new Thickness(40, 0, 44, 0), VerticalContentAlignment = VerticalAlignment.Center, FontSize = 13.5, Foreground = (Brush)FindResource("TextBrush"), Background = (Brush)FindResource("InputBackgroundBrush"), ToolTip = "Search by username or display name" };
         searchBox.TextChanged += async (_, _) => await RefreshGroupUserSearchAsync(searchBox.Text, membersList, selectedUsers, loadingText);
         var searchIcon = new TextBlock { Text = "⌕", FontSize = 23, Foreground = (Brush)FindResource("SecondaryTextBrush"), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false, Margin = new Thickness(12, 0, 0, 1) };
@@ -151,9 +154,6 @@ public partial class MainView
         searchPanel.Children.Add(searchLabel); searchPanel.Children.Add(searchGrid); Grid.SetRow(searchPanel, 5); root.Children.Add(searchPanel);
 
         var resultHost = new Grid { Margin = new Thickness(0, 0, 0, 0) };
-        var membersList = new ListBox { BorderThickness = new Thickness(0), Background = Brushes.Transparent, Padding = new Thickness(0) };
-        ScrollViewer.SetVerticalScrollBarVisibility(membersList, ScrollBarVisibility.Auto);
-        var loadingText = new TextBlock { Text = "", FontSize = 12, Foreground = (Brush)FindResource("SecondaryTextBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
         resultHost.Children.Add(membersList); resultHost.Children.Add(loadingText);
         Grid.SetRow(resultHost, 6); root.Children.Add(resultHost);
 
