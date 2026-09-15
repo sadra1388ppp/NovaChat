@@ -7,6 +7,7 @@
 -- MessageReads stores durable per-user read receipts for professional unread/seen behavior.
 -- Select/create the target database separately. This is not an in-place upgrade.
 -- All application dates are UTC.
+-- AllowGroupAdds is intentionally stored as the literal text "true"/"false".
 
 CREATE TABLE `Users` (
     `Id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -19,6 +20,8 @@ CREATE TABLE `Users` (
     `AvatarUrl` VARCHAR(512) NULL,
     `LastSeenAt` DATETIME(6) NULL,
     `CreatedAt` DATETIME(6) NOT NULL,
+    `MessagePrivacy` VARCHAR(32) NOT NULL DEFAULT 'Everybody',
+    `AllowGroupAdds` VARCHAR(5) NOT NULL DEFAULT 'true',
     PRIMARY KEY (`Id`),
     UNIQUE KEY `IX_Users_Username` (`Username`),
     UNIQUE KEY `IX_Users_Email` (`Email`),
