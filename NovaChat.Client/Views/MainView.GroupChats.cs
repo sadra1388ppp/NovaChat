@@ -93,25 +93,110 @@ public partial class MainView
     private async void CreateGroupButton_Click(object? sender, RoutedEventArgs e)
     {
         if (_groupCreationBusy) return;
-        var dialog = new Window { Title = "Create New Group", Width = 620, Height = 720, WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = Window.GetWindow(this), ResizeMode = ResizeMode.NoResize, Background = (Brush)FindResource("PanelBackgroundBrush") };
-        var root = new Grid { Margin = new Thickness(24) };
-        for (var i = 0; i < 4; i++) root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var title = new TextBlock { Text = "Create a group", FontSize = 24, FontWeight = FontWeights.Bold, Foreground = (Brush)FindResource("TextBrush") }; Grid.SetRow(title, 0); root.Children.Add(title);
-        var subtitle = new TextBlock { Text = "Give your group a name, then search and select people by username.", FontSize = 13, Margin = new Thickness(0, 5, 0, 18), Foreground = (Brush)FindResource("SecondaryTextBrush") }; Grid.SetRow(subtitle, 1); root.Children.Add(subtitle);
-        var namePanel = new StackPanel { Margin = new Thickness(0, 0, 0, 14) }; namePanel.Children.Add(new TextBlock { Text = "Group name", FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush"), Margin = new Thickness(0, 0, 0, 7) }); var nameBox = new TextBox { Height = 42, Padding = new Thickness(12, 0, 12, 0), VerticalContentAlignment = VerticalAlignment.Center, ToolTip = "Group name" }; namePanel.Children.Add(nameBox); Grid.SetRow(namePanel, 2); root.Children.Add(namePanel);
-        var membersList = new ListBox { BorderThickness = new Thickness(1), BorderBrush = (Brush)FindResource("BorderBrush"), Background = (Brush)FindResource("InputBackgroundBrush"), Padding = new Thickness(4) }; var countText = new TextBlock { Text = "0 selected", Foreground = (Brush)FindResource("SecondaryTextBrush"), VerticalAlignment = VerticalAlignment.Center };
-        var searchPanel = new StackPanel(); searchPanel.Children.Add(new TextBlock { Text = "Find members", FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush"), Margin = new Thickness(0, 0, 0, 7) }); var searchGrid = new Grid { Height = 42, Margin = new Thickness(0, 0, 0, 10) }; searchGrid.ColumnDefinitions.Add(new ColumnDefinition()); searchGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); var searchBox = new TextBox { Height = 42, Padding = new Thickness(12, 0, 12, 0), VerticalContentAlignment = VerticalAlignment.Center, ToolTip = "Search by username or display name" }; searchBox.TextChanged += async (_, _) => await RefreshGroupUserSearchAsync(searchBox.Text, membersList, countText); Grid.SetColumn(searchBox, 0); searchGrid.Children.Add(searchBox); var clearSearch = new Button { Content = "Clear", Height = 34, Margin = new Thickness(8, 4, 0, 4), Padding = new Thickness(12, 0, 12, 0), Style = (Style)FindResource("SecondaryButtonStyle") }; clearSearch.Click += (_, _) => searchBox.Clear(); Grid.SetColumn(clearSearch, 1); searchGrid.Children.Add(clearSearch); searchPanel.Children.Add(searchGrid); Grid.SetRow(searchPanel, 3); root.Children.Add(searchPanel);
-        Grid.SetRow(membersList, 4); root.Children.Add(membersList); var createButton = new Button { Content = "Create Group", Width = 140, Height = 42, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0), Style = (Style)FindResource("PrimaryButtonStyle") }; var footer = new Grid(); footer.ColumnDefinitions.Add(new ColumnDefinition()); footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); footer.Children.Add(countText); Grid.SetColumn(createButton, 1); footer.Children.Add(createButton); Grid.SetRow(footer, 5); root.Children.Add(footer);
+        var dialog = new Window
+        {
+            Title = "Create New Group",
+            Width = 700,
+            Height = 800,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = Window.GetWindow(this),
+            ResizeMode = ResizeMode.NoResize,
+            Background = (Brush)FindResource("PanelBackgroundBrush"),
+            WindowStyle = WindowStyle.SingleBorderWindow
+        };
+
+        var selectedUsers = new Dictionary<string, GroupUserSearchModel>(StringComparer.OrdinalIgnoreCase);
+        var root = new Grid { Margin = new Thickness(26) };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var headerGrid = new Grid { Margin = new Thickness(0, 0, 0, 16) };
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(52) });
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var headerBadge = new Border { Width = 46, Height = 46, CornerRadius = new CornerRadius(15), Background = (Brush)FindResource("PrimarySoftBrush"), HorizontalAlignment = HorizontalAlignment.Left };
+        headerBadge.Child = new TextBlock { Text = "👥", FontSize = 23, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        headerGrid.Children.Add(headerBadge);
+        var headerText = new StackPanel { Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        var title = new TextBlock { Text = "Create a group", FontSize = 25, FontWeight = FontWeights.Bold, Foreground = (Brush)FindResource("TextBrush") };
+        var subtitle = new TextBlock { Text = "Choose a name and invite the people you want in the conversation.", FontSize = 12.5, Margin = new Thickness(0, 4, 0, 0), Foreground = (Brush)FindResource("SecondaryTextBrush") };
+        headerText.Children.Add(title); headerText.Children.Add(subtitle); Grid.SetColumn(headerText, 1); headerGrid.Children.Add(headerText);
+        Grid.SetRow(headerGrid, 0); root.Children.Add(headerGrid);
+
+        var nameLabel = new TextBlock { Text = "GROUP NAME", FontSize = 11, FontWeight = FontWeights.Bold, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 0, 0, 7) };
+        Grid.SetRow(nameLabel, 1); root.Children.Add(nameLabel);
+        var nameBox = new TextBox { Height = 44, Padding = new Thickness(13, 0, 13, 0), VerticalContentAlignment = VerticalAlignment.Center, FontSize = 14, ToolTip = "Enter a group name" };
+        Grid.SetRow(nameBox, 2); root.Children.Add(nameBox);
+
+        var selectedHeader = new Grid { Margin = new Thickness(0, 17, 0, 8) };
+        var selectedLabel = new TextBlock { Text = "SELECTED MEMBERS", FontSize = 11, FontWeight = FontWeights.Bold, Foreground = (Brush)FindResource("SecondaryTextBrush") };
+        var selectedCount = new TextBlock { Text = "0 selected", FontSize = 11, Foreground = (Brush)FindResource("SecondaryTextBrush"), HorizontalAlignment = HorizontalAlignment.Right };
+        selectedHeader.Children.Add(selectedLabel); selectedHeader.Children.Add(selectedCount); Grid.SetRow(selectedHeader, 3); root.Children.Add(selectedHeader);
+
+        var selectedScroll = new ScrollViewer { Height = 62, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, Background = (Brush)FindResource("InputBackgroundBrush") };
+        var selectedPanel = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 7, 8, 7) };
+        selectedScroll.Content = selectedPanel;
+        Grid.SetRow(selectedScroll, 4); root.Children.Add(selectedScroll);
+
+        var searchPanel = new StackPanel { Margin = new Thickness(0, 16, 0, 10) };
+        var searchLabel = new TextBlock { Text = "ADD MEMBERS", FontSize = 11, FontWeight = FontWeights.Bold, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 0, 0, 7) };
+        var searchGrid = new Grid { Height = 44 };
+        searchGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        searchGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var searchBox = new TextBox { Height = 44, Padding = new Thickness(38, 0, 44, 0), VerticalContentAlignment = VerticalAlignment.Center, FontSize = 13.5, ToolTip = "Search by username or display name" };
+        var searchIcon = new TextBlock { Text = "⌕", FontSize = 23, Foreground = (Brush)FindResource("SecondaryTextBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false, Margin = new Thickness(10, 0, 0, 1) };
+        var searchHost = new Grid(); searchHost.Children.Add(searchBox); searchHost.Children.Add(searchIcon); Grid.SetColumn(searchHost, 0); searchGrid.Children.Add(searchHost);
+        var clearSearch = new Button { Content = "Clear", Height = 36, Margin = new Thickness(9, 4, 0, 4), Padding = new Thickness(13, 0, 13, 0), Style = (Style)FindResource("SecondaryButtonStyle") };
+        clearSearch.Click += (_, _) => searchBox.Clear(); Grid.SetColumn(clearSearch, 1); searchGrid.Children.Add(clearSearch);
+        searchPanel.Children.Add(searchLabel); searchPanel.Children.Add(searchGrid); Grid.SetRow(searchPanel, 5); root.Children.Add(searchPanel);
+
+        var membersList = new ListBox { BorderThickness = new Thickness(0), Background = Brushes.Transparent, Padding = new Thickness(0), ScrollViewer = { VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
+        Grid.SetRow(membersList, 5); root.Children.Remove(searchPanel); root.Children.Add(searchPanel); Grid.SetRow(membersList, 6);
+
+        var resultHost = new Grid();
+        var loadingText = new TextBlock { Text = "", FontSize = 12, Foreground = (Brush)FindResource("SecondaryTextBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
+        resultHost.Children.Add(membersList); resultHost.Children.Add(loadingText);
+        Grid.SetRow(resultHost, 6); root.Children.Add(resultHost);
+
+        var footer = new Grid { Margin = new Thickness(0, 16, 0, 0) };
+        footer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var footerHint = new TextBlock { Text = "Members who have group privacy enabled may receive an invitation request.", TextWrapping = TextWrapping.Wrap, FontSize = 11.5, MaxWidth = 390, Foreground = (Brush)FindResource("SecondaryTextBrush"), VerticalAlignment = VerticalAlignment.Center };
+        var createButton = new Button { Content = "Create Group", Width = 150, Height = 44, Margin = new Thickness(14, 0, 0, 0), Style = (Style)FindResource("PrimaryButtonStyle") };
+        footer.Children.Add(footerHint); Grid.SetColumn(createButton, 1); footer.Children.Add(createButton); Grid.SetRow(footer, 7); root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); root.Children.Add(footer);
+
+        void UpdateSelectedMembersUi()
+        {
+            selectedPanel.Children.Clear();
+            foreach (var user in selectedUsers.Values.OrderBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase))
+            {
+                var chip = new Border { Background = (Brush)FindResource("PrimarySoftBrush"), BorderBrush = (Brush)FindResource("BorderBrush"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(16), Margin = new Thickness(2), Padding = new Thickness(8, 4, 6, 4) };
+                var chipGrid = new Grid(); chipGrid.ColumnDefinitions.Add(new ColumnDefinition()); chipGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var text = new TextBlock { Text = $"@{user.Username}", FontSize = 11.5, Foreground = (Brush)FindResource("TextBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 7, 0) };
+                var remove = new Button { Content = "×", Width = 22, Height = 22, FontSize = 14, Padding = new Thickness(0), Background = Brushes.Transparent, BorderThickness = new Thickness(0), Foreground = (Brush)FindResource("SecondaryTextBrush") };
+                remove.Click += (_, _) => { selectedUsers.Remove(user.Username); UpdateSelectedMembersUi(); RefreshGroupUserSearchAsync(searchBox.Text, membersList, selectedUsers, loadingText); };
+                chipGrid.Children.Add(text); Grid.SetColumn(remove, 1); chipGrid.Children.Add(remove); chip.Child = chipGrid; selectedPanel.Children.Add(chip);
+            }
+            selectedCount.Text = $"{selectedUsers.Count} selected";
+            createButton.IsEnabled = !_groupCreationBusy && selectedUsers.Count > 0 && !string.IsNullOrWhiteSpace(nameBox.Text.Trim());
+        }
+
+        nameBox.TextChanged += (_, _) => UpdateSelectedMembersUi();
+        searchBox.TextChanged += async (_, _) => await RefreshGroupUserSearchAsync(searchBox.Text, membersList, selectedUsers, loadingText);
         createButton.Click += async (_, _) =>
         {
             if (_groupCreationBusy) return;
             var name = nameBox.Text.Trim();
-            var selected = membersList.Items.OfType<CheckBox>().Where(x => x.IsChecked == true).Select(x => x.Tag as GroupUserSearchModel).Where(x => x != null).Select(x => x!.Username).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var selected = selectedUsers.Values.Select(x => x.Username).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             if (string.IsNullOrWhiteSpace(name)) { MessageBox.Show("Please enter a group name.", "Create Group", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
             if (selected.Count == 0) { MessageBox.Show("Select at least one member.", "Create Group", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
             _groupCreationBusy = true;
             createButton.IsEnabled = false;
+            createButton.Content = "Creating…";
             try
             {
                 var response = await _apiService.PostAsync<GroupCreateResponse>("api/Chat/group", new { Name = name, Usernames = selected });
@@ -149,21 +234,75 @@ public partial class MainView
             finally
             {
                 _groupCreationBusy = false;
-                if (dialog.IsVisible)
-                    createButton.IsEnabled = true;
+                createButton.Content = "Create Group";
+                if (dialog.IsVisible) UpdateSelectedMembersUi();
             }
         };
-        searchBox.Focus(); dialog.Content = root; dialog.ShowDialog();
+
+        UpdateSelectedMembersUi();
+        searchBox.Focus();
+        dialog.Content = root;
+        dialog.ShowDialog();
     }
 
-    private async Task RefreshGroupUserSearchAsync(string query, ListBox membersList, TextBlock countText)
+    private async Task RefreshGroupUserSearchAsync(string query, ListBox membersList, Dictionary<string, GroupUserSearchModel> selectedUsers, TextBlock loadingText)
     {
+        var trimmedQuery = query.Trim();
         try
         {
-            var users = await _apiService.GetAsync<List<GroupUserSearchModel>>($"api/User/search?q={Uri.EscapeDataString(query.Trim())}") ?? [];
-            var selected = membersList.Items.OfType<CheckBox>().Where(x => x.IsChecked == true).Select(x => x.Tag as GroupUserSearchModel).Where(x => x != null).Select(x => x!.Username).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            membersList.Items.Clear(); foreach (var user in users.Where(x => !string.Equals(x.Username, AuthState.Username, StringComparison.OrdinalIgnoreCase))) { var box = new CheckBox { Content = $"{user.DisplayName}  (@{user.Username})", Tag = user, IsChecked = selected.Contains(user.Username), Padding = new Thickness(8) }; box.Checked += (_, _) => countText.Text = $"{membersList.Items.OfType<CheckBox>().Count(x => x.IsChecked == true)} selected"; box.Unchecked += (_, _) => countText.Text = $"{membersList.Items.OfType<CheckBox>().Count(x => x.IsChecked == true)} selected"; membersList.Items.Add(box); } countText.Text = $"{membersList.Items.OfType<CheckBox>().Count(x => x.IsChecked == true)} selected";
+            loadingText.Text = "Searching…";
+            loadingText.Visibility = Visibility.Visible;
+            membersList.Items.Clear();
+            var users = await _apiService.GetAsync<List<GroupUserSearchModel>>($"api/User/search?q={Uri.EscapeDataString(trimmedQuery)}") ?? [];
+            var visibleUsers = users.Where(x => !string.Equals(x.Username, AuthState.Username, StringComparison.OrdinalIgnoreCase)).ToList();
+            foreach (var user in visibleUsers)
+            {
+                var isSelected = selectedUsers.ContainsKey(user.Username);
+                var row = new Grid { Margin = new Thickness(0, 3, 0, 3) };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+                var avatar = new Border { Width = 40, Height = 40, CornerRadius = new CornerRadius(20), Background = (Brush)FindResource("PrimarySoftBrush"), HorizontalAlignment = HorizontalAlignment.Left };
+                avatar.Child = new TextBlock { Text = BuildUserInitials(user.DisplayName, user.Username), FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("PrimaryBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+                row.Children.Add(avatar);
+
+                var info = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 12, 0) };
+                var display = new TextBlock { Text = string.IsNullOrWhiteSpace(user.DisplayName) ? user.Username : user.DisplayName, FontSize = 13.5, FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush") };
+                var username = new TextBlock { Text = $"@{user.Username}", FontSize = 11.5, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 2, 0, 0) };
+                info.Children.Add(display); info.Children.Add(username); Grid.SetColumn(info, 1); row.Children.Add(info);
+
+                var status = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+                var dot = new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = user.IsOnline ? Brushes.LimeGreen : Brushes.Gray, Margin = new Thickness(0, 0, 5, 0) };
+                status.Children.Add(dot); status.Children.Add(new TextBlock { Text = user.IsOnline ? "Online" : "Offline", FontSize = 10.5, Foreground = (Brush)FindResource("SecondaryTextBrush"), VerticalAlignment = VerticalAlignment.Center });
+                Grid.SetColumn(status, 2); row.Children.Add(status);
+
+                var check = new CheckBox { IsChecked = isSelected, Content = row, HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(12, 10, 12, 10), Margin = new Thickness(0, 1, 0, 1), ToolTip = $"Select @{user.Username}" };
+                check.Checked += (_, _) => { selectedUsers[user.Username] = user; UpdateGroupUserRowVisual(row, true); };
+                check.Unchecked += (_, _) => { selectedUsers.Remove(user.Username); UpdateGroupUserRowVisual(row, false); };
+                membersList.Items.Add(check);
+            }
+            loadingText.Visibility = visibleUsers.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            if (visibleUsers.Count == 0) loadingText.Text = string.IsNullOrWhiteSpace(trimmedQuery) ? "No people available." : "No users found.";
         }
-        catch { }
+        catch
+        {
+            loadingText.Text = "Could not load users.";
+            loadingText.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void UpdateGroupUserRowVisual(Grid row, bool selected)
+    {
+        row.Opacity = selected ? 1 : 0.9;
+        row.SetValue(Control.BackgroundProperty, selected ? FindResource("PrimarySoftBrush") : Brushes.Transparent);
+    }
+
+    private static string BuildUserInitials(string? displayName, string? username)
+    {
+        var value = string.IsNullOrWhiteSpace(displayName) ? username : displayName;
+        if (string.IsNullOrWhiteSpace(value)) return "?";
+        var parts = value.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length > 1 ? $"{parts[0][0]}{parts[1][0]}".ToUpperInvariant() : value.Trim()[..Math.Min(2, value.Trim().Length)].ToUpperInvariant();
     }
 }
