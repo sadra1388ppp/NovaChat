@@ -132,6 +132,7 @@ namespace NovaChat.Client
         public static System.Windows.MessageBoxResult Show(string messageBoxText, string caption, System.Windows.MessageBoxButton button) => Show(null, messageBoxText, caption, button, System.Windows.MessageBoxImage.None, GetDefault(button));
         public static System.Windows.MessageBoxResult Show(string messageBoxText, string caption, System.Windows.MessageBoxButton button, System.Windows.MessageBoxImage icon) => Show(null, messageBoxText, caption, button, icon, GetDefault(button));
         public static System.Windows.MessageBoxResult Show(string messageBoxText, string caption, System.Windows.MessageBoxButton button, System.Windows.MessageBoxImage icon, System.Windows.MessageBoxResult defaultResult) => Show(null, messageBoxText, caption, button, icon, defaultResult);
+        public static System.Windows.MessageBoxResult Show(Window owner, string messageBoxText, string caption, System.Windows.MessageBoxButton button, System.Windows.MessageBoxImage icon) => Show(owner, messageBoxText, caption, button, icon, GetDefault(button));
 
         public static System.Windows.MessageBoxResult Show(Window? owner, string messageBoxText, string caption, System.Windows.MessageBoxButton button, System.Windows.MessageBoxImage icon, System.Windows.MessageBoxResult defaultResult)
         {
@@ -357,33 +358,48 @@ namespace NovaChat.Client
             badge.Child = badgeText;
             header.Children.Add(badge);
             var heading = new StackPanel { Margin = new Thickness(14, 1, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-            heading.Children.Add(new TextBlock { Text = string.IsNullOrWhiteSpace(title) ? "NovaChat" : title, FontSize = 18, FontWeight = FontWeights.Bold, Foreground = FindResource("TextBrush") });
-            header.Children.Add(heading);
-            Grid.SetRow(header, 0);
-            root.Children.Add(header);
+            var headingText = new TextBlock { Text = title, FontSize = 20, FontWeight = FontWeights.Bold }; headingText.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush");
+            var subtitle = new TextBlock { Text = "Please confirm this action", FontSize = 11, Margin = new Thickness(0, 4, 0, 0) }; subtitle.SetResourceReference(TextBlock.ForegroundProperty, "SecondaryTextBrush");
+            heading.Children.Add(headingText); heading.Children.Add(subtitle); header.Children.Add(heading);
+            Grid.SetRow(header, 0); root.Children.Add(header);
 
-            var messageText = new TextBlock { Text = message ?? string.Empty, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 18, 0, 14), Foreground = (Brush)FindResource("SecondaryTextBrush") };
-            Grid.SetRow(messageText, 2);
-            root.Children.Add(messageText);
+            var separator = new Border { Height = 1, Margin = new Thickness(0, 18, 0, 14) }; separator.SetResourceReference(Border.BackgroundProperty, "BorderBrush"); Grid.SetRow(separator, 1); root.Children.Add(separator);
+            var body = new TextBlock { Text = message, FontSize = 13, LineHeight = 21, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Top }; body.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush"); Grid.SetRow(body, 2); root.Children.Add(body);
 
-            var buttonsPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-            AddButton(buttonsPanel, "Cancel", System.Windows.MessageBoxResult.Cancel, "SecondaryButtonStyle");
-            if (buttons is System.Windows.MessageBoxButton.YesNo or System.Windows.MessageBoxButton.YesNoCancel) AddButton(buttonsPanel, "Yes", System.Windows.MessageBoxResult.Yes, "PrimaryButtonStyle");
-            if (buttons is System.Windows.MessageBoxButton.OKCancel or System.Windows.MessageBoxButton.YesNoCancel) AddButton(buttonsPanel, "OK", System.Windows.MessageBoxResult.OK, "PrimaryButtonStyle");
-            if (buttons == System.Windows.MessageBoxButton.YesNo) AddButton(buttonsPanel, "No", System.Windows.MessageBoxResult.No, "SecondaryButtonStyle");
-            Grid.SetRow(buttonsPanel, 3);
-            root.Children.Add(buttonsPanel);
+            var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 18, 0, 0) };
+            foreach (var spec in BuildButtonSpecs(buttons))
+            {
+                var button = new Button { Content = spec.Text, Width = spec.Width, Height = 40, Margin = new Thickness(spec.IsFirst ? 0 : 8, 0, 0, 0), Style = GetButtonStyle(spec.Result) };
+                button.Click += (_, _) => { ResultSelected?.Invoke(spec.Result); DialogResult = spec.Result != System.Windows.MessageBoxResult.Cancel; };
+                button.IsDefault = spec.Result == defaultResult;
+                button.IsCancel = spec.Result == System.Windows.MessageBoxResult.Cancel;
+                actions.Children.Add(button);
+                if (button.IsDefault) button.Dispatcher.BeginInvoke(() => button.Focus());
+            }
+            Grid.SetRow(actions, 3); root.Children.Add(actions);
+
             card.Child = root;
             Content = card;
-            ContentRendered += (_, _) => Activate();
+
+            KeyDown += (_, e) =>
+            {
+                if (e.Key != System.Windows.Input.Key.Escape) return;
+                var escapeResult = buttons == System.Windows.MessageBoxButton.YesNo ? System.Windows.MessageBoxResult.No : System.Windows.MessageBoxResult.Cancel;
+                ResultSelected?.Invoke(escapeResult);
+                DialogResult = escapeResult != System.Windows.MessageBoxResult.Cancel;
+            };
+            Loaded += (_, _) => Opacity = 1;
         }
 
-        private void AddButton(Panel panel, string text, System.Windows.MessageBoxResult result, string styleKey)
+        private Style? GetButtonStyle(System.Windows.MessageBoxResult result) => Application.Current?.FindResource(result is System.Windows.MessageBoxResult.Yes or System.Windows.MessageBoxResult.OK ? "PrimaryButtonStyle" : result == System.Windows.MessageBoxResult.No ? "SecondaryButtonStyle" : "SecondaryButtonStyle") as Style;
+
+        private static IEnumerable<(string Text, System.Windows.MessageBoxResult Result, bool IsFirst, double Width)> BuildButtonSpecs(System.Windows.MessageBoxButton button) => button switch
         {
-            var button = new Button { Content = text, Width = 92, Height = 38, Margin = new Thickness(8, 0, 0, 0), Style = (Style)FindResource(styleKey) };
-            button.Click += (_, _) => { ResultSelected?.Invoke(result); DialogResult = true; Close(); };
-            panel.Children.Add(button);
-        }
+            System.Windows.MessageBoxButton.YesNo => [("No", System.Windows.MessageBoxResult.No, true, 92), ("Yes", System.Windows.MessageBoxResult.Yes, false, 108)],
+            System.Windows.MessageBoxButton.OKCancel => [("Cancel", System.Windows.MessageBoxResult.Cancel, true, 98), ("OK", System.Windows.MessageBoxResult.OK, false, 98)],
+            System.Windows.MessageBoxButton.YesNoCancel => [("Cancel", System.Windows.MessageBoxResult.Cancel, true, 98), ("No", System.Windows.MessageBoxResult.No, false, 92), ("Yes", System.Windows.MessageBoxResult.Yes, false, 108)],
+            _ => [("OK", System.Windows.MessageBoxResult.OK, true, 108)]
+        };
 
         private static string IconText(System.Windows.MessageBoxImage icon) => icon switch
         {
