@@ -13,11 +13,13 @@ public partial class MainView
 {
     private sealed class GroupMemberModel { public string UserId { get; set; } = string.Empty; public string Username { get; set; } = string.Empty; public string DisplayName { get; set; } = string.Empty; public string Role { get; set; } = string.Empty; }
     private sealed class GroupUserSearchModel { public string Id { get; set; } = string.Empty; public string Username { get; set; } = string.Empty; public string DisplayName { get; set; } = string.Empty; public string Email { get; set; } = string.Empty; public string? AvatarUrl { get; set; } public bool IsOnline { get; set; } }
-    private sealed class GroupCreateResponse { public string Message { get; set; } = string.Empty; public ChatModel? Chat { get; set; } }
+    private sealed class GroupCreateResponse { public string Message { get; set; } = string.Empty; public ChatModel? Chat { get; set; } public List<string> SkippedUsernames { get; set; } = []; }
+    private sealed class GroupAddRequestResponse { public string Message { get; set; } = string.Empty; public bool RequestPending { get; set; } }
     private static bool _groupUiRegistered;
     private Button? _createGroupButton;
     private DispatcherTimer? _groupEventTimer;
     private bool _groupEventsHooked;
+    private bool _groupCreationBusy;
     private List<GroupMemberModel> _currentGroupMembers = [];
     private bool IsCurrentGroupChat => _currentChatId.HasValue && _chats.FirstOrDefault(x => x.Chat.Id == _currentChatId.Value)?.Chat.IsGroup == true;
     private void RefreshGroupOnlineStatus() { if (!IsCurrentGroupChat || !_currentChatId.HasValue) return; _ = RefreshCurrentGroupInfoAsync(); }
@@ -90,6 +92,7 @@ public partial class MainView
 
     private async void CreateGroupButton_Click(object? sender, RoutedEventArgs e)
     {
+        if (_groupCreationBusy) return;
         var dialog = new Window { Title = "Create New Group", Width = 620, Height = 720, WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = Window.GetWindow(this), ResizeMode = ResizeMode.NoResize, Background = (Brush)FindResource("PanelBackgroundBrush") };
         var root = new Grid { Margin = new Thickness(24) };
         for (var i = 0; i < 4; i++) root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -100,7 +103,60 @@ public partial class MainView
         var membersList = new ListBox { BorderThickness = new Thickness(1), BorderBrush = (Brush)FindResource("BorderBrush"), Background = (Brush)FindResource("InputBackgroundBrush"), Padding = new Thickness(4) }; var countText = new TextBlock { Text = "0 selected", Foreground = (Brush)FindResource("SecondaryTextBrush"), VerticalAlignment = VerticalAlignment.Center };
         var searchPanel = new StackPanel(); searchPanel.Children.Add(new TextBlock { Text = "Find members", FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush"), Margin = new Thickness(0, 0, 0, 7) }); var searchGrid = new Grid { Height = 42, Margin = new Thickness(0, 0, 0, 10) }; searchGrid.ColumnDefinitions.Add(new ColumnDefinition()); searchGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); var searchBox = new TextBox { Height = 42, Padding = new Thickness(12, 0, 12, 0), VerticalContentAlignment = VerticalAlignment.Center, ToolTip = "Search by username or display name" }; searchBox.TextChanged += async (_, _) => await RefreshGroupUserSearchAsync(searchBox.Text, membersList, countText); Grid.SetColumn(searchBox, 0); searchGrid.Children.Add(searchBox); var clearSearch = new Button { Content = "Clear", Height = 34, Margin = new Thickness(8, 4, 0, 4), Padding = new Thickness(12, 0, 12, 0), Style = (Style)FindResource("SecondaryButtonStyle") }; clearSearch.Click += (_, _) => searchBox.Clear(); Grid.SetColumn(clearSearch, 1); searchGrid.Children.Add(clearSearch); searchPanel.Children.Add(searchGrid); Grid.SetRow(searchPanel, 3); root.Children.Add(searchPanel);
         Grid.SetRow(membersList, 4); root.Children.Add(membersList); var createButton = new Button { Content = "Create Group", Width = 140, Height = 42, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0), Style = (Style)FindResource("PrimaryButtonStyle") }; var footer = new Grid(); footer.ColumnDefinitions.Add(new ColumnDefinition()); footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); footer.Children.Add(countText); Grid.SetColumn(createButton, 1); footer.Children.Add(createButton); Grid.SetRow(footer, 5); root.Children.Add(footer);
-        createButton.Click += async (_, _) => { var name = nameBox.Text.Trim(); var selected = membersList.Items.OfType<CheckBox>().Where(x => x.IsChecked == true).Select(x => x.Tag as GroupUserSearchModel).Where(x => x != null).Select(x => x!.Username).Distinct(StringComparer.OrdinalIgnoreCase).ToList(); if (string.IsNullOrWhiteSpace(name)) { MessageBox.Show("Please enter a group name.", "Create Group", MessageBoxButton.OK, MessageBoxImage.Warning); return; } if (selected.Count == 0) { MessageBox.Show("Select at least one member.", "Create Group", MessageBoxButton.OK, MessageBoxImage.Warning); return; } try { var payload = new { Name = name, Usernames = selected }; var response = await _apiService.PostAsync<GroupCreateResponse>("api/Chat/group", payload); var created = response?.Chat; if (created == null || created.Id <= 0) throw new InvalidOperationException(response?.Message ?? "The server did not return the created group."); dialog.DialogResult = true; await LoadChatsAsync(); await OpenChatAsync(created); if (!string.IsNullOrWhiteSpace(response?.Message) && response.Message.Contains("were not added", StringComparison.OrdinalIgnoreCase)) MessageBox.Show(response.Message, "Group privacy", MessageBoxButton.OK, MessageBoxImage.Information); } catch (Exception ex) { MessageBox.Show($"Could not create group.\n\n{ex.Message}", "Create Group", MessageBoxButton.OK, MessageBoxImage.Error); } }; searchBox.Focus(); dialog.Content = root; dialog.ShowDialog();
+        createButton.Click += async (_, _) =>
+        {
+            if (_groupCreationBusy) return;
+            var name = nameBox.Text.Trim();
+            var selected = membersList.Items.OfType<CheckBox>().Where(x => x.IsChecked == true).Select(x => x.Tag as GroupUserSearchModel).Where(x => x != null).Select(x => x!.Username).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (string.IsNullOrWhiteSpace(name)) { MessageBox.Show("Please enter a group name.", "Create Group", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+            if (selected.Count == 0) { MessageBox.Show("Select at least one member.", "Create Group", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+            _groupCreationBusy = true;
+            createButton.IsEnabled = false;
+            try
+            {
+                var response = await _apiService.PostAsync<GroupCreateResponse>("api/Chat/group", new { Name = name, Usernames = selected });
+                var created = response?.Chat;
+                if (created == null || created.Id <= 0) throw new InvalidOperationException(response?.Message ?? "The server did not return the created group.");
+
+                // The server deliberately creates the group only with eligible users.
+                // Protected selected users are converted into explicit group-add requests now.
+                var requestFailures = new List<string>();
+                foreach (var username in response.SkippedUsernames.Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        var request = await _apiService.PostAsync<object, GroupAddRequestResponse>($"api/GroupAddRequests/{created.Id}", new { Username = username });
+                        if (request == null || !request.RequestPending) requestFailures.Add(username);
+                    }
+                    catch { requestFailures.Add(username); }
+                }
+
+                await LoadChatsAsync();
+                dialog.Close();
+                var fresh = _chats.FirstOrDefault(x => x.Chat.Id == created.Id)?.Chat ?? created;
+                await OpenChatAsync(fresh);
+
+                if (response.SkippedUsernames.Count > 0)
+                {
+                    var requested = response.SkippedUsernames.Except(requestFailures, StringComparer.OrdinalIgnoreCase).Select(x => "@" + x).ToList();
+                    var message = requested.Count > 0
+                        ? $"The group was created. These users do not allow direct group additions, so a request was sent to: {string.Join(", ", requested)}. They must accept before joining."
+                        : "The group was created, but the selected users could not be reached for group requests.";
+                    MessageBox.Show(message, "Group privacy", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not create group.\n\n{ex.Message}", "Create Group", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                _groupCreationBusy = false;
+                if (!dialog.IsVisible) return;
+                createButton.IsEnabled = true;
+            }
+        };
+        searchBox.Focus(); dialog.Content = root; dialog.ShowDialog();
     }
 
     private async Task RefreshGroupUserSearchAsync(string query, ListBox membersList, TextBlock countText)
