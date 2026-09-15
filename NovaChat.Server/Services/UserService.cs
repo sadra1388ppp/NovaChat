@@ -39,7 +39,7 @@ public class UserService
             if (await _context.Users.AnyAsync(u => u.Email == email)) return Fail("This Email is already registered.");
             if (await _context.Users.AnyAsync(u => u.PhoneNumber == phoneNumber)) return Fail("This phone number is already registered.");
             var userId = await GenerateNextUserIdAsync();
-            var createdAt = DateTime.UtcNow;
+            var createdAt = IranTime.Now;
             var passwordHash = _passwordHashService.HashPassword(dto.Password);
             await _context.Database.ExecuteSqlInterpolatedAsync($@"
                 INSERT INTO `Users` (`Id`, `Username`, `DisplayName`, `Email`, `PhoneNumber`, `PasswordHash`, `Bio`, `AvatarUrl`, `LastSeenAt`, `CreatedAt`, `MessagePrivacy`, `AllowGroupAdds`)
@@ -154,7 +154,8 @@ public class UserService
     public async Task MarkLastSeenAsync(string id)
     {
         if (!long.TryParse(id, out var userId)) return;
-        await _context.Users.Where(u => u.Id == userId).ExecuteUpdateAsync(s => s.SetProperty(u => u.LastSeenAt, DateTime.UtcNow));
+        var lastSeen = IranTime.Now;
+        await _context.Users.Where(u => u.Id == userId).ExecuteUpdateAsync(s => s.SetProperty(u => u.LastSeenAt, lastSeen));
     }
 
     public async Task<bool> DeleteUserAsync(string id)
