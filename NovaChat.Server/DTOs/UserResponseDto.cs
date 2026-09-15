@@ -10,6 +10,7 @@ public class UserResponseDto
     public string Bio { get; set; } = string.Empty;
     public string? AvatarUrl { get; set; }
     public bool IsOnline { get; set; }
+    public bool AllowGroupAdds { get; set; }
     public DateTime? LastSeenAt { get; set; }
     public DateTime CreatedAt { get; set; }
 }
