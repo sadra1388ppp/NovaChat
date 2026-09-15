@@ -107,8 +107,8 @@ public partial class MainView
 
         var selectedUsers = new Dictionary<string, GroupUserSearchModel>(StringComparer.OrdinalIgnoreCase);
         var root = new Grid { Margin = new Thickness(26) };
-        for (var i = 0; i < 7; i++) root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.RowDefinitions[5].Height = new GridLength(1, GridUnitType.Star);
+        for (var i = 0; i < 8; i++) root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions[6].Height = new GridLength(1, GridUnitType.Star);
 
         var headerGrid = new Grid { Margin = new Thickness(0, 0, 0, 16) };
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(52) });
@@ -142,7 +142,8 @@ public partial class MainView
         var searchGrid = new Grid { Height = 44 };
         searchGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         searchGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var searchBox = new TextBox { Height = 44, Padding = new Thickness(38, 0, 44, 0), VerticalContentAlignment = VerticalAlignment.Center, FontSize = 13.5, ToolTip = "Search by username or display name" };
+        var searchBox = new TextBox { Height = 44, Padding = new Thickness(40, 0, 44, 0), VerticalContentAlignment = VerticalAlignment.Center, FontSize = 13.5, Foreground = (Brush)FindResource("TextBrush"), Background = (Brush)FindResource("InputBackgroundBrush"), ToolTip = "Search by username or display name" };
+        searchBox.TextChanged += async (_, _) => await RefreshGroupUserSearchAsync(searchBox.Text, membersList, selectedUsers, loadingText);
         var searchIcon = new TextBlock { Text = "⌕", FontSize = 23, Foreground = (Brush)FindResource("SecondaryTextBrush"), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false, Margin = new Thickness(12, 0, 0, 1) };
         var searchHost = new Grid(); searchHost.Children.Add(searchBox); searchHost.Children.Add(searchIcon); Grid.SetColumn(searchHost, 0); searchGrid.Children.Add(searchHost);
         var clearSearch = new Button { Content = "Clear", Height = 36, Margin = new Thickness(9, 4, 0, 4), Padding = new Thickness(13, 0, 13, 0), Style = (Style)FindResource("SecondaryButtonStyle") };
@@ -161,7 +162,7 @@ public partial class MainView
         footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var footerHint = new TextBlock { Text = "Members who have group privacy enabled may receive an invitation request.", TextWrapping = TextWrapping.Wrap, FontSize = 11.5, MaxWidth = 390, Foreground = (Brush)FindResource("SecondaryTextBrush"), VerticalAlignment = VerticalAlignment.Center };
         var createButton = new Button { Content = "Create Group", Width = 150, Height = 44, Margin = new Thickness(14, 0, 0, 0), Style = (Style)FindResource("PrimaryButtonStyle") };
-        footer.Children.Add(footerHint); Grid.SetColumn(createButton, 1); footer.Children.Add(createButton); Grid.SetRow(footer, 7); root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); root.Children.Add(footer);
+        footer.Children.Add(footerHint); Grid.SetColumn(createButton, 1); footer.Children.Add(createButton); Grid.SetRow(footer, 7); root.Children.Add(footer);
 
         void UpdateSelectedMembersUi()
         {
@@ -180,7 +181,6 @@ public partial class MainView
         }
 
         nameBox.TextChanged += (_, _) => UpdateSelectedMembersUi();
-        searchBox.TextChanged += async (_, _) => await RefreshGroupUserSearchAsync(searchBox.Text, membersList, selectedUsers, loadingText);
         createButton.Click += async (_, _) =>
         {
             if (_groupCreationBusy) return;
@@ -197,7 +197,6 @@ public partial class MainView
                 if (response == null) throw new InvalidOperationException("The server returned an empty response.");
                 var created = response.Chat;
                 if (created == null || created.Id <= 0) throw new InvalidOperationException(response.Message ?? "The server did not return the created group.");
-
                 var requestFailures = new List<string>();
                 foreach (var username in response.SkippedUsernames.Distinct(StringComparer.OrdinalIgnoreCase))
                 {
@@ -208,10 +207,8 @@ public partial class MainView
                     }
                     catch { requestFailures.Add(username); }
                 }
-
                 await LoadChatsAsync();
                 dialog.Close();
-
                 if (response.SkippedUsernames.Count > 0)
                 {
                     var requested = response.SkippedUsernames.Except(requestFailures, StringComparer.OrdinalIgnoreCase).Select(x => "@" + x).ToList();
@@ -232,7 +229,6 @@ public partial class MainView
                 if (dialog.IsVisible) UpdateSelectedMembersUi();
             }
         };
-
         UpdateSelectedMembersUi();
         searchBox.Focus();
         dialog.Content = root;
@@ -244,7 +240,7 @@ public partial class MainView
         var trimmedQuery = query.Trim();
         try
         {
-            loadingText.Text = "Searching…";
+            loadingText.Text = string.IsNullOrWhiteSpace(trimmedQuery) ? "Type a name or username to search" : "Searching…";
             loadingText.Visibility = Visibility.Visible;
             membersList.Items.Clear();
             var users = await _apiService.GetAsync<List<GroupUserSearchModel>>($"api/User/search?q={Uri.EscapeDataString(trimmedQuery)}") ?? [];
@@ -252,51 +248,39 @@ public partial class MainView
             foreach (var user in visibleUsers)
             {
                 var isSelected = selectedUsers.ContainsKey(user.Username);
-                var row = new Grid { Margin = new Thickness(0, 3, 0, 3) };
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-                var avatar = new Border { Width = 40, Height = 40, CornerRadius = new CornerRadius(20), Background = (Brush)FindResource("PrimarySoftBrush"), HorizontalAlignment = HorizontalAlignment.Left };
-                avatar.Child = new TextBlock { Text = BuildUserInitials(user.DisplayName, user.Username), FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("PrimaryBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-                row.Children.Add(avatar);
-
-                var info = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 12, 0) };
+                var check = new CheckBox { IsChecked = isSelected, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 8, 0), Tag = user };
+                check.Checked += (_, _) => { selectedUsers[user.Username] = user; loadingText.Visibility = Visibility.Collapsed; UpdateGroupSelectionVisuals(membersList, selectedUsers); };
+                check.Unchecked += (_, _) => { selectedUsers.Remove(user.Username); UpdateGroupSelectionVisuals(membersList, selectedUsers); };
+                var avatar = new Border { Width = 42, Height = 42, CornerRadius = new CornerRadius(21), Background = (Brush)FindResource("PrimarySoftBrush"), VerticalAlignment = VerticalAlignment.Center };
+                avatar.Child = new TextBlock { Text = string.IsNullOrWhiteSpace(user.DisplayName) ? "?" : user.DisplayName[..1].ToUpperInvariant(), FontSize = 16, FontWeight = FontWeights.Bold, Foreground = (Brush)FindResource("PrimaryBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+                var nameStack = new StackPanel { Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
                 var display = new TextBlock { Text = string.IsNullOrWhiteSpace(user.DisplayName) ? user.Username : user.DisplayName, FontSize = 13.5, FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush") };
-                var usernameText = new TextBlock { Text = $"@{user.Username}", FontSize = 11.5, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 2, 0, 0) };
-                info.Children.Add(display); info.Children.Add(usernameText); Grid.SetColumn(info, 1); row.Children.Add(info);
-
-                var status = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
-                var dot = new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = user.IsOnline ? Brushes.LimeGreen : Brushes.Gray, Margin = new Thickness(0, 0, 5, 0) };
-                status.Children.Add(dot); status.Children.Add(new TextBlock { Text = user.IsOnline ? "Online" : "Offline", FontSize = 10.5, Foreground = (Brush)FindResource("SecondaryTextBrush"), VerticalAlignment = VerticalAlignment.Center });
-                Grid.SetColumn(status, 2); row.Children.Add(status);
-
-                var check = new CheckBox { IsChecked = isSelected, Content = row, HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(12, 10, 12, 10), Margin = new Thickness(0, 1, 0, 1), ToolTip = $"Select @{user.Username}" };
-                check.Checked += (_, _) => { selectedUsers[user.Username] = user; UpdateGroupUserRowVisual(row, true); };
-                check.Unchecked += (_, _) => { selectedUsers.Remove(user.Username); UpdateGroupUserRowVisual(row, false); };
-                membersList.Items.Add(check);
+                var handle = new TextBlock { Text = $"@{user.Username}{(user.IsOnline ? "  •  Online" : "")}", FontSize = 11.5, Foreground = (Brush)FindResource("SecondaryTextBrush"), Margin = new Thickness(0, 2, 0, 0) };
+                nameStack.Children.Add(display); nameStack.Children.Add(handle);
+                var row = new Grid { Height = 56, Margin = new Thickness(2, 3, 2, 3), Background = Brushes.Transparent };
+                row.Children.Add(check); Grid.SetColumn(check, 0);
+                row.Children.Add(avatar); Grid.SetColumn(avatar, 1);
+                row.Children.Add(nameStack); Grid.SetColumn(nameStack, 2);
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.MouseLeftButtonUp += (_, _) => check.IsChecked = !check.IsChecked;
+                membersList.Items.Add(row);
             }
             loadingText.Visibility = visibleUsers.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-            if (visibleUsers.Count == 0) loadingText.Text = string.IsNullOrWhiteSpace(trimmedQuery) ? "No people available." : "No users found.";
+            if (visibleUsers.Count == 0 && !string.IsNullOrWhiteSpace(trimmedQuery)) loadingText.Text = "No users found";
         }
         catch
         {
-            loadingText.Text = "Could not load users.";
+            loadingText.Text = "Could not search users";
             loadingText.Visibility = Visibility.Visible;
         }
     }
 
-    private void UpdateGroupUserRowVisual(Grid row, bool selected)
+    private static void UpdateGroupSelectionVisuals(ListBox membersList, Dictionary<string, GroupUserSearchModel> selectedUsers)
     {
-        row.Opacity = selected ? 1 : 0.9;
-        row.Background = selected ? (Brush)FindResource("PrimarySoftBrush") : Brushes.Transparent;
-    }
-
-    private static string BuildUserInitials(string? displayName, string? username)
-    {
-        var value = string.IsNullOrWhiteSpace(displayName) ? username : displayName;
-        if (string.IsNullOrWhiteSpace(value)) return "?";
-        var parts = value.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length > 1 ? $"{parts[0][0]}{parts[1][0]}".ToUpperInvariant() : value.Trim()[..Math.Min(2, value.Trim().Length)].ToUpperInvariant();
+        foreach (var row in membersList.Items.OfType<Grid>())
+        {
+            var check = row.Children.OfType<CheckBox>().FirstOrDefault();
+            if (check?.Tag is GroupUserSearchModel user) check.IsChecked = selectedUsers.ContainsKey(user.Username);
+        }
     }
 }
