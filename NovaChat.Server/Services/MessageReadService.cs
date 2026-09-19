@@ -34,12 +34,14 @@ CREATE TABLE IF NOT EXISTS `MessageReads` (
         try
         {
             var readIds = new List<int>();
+            var readAt = IranTime.Now;
             foreach (var messageId in ids)
             {
                 await using var insert = connection.CreateCommand();
-                insert.CommandText = "INSERT IGNORE INTO MessageReads (MessageId, UserId, ReadAt) VALUES (@messageId, @userId, UTC_TIMESTAMP(6))";
+                insert.CommandText = "INSERT IGNORE INTO MessageReads (MessageId, UserId, ReadAt) VALUES (@messageId, @userId, @readAt)";
                 AddParameter(insert, "@messageId", messageId);
                 AddParameter(insert, "@userId", userId);
+                AddParameter(insert, "@readAt", readAt);
                 var affected = await insert.ExecuteNonQueryAsync(cancellationToken);
                 if (affected > 0) readIds.Add(messageId);
             }

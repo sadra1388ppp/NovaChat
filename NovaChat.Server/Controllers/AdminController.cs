@@ -82,7 +82,7 @@ public class AdminController : ControllerBase
     }
 
     [HttpGet("overview")]
-    public async Task<IActionResult> GetOverview() => Ok(new { status = "Online", users = await _db.Users.CountAsync(), serverTime = DateTime.UtcNow });
+    public async Task<IActionResult> GetOverview() => Ok(new { status = "Online", users = await _db.Users.CountAsync(), serverTime = IranTime.Now });
 
     [HttpGet("settings")]
     public IActionResult GetSettings() => Ok(new { serverName = "NovaChat Server", ownerAccess = true, status = "Online" });
@@ -90,57 +90,87 @@ public class AdminController : ControllerBase
     [HttpGet("users/{id}/chats")]
     public async Task<IActionResult> GetUserChats(string id)
     {
-        if (!long.TryParse(id, out var userId) || userId <= 0) return BadRequest(new { message = "Invalid user ID." });
-        if (!await _db.Users.AsNoTracking().AnyAsync(u => u.Id == userId)) return NotFound(new { message = "User not found." });
-
-        var chats = await _db.Chats.AsNoTracking()
-            .Include(c => c.ChatMembers)
-            .ThenInclude(m => m.User)
-            .Where(c => c.ChatMembers.Any(m => m.UserId == userId))
-            .OrderByDescending(c => c.CreatedAt)
-            .ThenByDescending(c => c.Id)
-            .ToListAsync();
-
-        var result = new List<AdminChatDto>(chats.Count);
-        foreach (var chat in chats)
+        try
         {
-            var last = await _db.Messages.AsNoTracking()
-                .Include(m => m.Sender)
-                .Where(m => m.ChatId == chat.Id && !m.DeletedForEveryone)
-                .OrderByDescending(m => m.SentAt)
-                .ThenByDescending(m => m.Id)
+            if (!long.TryParse(id, out var userId) || userId <= 0)
+                return BadRequest(new { message = "Invalid user ID." });
+
+            var user = await _db.Users.AsNoTracking()
+                .Where(u => u.Id == userId)
+                .Select(u => new { u.Id, u.Username })
                 .FirstOrDefaultAsync();
 
-            var count = await _db.Messages.AsNoTracking().CountAsync(m => m.ChatId == chat.Id && !m.DeletedForEveryone);
-            var other = chat.ChatMembers.FirstOrDefault(m => m.UserId != userId)?.User;
+            if (user == null)
+                return NotFound(new { message = "User not found." });
 
-            result.Add(new AdminChatDto
+            var chats = await _db.Chats.AsNoTracking()
+                .Where(c => !c.IsDeleted &&
+                    (c.Members == user.Username ||
+                     c.Members.StartsWith(user.Username + ", ") ||
+                     c.Members.Contains(", " + user.Username + ", ") ||
+                     c.Members.EndsWith(", " + user.Username)))
+                .OrderByDescending(c => c.CreatedAt)
+                .ThenByDescending(c => c.Id)
+                .ToListAsync();
+
+            var result = new List<AdminChatDto>(chats.Count);
+            foreach (var chat in chats)
             {
-                Id = chat.Id,
-                Type = chat.Type,
-                ChatName = chat.Name,
-                OtherUserId = other?.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty,
-                OtherUsername = other?.Username ?? string.Empty,
-                OtherDisplayName = other?.DisplayName ?? string.Empty,
-                OtherAvatarUrl = other?.AvatarUrl,
-                CreatedAt = chat.CreatedAt,
-                MessageCount = count,
-                LastMessage = last == null ? null : MapAdminSafeMessage(last)
-            });
-        }
+                var memberNames = ParseMembers(chat.Members).ToList();
+                var otherUsername = chat.Type == ChatType.Private
+                    ? memberNames.FirstOrDefault(x => !string.Equals(x, user.Username, StringComparison.OrdinalIgnoreCase))
+                    : null;
 
-        return Ok(result.OrderByDescending(x => x.LastMessage?.SentAt ?? x.CreatedAt).ThenByDescending(x => x.Id).ToList());
+                var other = !string.IsNullOrWhiteSpace(otherUsername)
+                    ? await _db.Users.AsNoTracking()
+                        .Where(u => u.Username == otherUsername)
+                        .Select(u => new { u.Id, u.Username, u.DisplayName, u.AvatarUrl })
+                        .FirstOrDefaultAsync()
+                    : null;
+
+                var last = await _db.Messages.AsNoTracking()
+                    .Where(m => m.ChatId == chat.Id && !m.DeletedForEveryone)
+                    .OrderByDescending(m => m.SentAt)
+                    .ThenByDescending(m => m.Id)
+                    .FirstOrDefaultAsync();
+
+                var count = await _db.Messages.AsNoTracking()
+                    .CountAsync(m => m.ChatId == chat.Id && !m.DeletedForEveryone);
+
+                result.Add(new AdminChatDto
+                {
+                    Id = chat.Id,
+                    Type = chat.Type,
+                    ChatName = chat.Name,
+                    OtherUserId = other?.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty,
+                    OtherUsername = other?.Username ?? string.Empty,
+                    OtherDisplayName = other?.DisplayName ?? string.Empty,
+                    OtherAvatarUrl = other?.AvatarUrl,
+                    CreatedAt = chat.CreatedAt,
+                    MessageCount = count,
+                    LastMessage = last == null ? null : MapAdminSafeMessage(last)
+                });
+            }
+
+            return Ok(result
+                .OrderByDescending(x => x.LastMessage?.SentAt ?? x.CreatedAt)
+                .ThenByDescending(x => x.Id)
+                .ToList());
+        }
+        catch (Exception ex)
+        {
+            return Problem(statusCode: 500, title: "Could not load user chats.", detail: "The owner chat viewer could not read this user's conversation list safely.");
+        }
     }
 
     [HttpGet("chats/{chatId}/messages")]
     public async Task<IActionResult> GetAdminChatMessages(int chatId)
     {
         if (chatId <= 0) return BadRequest(new { message = "Invalid chat ID." });
-        var exists = await _db.Chats.AsNoTracking().AnyAsync(c => c.Id == chatId);
+        var exists = await _db.Chats.AsNoTracking().AnyAsync(c => c.Id == chatId && !c.IsDeleted);
         if (!exists) return NotFound(new { message = "Chat not found." });
 
         var messages = await _db.Messages.AsNoTracking()
-            .Include(m => m.Sender)
             .Where(m => m.ChatId == chatId && !m.DeletedForEveryone)
             .OrderBy(m => m.SentAt)
             .ThenBy(m => m.Id)
@@ -164,7 +194,7 @@ public class AdminController : ControllerBase
         var message = await _db.Messages.FirstOrDefaultAsync(m => m.Id == messageId);
         if (message == null) return NotFound(new { message = "Message not found." });
 
-        var chat = await _db.Chats.AsNoTracking().Include(c => c.ChatMembers).FirstOrDefaultAsync(c => c.Id == message.ChatId);
+        var chat = await _db.Chats.AsNoTracking().FirstOrDefaultAsync(c => c.Id == message.ChatId);
         if (chat == null) return NotFound(new { message = "Chat not found." });
 
         var payload = new
@@ -191,9 +221,19 @@ public class AdminController : ControllerBase
 
     private async Task SendToChatMembersAsync(Chat chat, string method, object payload)
     {
-        var ids = chat.ChatMembers.Select(m => m.UserId.ToString(System.Globalization.CultureInfo.InvariantCulture)).Distinct().ToArray();
+        var usernames = ParseMembers(chat.Members).ToArray();
+        if (usernames.Length == 0) return;
+        var ids = await _db.Users.AsNoTracking()
+            .Where(u => usernames.Contains(u.Username))
+            .Select(u => u.Id.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            .ToArrayAsync();
         if (ids.Length > 0) await _hub.Clients.Users(ids).SendAsync(method, payload);
     }
+
+    private static IEnumerable<string> ParseMembers(string? members) =>
+        (members ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
 
     private static string? NormalizePhone(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim().Replace(" ", string.Empty).Replace("-", string.Empty).Replace("(", string.Empty).Replace(")", string.Empty);
 

@@ -17,7 +17,7 @@ public partial class ProfileView : UserControl
     public event Action? BackToChatRequested; public event Action? ContactsRequested; public event Action? SessionExpired;
     private readonly ApiService _apiService = new(); private ProfileModel? _profile; private bool _busy;
     public ProfileView() { InitializeComponent(); Loaded += ProfileView_Loaded; }
-    private async void ProfileView_Loaded(object sender, RoutedEventArgs e) { await LoadProfileAsync(); }
+    private async void ProfileView_Loaded(object sender, RoutedEventArgs e) { await LoadProfileAsync(); InitializePrivacyUi(); }
     private async Task LoadProfileAsync()
     {
         if (!AuthState.IsAuthenticated) return;

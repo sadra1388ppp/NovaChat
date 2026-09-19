@@ -14,6 +14,7 @@ public partial class MainView
             new RoutedEventHandler(E2eeCopyMenuItem_Click));
 
         RegisterGroupUiHandlers();
+        RegisterChatRequestHandlers();
     }
 
     private static void E2eeCopyMenuItem_Click(object sender, RoutedEventArgs e)
@@ -46,11 +47,7 @@ public partial class MainView
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
-                $"Could not copy the message.\n\n{ex.Message}",
-                "Copy Message",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            MessageBox.Show($"Could not copy the message.\n\n{ex.Message}", "Copy Message", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 

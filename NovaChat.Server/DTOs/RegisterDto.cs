@@ -25,4 +25,9 @@ public class RegisterDto
     [Required]
     [StringLength(100, MinimumLength = 6)]
     public string Password { get; set; } = string.Empty;
+
+    [StringLength(20)]
+    public string MessagePrivacy { get; set; } = "Everybody";
+
+    public bool AllowGroupAdds { get; set; } = true;
 }

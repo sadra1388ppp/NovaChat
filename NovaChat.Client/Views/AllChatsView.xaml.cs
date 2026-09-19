@@ -129,7 +129,7 @@ public partial class AllChatsView : UserControl
     private async Task ShowChatDetailsAsync(AdminChatItem item)
     {
         var kind = item.Chat.IsGroup ? "GROUP" : "PRIVATE CHAT";
-        SelectedChatIdText.Text = $"{kind}  •  Chat #{item.Chat.Id}  •  Created {item.Chat.CreatedAt.ToLocalTime():g}";
+        SelectedChatIdText.Text = $"{kind}  •  Chat #{item.Chat.Id}  •  Created {IranTime.Format(item.Chat.CreatedAt)}";
         DeleteButton.IsEnabled = true;
         DeleteButton.Content = item.Chat.IsGroup ? "Delete Group" : "Delete Chat";
         NoMessagesText.Visibility = Visibility.Collapsed;
@@ -299,7 +299,7 @@ public partial class AllChatsView : UserControl
         public string Preview => Chat.LastMessage == null
             ? (Chat.IsGroup ? "No group messages yet" : "No messages yet")
             : $"{Chat.LastMessage.SenderName}: {Chat.LastMessage.Content}";
-        public string LastActivityText => (Chat.LastMessage?.SentAt ?? Chat.CreatedAt).ToLocalTime().ToString("g");
+        public string LastActivityText => IranTime.Format(Chat.LastMessage?.SentAt ?? Chat.CreatedAt);
         public string Initials
         {
             get
@@ -350,7 +350,7 @@ public partial class AllChatsView : UserControl
         {
             SenderName = string.IsNullOrWhiteSpace(message.SenderName) ? message.SenderId : message.SenderName;
             Content = string.IsNullOrWhiteSpace(message.Content) ? "[No text content]" : message.Content;
-            TimeText = message.SentAt.ToLocalTime().ToString("g");
+            TimeText = IranTime.Format(message.SentAt);
         }
     }
 }

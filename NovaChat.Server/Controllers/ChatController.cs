@@ -59,11 +59,40 @@ public partial class ChatController : ControllerBase
         if (dto == null || string.IsNullOrWhiteSpace(dto.Name)) return BadRequest(new { message = "Group name is required." });
         try
         {
-            var chat = await _chatService.CreateGroupChatAsync(userId, dto.Name, dto.Usernames ?? []);
-            if (chat == null) return BadRequest(new { message = "The group could not be created. Check the group name and usernames." });
+            var requestedUsernames = (dto.Usernames ?? [])
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim().ToLowerInvariant())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var eligibleUsernames = new List<string>();
+            var skippedUsernames = new List<string>();
+
+            foreach (var username in requestedUsernames)
+            {
+                var user = await _chatService.GetUserByUsernameAsync(username);
+                if (user == null) return BadRequest(new { message = $"User @{username} was not found." });
+
+                if (user.Id == userId || user.AllowGroupAdds)
+                    eligibleUsernames.Add(user.Username);
+                else
+                    skippedUsernames.Add(user.Username);
+            }
+
+            // An empty eligible list is valid: the service will create the group
+            // for its creator and simply omit all protected selected users.
+            var chat = await _chatService.CreateGroupChatAsync(userId, dto.Name, eligibleUsernames);
+            if (chat == null)
+                return BadRequest(new { message = "The group could not be created. Check the group name and your account." });
+
             var mapped = MapChat(chat, null);
             await _hub.Clients.Users(RecipientIds(chat)).SendAsync("ChatCreated", mapped);
-            return Ok(new { message = "Group created successfully.", chat = mapped });
+
+            var message = skippedUsernames.Count == 0
+                ? "Group created successfully."
+                : $"Group created successfully. The following users were not added because they do not allow group additions: {string.Join(", ", skippedUsernames.Select(x => "@" + x))}.";
+
+            return Ok(new { message, chat = mapped, skippedUsernames });
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to create group chat."); return Problem(statusCode: 500, title: "Group creation failed"); }
     }
@@ -90,7 +119,12 @@ public partial class ChatController : ControllerBase
         if (dto == null || string.IsNullOrWhiteSpace(dto.Username)) return BadRequest(new { message = "Username is required." });
         var user = await _chatService.GetUserByUsernameAsync(dto.Username);
         if (user == null) return NotFound(new { message = "User not found." });
-        if (!await _chatService.AddMemberAsync(chatId, actorId, user.Id)) return Forbid();
+        if (!await _chatService.AddMemberAsync(chatId, actorId, user.Id))
+        {
+            if (!user.AllowGroupAdds)
+                return BadRequest(new { message = $"@{user.Username} does not allow other people to add them to groups." });
+            return Forbid();
+        }
         var chat = await _chatService.GetChatByIdAsync(chatId);
         if (chat == null) return NotFound();
         var mapped = MapChat(chat, null);
