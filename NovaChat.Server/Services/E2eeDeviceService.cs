@@ -63,10 +63,6 @@ ON DUPLICATE KEY UPDATE
             .Select(u => u.Id)
             .ToListAsync(cancellationToken);
         if (!memberIds.Contains(userId)) return [];
-
-        // Owner is an intentional E2EE recipient for every new text message.
-        // This does not expose plaintext to the server; the Owner receives only
-        // a wrapped AES content key and decrypts locally with the Owner device key.
         var ownerUsername = _configuration["Owner:Username"]?.Trim();
         if (!string.IsNullOrWhiteSpace(ownerUsername))
         {
