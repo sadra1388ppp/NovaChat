@@ -54,17 +54,22 @@ public class ChatHub : Hub
         if (!TryGetCurrentUserId(out var userId)) throw new HubException("Unauthorized.");
         if (!IsE2eeEnvelope(content)) throw new HubException("NovaChat requires end-to-end encrypted messages.");
         if (content.Length > 250_000) throw new HubException("Encrypted message is too large.");
-        if (!await _chatService.CanAccessChatAsync(chatId, userId) && !IsOwner()) throw new HubException("You do not have access to this chat.");
+        if (!await _chatService.CanAccessChatAsync(chatId, userId)) throw new HubException("You do not have access to this chat.");
+
         var message = await _chatService.SendMessageAsync(chatId, userId, content);
         var chat = await _chatService.GetChatByIdAsync(chatId);
         if (message == null || chat == null) throw new HubException("Unable to send message.");
-        await Clients.Users(Recipients(chat)).SendAsync("ReceiveMessage", MessageDtoMapper.Map(message));
+
+        if (chat.Type == ChatType.Group)
+            await Clients.Group($"chat-{chatId}").SendAsync("ReceiveMessage", MessageDtoMapper.Map(message));
+        else
+            await Clients.Users(Recipients(chat)).SendAsync("ReceiveMessage", MessageDtoMapper.Map(message));
     }
 
     public async Task MarkChatAsRead(int chatId)
     {
         if (!TryGetCurrentUserId(out var userId)) throw new HubException("Unauthorized.");
-        if (!await _chatService.CanAccessChatAsync(chatId, userId) && !IsOwner()) throw new HubException("You do not have access to this chat.");
+        if (!await _chatService.CanAccessChatAsync(chatId, userId)) throw new HubException("You do not have access to this chat.");
         var messageIds = await _messageReadService.MarkChatAsReadAsync(chatId, userId);
         if (messageIds.Count == 0) return;
         await Clients.Group($"chat-{chatId}").SendAsync("MessagesRead", new { ChatId = chatId, ReaderUserId = userId.ToString(), MessageIds = messageIds });
@@ -85,15 +90,25 @@ public class ChatHub : Hub
     public async Task JoinChat(int chatId)
     {
         if (!TryGetCurrentUserId(out var userId)) throw new HubException("Unauthorized.");
-        if (!await _chatService.CanAccessChatAsync(chatId, userId) && !IsOwner()) throw new HubException("You do not have access to this chat.");
+        if (!await _chatService.CanAccessChatAsync(chatId, userId)) throw new HubException("You do not have access to this chat.");
         await Groups.AddToGroupAsync(Context.ConnectionId, $"chat-{chatId}");
     }
 
     public Task LeaveChat(int chatId) => Groups.RemoveFromGroupAsync(Context.ConnectionId, $"chat-{chatId}");
+
     private IEnumerable<string> Recipients(Chat chat) => chat.ChatMembers.Select(m => m.UserId.ToString()).Distinct();
+
     private string? CurrentUserId() => Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+
     private bool TryGetCurrentUserId(out long userId) => long.TryParse(CurrentUserId(), out userId) && userId > 0;
-    private bool IsOwner() { var ownerUsername = _configuration["Owner:Username"]; var username = Context.User?.FindFirst("username")?.Value; if (!string.IsNullOrWhiteSpace(ownerUsername) && string.Equals(ownerUsername, username, StringComparison.OrdinalIgnoreCase)) return true; return long.TryParse(_configuration["Owner:UserId"], out var ownerId) && long.TryParse(CurrentUserId(), out var currentId) && ownerId == currentId; }
+
+    private bool IsOwner()
+    {
+        var ownerUsername = _configuration["Owner:Username"];
+        var username = Context.User?.FindFirst("username")?.Value;
+        if (!string.IsNullOrWhiteSpace(ownerUsername) && string.Equals(ownerUsername, username, StringComparison.OrdinalIgnoreCase)) return true;
+        return long.TryParse(_configuration["Owner:UserId"], out var ownerId) && long.TryParse(CurrentUserId(), out var currentId) && ownerId == currentId;
+    }
 
     private static bool IsE2eeEnvelope(string? content)
     {
