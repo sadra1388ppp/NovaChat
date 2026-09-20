@@ -21,6 +21,7 @@
                     </StackPanel>
                 </Border>
                 <Button Content="←   Back to chat" Height="46" Margin="0,18,0,0" Style="{StaticResource PrimaryButtonStyle}" Click="BackToChatButton_Click"/>
+                <Button Content="↪   Log out" Height="46" Margin="0,10,0,0" Style="{StaticResource SecondaryButtonStyle}" Click="LogoutButton_Click"/>
             </StackPanel>
         </Grid>
     </ScrollViewer>
