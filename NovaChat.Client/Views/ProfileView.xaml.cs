@@ -3,6 +3,7 @@ using NovaChat.Client.Models;
 using NovaChat.Client.Services;
 using System.Globalization;
 using System.IO;
+using System.Net.Http;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
