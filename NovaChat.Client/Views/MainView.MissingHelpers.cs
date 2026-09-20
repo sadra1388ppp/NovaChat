@@ -57,6 +57,18 @@ public partial class MainView
             FontSize = 10,
             Foreground = mine ? Brushes.White : (Brush)FindResource("SecondaryTextBrush")
         });
+        if (message.IsEdited)
+        {
+            meta.Children.Add(new TextBlock
+            {
+                Tag = "edited",
+                Text = "edited",
+                FontSize = 9,
+                Margin = new Thickness(6, 0, 0, 0),
+                Foreground = mine ? Brushes.White : (Brush)FindResource("SecondaryTextBrush")
+            });
+        }
+
         if (mine)
         {
             meta.Children.Add(new TextBlock
