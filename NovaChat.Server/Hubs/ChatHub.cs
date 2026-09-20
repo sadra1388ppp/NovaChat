@@ -66,6 +66,29 @@ public class ChatHub : Hub
             await Clients.Users(Recipients(chat)).SendAsync("ReceiveMessage", MessageDtoMapper.Map(message));
     }
 
+    public async Task EditMessage(int messageId, string encryptedContent)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            throw new HubException("Unauthorized.");
+
+        if (!IsE2eeEnvelope(encryptedContent))
+            throw new HubException("NovaChat requires end-to-end encrypted messages.");
+
+        if (encryptedContent.Length > 250_000)
+            throw new HubException("Encrypted message is too large.");
+
+        var message = await _chatService.EditMessageAsync(messageId, userId, encryptedContent);
+        if (message == null)
+            throw new HubException("You can only edit your own active messages.");
+
+        var chat = await _chatService.GetChatByIdAsync(message.ChatId);
+        if (chat == null)
+            throw new HubException("Chat not found.");
+
+        await Clients.Users(Recipients(chat))
+            .SendAsync("MessageEdited", MessageDtoMapper.Map(message));
+    }
+
     public async Task MarkChatAsRead(int chatId)
     {
         if (!TryGetCurrentUserId(out var userId)) throw new HubException("Unauthorized.");
