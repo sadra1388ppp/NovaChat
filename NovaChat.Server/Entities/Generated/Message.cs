@@ -17,6 +17,8 @@ public partial class Message
 
     public DateTime SentAt { get; set; }
 
+    public DateTime? EditedAt { get; set; }
+
     public bool DeletedForEveryone { get; set; }
 
     public string DeletedForUserIds { get; set; } = null!;
