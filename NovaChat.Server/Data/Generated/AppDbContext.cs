@@ -54,6 +54,7 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.ChatId).HasColumnType("int(11)");
             entity.Property(e => e.SenderId).HasMaxLength(32).IsRequired();
             entity.Property(e => e.SentAt).HasMaxLength(6);
+            entity.Property(e => e.EditedAt).HasMaxLength(6);
             entity.HasOne(d => d.Chat).WithMany(p => p.Messages).HasForeignKey(d => d.ChatId);
         });
 
