@@ -24,6 +24,23 @@ public class UserController : ControllerBase
     public async Task<IActionResult> RegistrationAvailability([FromQuery] string? username, [FromQuery] string? email, [FromQuery] string? phoneNumber) { var result = await _userService.CheckRegistrationAvailabilityAsync(username, email, phoneNumber); return Ok(new { usernameTaken = result.UsernameTaken, emailTaken = result.EmailTaken, phoneTaken = result.PhoneTaken }); }
     [AllowAnonymous, HttpPost("login")]
     public async Task<IActionResult> Login(LoginDto dto) { var user = await _userService.LoginAsync(dto); if (user == null) return Unauthorized(new { message = "Invalid username/phone number or password." }); var token = _jwtService.GenerateToken(user); var id = user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture); return Ok(new { message = "Login successful.", token, user = await _userService.GetUserByIdAsync(id) }); }
+    [Authorize, HttpPost("logout")]
+    public IActionResult Logout([FromServices] JwtRevocationService revocationService)
+    {
+        var jti = User.FindFirstValue("jti");
+        var exp = User.FindFirstValue("exp");
+
+        if (!string.IsNullOrWhiteSpace(jti) &&
+            long.TryParse(exp, out var expirationUnix))
+        {
+            revocationService.Revoke(
+                jti,
+                DateTimeOffset.FromUnixTimeSeconds(expirationUnix));
+        }
+
+        return Ok(new { message = "Logout successful." });
+    }
+
     [Authorize, HttpGet("profile/me")]
     public async Task<IActionResult> GetMyProfile() { var id = CurrentUserId(); if (id == null) return Unauthorized(); var user = await _userService.GetUserByIdAsync(id, true); return user == null ? NotFound(new { message = "User not found." }) : Ok(user); }
     [Authorize, HttpGet("profile/{id}")]
