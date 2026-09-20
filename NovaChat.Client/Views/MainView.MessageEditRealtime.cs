@@ -71,9 +71,34 @@ public partial class MainView
 
             if (bubble?.Child is StackPanel panel)
             {
-                var text = panel.Children.OfType<TextBlock>().FirstOrDefault();
+                var text = panel.Children
+                    .OfType<TextBlock>()
+                    .FirstOrDefault(x => string.Equals(x.Tag?.ToString(), "message-content", StringComparison.Ordinal));
+
                 if (text != null)
+                {
                     text.Text = message.Content;
+
+                    if (message.IsEdited)
+                    {
+                        var meta = panel.Children
+                            .OfType<StackPanel>()
+                            .LastOrDefault(x => x.Orientation == Orientation.Horizontal);
+
+                        if (meta != null && !meta.Children.OfType<TextBlock>().Any(x => string.Equals(x.Tag?.ToString(), "edited", StringComparison.Ordinal)))
+                        {
+                            var mine = string.Equals(message.SenderId, AuthState.Username, StringComparison.OrdinalIgnoreCase);
+                            meta.Children.Insert(Math.Min(1, meta.Children.Count), new TextBlock
+                            {
+                                Tag = "edited",
+                                Text = "edited",
+                                FontSize = 9,
+                                Margin = new Thickness(6, 0, 0, 0),
+                                Foreground = mine ? Brushes.White : (Brush)FindResource("SecondaryTextBrush")
+                            });
+                        }
+                    }
+                }
             }
             else
             {
