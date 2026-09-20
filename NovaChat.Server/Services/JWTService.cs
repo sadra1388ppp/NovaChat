@@ -19,7 +19,7 @@ public class JwtService
         if (string.IsNullOrWhiteSpace(audience)) throw new InvalidOperationException("JWT Audience is not configured.");
         var id = user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
         var expirationMinutes = _configuration.GetValue<int>("Jwt:ExpirationMinutes");
-        var claims = new List<Claim> { new(JwtRegisteredClaimNames.Sub, id), new(ClaimTypes.NameIdentifier, id), new(ClaimTypes.Name, user.DisplayName), new("username", user.Username), new(JwtRegisteredClaimNames.Email, user.Email) };
+        var claims = new List<Claim> { new(JwtRegisteredClaimNames.Sub, id), new(ClaimTypes.NameIdentifier, id), new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")), new(ClaimTypes.Name, user.DisplayName), new("username", user.Username), new(JwtRegisteredClaimNames.Email, user.Email) };
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
         var token = new JwtSecurityToken(issuer: issuer, audience: audience, claims: claims, expires: DateTime.UtcNow.AddMinutes(expirationMinutes), signingCredentials: credentials);
