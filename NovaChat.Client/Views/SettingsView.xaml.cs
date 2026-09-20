@@ -7,6 +7,7 @@ namespace NovaChat.Client.Views
     public partial class SettingsView : UserControl
     {
         public event Action? BackToChatRequested;
+        public event Action? LogoutRequested;
 
         public SettingsView()
         {
@@ -42,6 +43,11 @@ namespace NovaChat.Client.Views
         private void BackToChatButton_Click(object sender, RoutedEventArgs e)
         {
             BackToChatRequested?.Invoke();
+        }
+
+        private void LogoutButton_Click(object sender, RoutedEventArgs e)
+        {
+            LogoutRequested?.Invoke();
         }
     }
 }
