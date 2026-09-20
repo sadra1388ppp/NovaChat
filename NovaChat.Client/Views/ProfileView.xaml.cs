@@ -74,6 +74,29 @@ public partial class ProfileView : UserControl
     private static PasswordBox CreatePasswordBox(Panel parent, string label) { parent.Children.Add(new TextBlock { Text = label, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = (Brush)Application.Current.FindResource("TextBrush"), Margin = new Thickness(0, 6, 0, 5) }); var box = new PasswordBox { Height = 40, Padding = new Thickness(10), Background = (Brush)Application.Current.FindResource("InputBackgroundBrush"), Foreground = (Brush)Application.Current.FindResource("TextBrush"), BorderBrush = (Brush)Application.Current.FindResource("BorderBrush") }; parent.Children.Add(box); return box; }
     private static string GetInitials(string displayName, string username) { var value = string.IsNullOrWhiteSpace(displayName) ? username : displayName.Trim(); if (string.IsNullOrWhiteSpace(value)) return "?"; var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries); return parts.Length >= 2 ? $"{parts[0][0]}{parts[1][0]}".ToUpperInvariant() : value[..Math.Min(2, value.Length)].ToUpperInvariant(); }
     private static string FormatLastSeen(DateTime value) { var local = value.ToLocalTime(); return local.Date == DateTime.Now.Date ? $"today at {local:HH:mm}" : local.ToString("dd MMM yyyy HH:mm"); }
+    private async void LogoutButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!AuthState.IsAuthenticated)
+        {
+            SessionExpired?.Invoke();
+            return;
+        }
+
+        try
+        {
+            await _apiService.PostAsync<SimpleMessageResponse>("api/User/logout", new { });
+        }
+        catch (HttpRequestException)
+        {
+            // The local session is still cleared even if the server is unreachable.
+        }
+        finally
+        {
+            AuthState.Clear();
+            SessionExpired?.Invoke();
+        }
+    }
+
     private void ShowFeedback(string message) => FeedbackText.Text = message; private void BackToChatButton_Click(object sender, RoutedEventArgs e) => BackToChatRequested?.Invoke(); private void ContactsButton_Click(object sender, RoutedEventArgs e) => ContactsRequested?.Invoke();
     private sealed class ChangePasswordRequest { public string CurrentPassword { get; set; } = string.Empty; public string NewPassword { get; set; } = string.Empty; } private sealed class SimpleMessageResponse { public string Message { get; set; } = string.Empty; }
 }
