@@ -28,6 +28,14 @@ public partial class MainView
         copyItem.Click += mainView.CopyMessageMenuItem_Click;
         menu.Items.Add(copyItem);
 
+        if (messageBorder.HorizontalAlignment == HorizontalAlignment.Right)
+        {
+            var editItem = new MenuItem { Header = "Edit message" };
+            editItem.Tag = new MessageBubbleInfo(messageBorder, messageId.Value);
+            editItem.Click += mainView.EditMessageMenuItem_Click;
+            menu.Items.Add(editItem);
+        }
+
         var separator = new Separator();
         menu.Items.Add(separator);
         var deleteItem = new MenuItem { Header = "Delete message" };
@@ -89,6 +97,152 @@ public partial class MainView
         {
             MessageBox.Show($"Could not copy the message.\n\n{ex.Message}", "Copy Message", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+    }
+
+    private async void EditMessageMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem item || item.Tag is not MessageBubbleInfo info || _currentChatId == null)
+            return;
+
+        try
+        {
+            var message = await GetMessageByIdAsync(_currentChatId.Value, info.MessageId);
+            if (message == null)
+            {
+                MessageBox.Show("The message could not be located.", "Edit Message", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (!string.Equals(message.SenderId, AuthState.Username, StringComparison.OrdinalIgnoreCase))
+            {
+                MessageBox.Show("You can only edit your own messages.", "Edit Message", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (!string.Equals(message.MessageType, "text", StringComparison.OrdinalIgnoreCase))
+            {
+                MessageBox.Show("Only text messages can be edited.", "Edit Message", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var decrypted = await _e2ee.DecryptMessageAsync(message);
+            if (string.IsNullOrWhiteSpace(decrypted.Content) ||
+                decrypted.Content.StartsWith("[Encrypted message", StringComparison.Ordinal))
+            {
+                MessageBox.Show("This message could not be decrypted on this device.", "Edit Message", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var editedText = ShowEditMessageDialog(decrypted.Content);
+            if (editedText == null || string.Equals(editedText, decrypted.Content, StringComparison.Ordinal))
+                return;
+
+            if (_hubConnection == null || _hubConnection.State != HubConnectionState.Connected)
+            {
+                MessageBox.Show("NovaChat is not connected to the server.", "Edit Message", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var encrypted = await _e2ee.EncryptForChatAsync(message.ChatId, editedText, _apiService);
+            await _hubConnection.InvokeAsync("EditMessage", message.Id, encrypted);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Could not edit the message.\n\n{ex.Message}", "Edit Message", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private string? ShowEditMessageDialog(string currentText)
+    {
+        var dialog = new Window
+        {
+            Title = "Edit Message",
+            Width = 520,
+            Height = 250,
+            Owner = Window.GetWindow(this),
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.NoResize,
+            ShowInTaskbar = false,
+            Background = (Brush)FindResource("PanelBackgroundBrush")
+        };
+
+        var root = new Grid { Margin = new Thickness(20) };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        root.Children.Add(new TextBlock
+        {
+            Text = "Edit your message",
+            FontSize = 18,
+            FontWeight = FontWeights.Bold,
+            Foreground = (Brush)FindResource("TextBrush")
+        });
+
+        var editor = new TextBox
+        {
+            Text = currentText,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Margin = new Thickness(0, 14, 0, 14),
+            Padding = new Thickness(10),
+            MinHeight = 80,
+            Background = (Brush)FindResource("InputBackgroundBrush"),
+            Foreground = (Brush)FindResource("TextBrush"),
+            BorderBrush = (Brush)FindResource("BorderBrush")
+        };
+        Grid.SetRow(editor, 1);
+        root.Children.Add(editor);
+
+        var actions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+
+        var cancel = new Button
+        {
+            Content = "Cancel",
+            Width = 90,
+            Height = 36,
+            Margin = new Thickness(0, 0, 8, 0),
+            Style = (Style)FindResource("SecondaryButtonStyle")
+        };
+
+        var save = new Button
+        {
+            Content = "Save",
+            Width = 90,
+            Height = 36,
+            Style = (Style)FindResource("PrimaryButtonStyle")
+        };
+
+        cancel.Click += (_, _) => dialog.DialogResult = false;
+        save.Click += (_, _) =>
+        {
+            if (string.IsNullOrWhiteSpace(editor.Text))
+            {
+                MessageBox.Show("Message cannot be empty.", "Edit Message", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            dialog.DialogResult = true;
+        };
+
+        actions.Children.Add(cancel);
+        actions.Children.Add(save);
+        Grid.SetRow(actions, 2);
+        root.Children.Add(actions);
+
+        dialog.Content = root;
+        dialog.Loaded += (_, _) =>
+        {
+            editor.Focus();
+            editor.SelectAll();
+        };
+
+        return dialog.ShowDialog() == true ? editor.Text.Trim() : null;
     }
 
     private async void DeleteMessageMenuItem_Click(object sender, RoutedEventArgs e)
