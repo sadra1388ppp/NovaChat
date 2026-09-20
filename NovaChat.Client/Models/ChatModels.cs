@@ -32,6 +32,8 @@ public class MessageModel
     public string SenderName { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public DateTime SentAt { get; set; }
+    public DateTime? EditedAt { get; set; }
+    public bool IsEdited { get; set; }
     public string MessageType { get; set; } = "text";
     public string? AttachmentUrl { get; set; }
     public string? FileName { get; set; }
