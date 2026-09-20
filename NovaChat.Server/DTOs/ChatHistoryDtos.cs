@@ -56,7 +56,8 @@ public static class MessageDtoMapper
             SenderId = message.SenderId,
             SenderName = message.SenderId,
             Content = message.Content,
-            SentAt = message.SentAt
+            SentAt = message.SentAt,
+            EditedAt = message.EditedAt
         };
 
         if (E2eeMediaMessageEnvelope.TryParse(message.Content, out _))
