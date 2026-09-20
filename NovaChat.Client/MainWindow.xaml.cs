@@ -107,11 +107,38 @@ namespace NovaChat.Client
             MainContainer.Children.Add(contactsView);
         }
 
+        private async void LogoutAsync()
+        {
+            try
+            {
+                if (AuthState.IsAuthenticated)
+                {
+                    var api = new ApiService();
+                    await api.PostAsync<object, LogoutResponse>("api/User/logout", new { });
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Logout request failed: {ex}");
+            }
+            finally
+            {
+                AuthState.Clear();
+                ShowLogin();
+            }
+        }
+
+        private sealed class LogoutResponse
+        {
+            public string? Message { get; set; }
+        }
+
         public void ShowSettings()
         {
             MainContainer.Children.Clear();
             SettingsView settingsView = new SettingsView();
             settingsView.BackToChatRequested += ShowMain;
+            settingsView.LogoutRequested += LogoutAsync;
             MainContainer.Children.Add(settingsView);
         }
 
