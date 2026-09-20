@@ -19,6 +19,7 @@ builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ContactService>();
 builder.Services.AddSingleton<PasswordHashService>();
 builder.Services.AddScoped<JwtService>();
+builder.Services.AddSingleton<JwtRevocationService>();
 builder.Services.AddSingleton<JwtTokenRevocationService>();
 builder.Services.AddScoped<AdminService>();
 builder.Services.AddScoped<ChatService>();
