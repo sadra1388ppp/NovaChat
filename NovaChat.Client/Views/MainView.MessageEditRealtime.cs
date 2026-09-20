@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.SignalR.Client;
 using NovaChat.Client.Models;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Threading;
 
 namespace NovaChat.Client.Views;
