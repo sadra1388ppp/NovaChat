@@ -50,6 +50,7 @@ CREATE TABLE `Messages` (
     `SenderId` VARCHAR(32) NOT NULL,
     `Content` LONGTEXT NOT NULL,
     `SentAt` DATETIME(6) NOT NULL,
+    `EditedAt` DATETIME(6) NULL,
     `DeletedForEveryone` TINYINT(1) NOT NULL,
     `DeletedForUserIds` LONGTEXT NOT NULL,
     PRIMARY KEY (`Id`),
