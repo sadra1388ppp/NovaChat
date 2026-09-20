@@ -238,6 +238,12 @@ public class ChatService
             !await CanAccessChatAsync(message.ChatId, userId))
             return null;
 
+        // Media messages have their own encrypted envelope and must not be replaced
+        // by a text-message envelope.
+        if (MediaMessageEnvelope.TryParse(message.Content, out _) ||
+            E2eeMediaMessageEnvelope.TryParse(message.Content, out _))
+            return null;
+
         message.Content = encryptedContent.Trim();
         message.EditedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
