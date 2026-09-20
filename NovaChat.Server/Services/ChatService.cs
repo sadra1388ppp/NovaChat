@@ -216,6 +216,34 @@ public class ChatService
         return message;
     }
 
+    public async Task<Message?> EditMessageAsync(int messageId, long userId, string encryptedContent)
+    {
+        if (messageId <= 0 || string.IsNullOrWhiteSpace(encryptedContent))
+            return null;
+
+        var username = await _context.Users
+            .AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => u.Username)
+            .FirstOrDefaultAsync();
+
+        if (string.IsNullOrWhiteSpace(username))
+            return null;
+
+        var message = await _context.Messages
+            .FirstOrDefaultAsync(m => m.Id == messageId && !m.DeletedForEveryone);
+
+        if (message == null ||
+            !string.Equals(message.SenderId, username, StringComparison.OrdinalIgnoreCase) ||
+            !await CanAccessChatAsync(message.ChatId, userId))
+            return null;
+
+        message.Content = encryptedContent.Trim();
+        message.EditedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        return message;
+    }
+
     public async Task<List<Message>> GetMessagesAsync(int chatId, long viewerUserId, int? beforeMessageId = null, int pageSize = 50)
     {
         pageSize = Math.Clamp(pageSize, 1, 100);
