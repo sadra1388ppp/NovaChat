@@ -15,6 +15,13 @@ public sealed class DatabaseInitializer(AppDbContext context, MessageReadService
         return created;
     }
 
+    private async Task EnsureMessageEditSchemaAsync(CancellationToken cancellationToken)
+    {
+        await context.Database.ExecuteSqlRawAsync(
+            "ALTER TABLE Messages ADD COLUMN IF NOT EXISTS EditedAt DATETIME(6) NULL;",
+            cancellationToken);
+    }
+
     public async Task ValidateSchemaAsync(CancellationToken cancellationToken = default)
     {
         try
