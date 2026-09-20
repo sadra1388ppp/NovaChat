@@ -39,6 +39,7 @@ public partial class MainView
 
         panel.Children.Add(new TextBlock
         {
+            Tag = "message-content",
             Text = message.Content,
             TextWrapping = TextWrapping.Wrap,
             Foreground = mine ? Brushes.White : (Brush)FindResource("TextBrush")
