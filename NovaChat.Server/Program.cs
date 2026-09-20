@@ -6,6 +6,7 @@ using Microsoft.OpenApi;
 using NovaChat.Server.Authorization;
 using NovaChat.Server.Data;
 using NovaChat.Server.Hubs;
+using NovaChat.Server.Middleware;
 using NovaChat.Server.Services;
 using System.Text;
 
@@ -18,6 +19,7 @@ builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ContactService>();
 builder.Services.AddSingleton<PasswordHashService>();
 builder.Services.AddScoped<JwtService>();
+builder.Services.AddSingleton<JwtTokenRevocationService>();
 builder.Services.AddScoped<AdminService>();
 builder.Services.AddScoped<ChatService>();
 builder.Services.AddScoped<ChatRequestService>();
@@ -59,8 +61,32 @@ if (app.Environment.IsDevelopment()) { app.UseSwagger(); app.UseSwaggerUI(); }
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseAuthentication();
+app.UseMiddleware<JwtTokenRevocationMiddleware>();
 app.UseAuthorization();
 app.UseMiddleware<ChatPrivacyMiddleware>();
 app.MapControllers();
+
+app.MapPost("/api/User/logout", (
+    HttpContext context,
+    JwtTokenRevocationService revocationService) =>
+{
+    var authorization = context.Request.Headers.Authorization.ToString();
+
+    if (!authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        return Results.Unauthorized();
+
+    var token = authorization["Bearer ".Length..].Trim();
+
+    if (string.IsNullOrWhiteSpace(token))
+        return Results.Unauthorized();
+
+    revocationService.Revoke(token);
+
+    return Results.Ok(new
+    {
+        message = "Logged out successfully."
+    });
+}).RequireAuthorization();
+
 app.MapHub<ChatHub>("/hubs/chat");
 app.Run();
