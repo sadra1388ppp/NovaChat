@@ -61,6 +61,15 @@ public partial class MainView
         if (message.Id <= 0 || message.ChatId <= 0)
             return;
 
+        try
+        {
+            message = await _e2ee.DecryptMessageAsync(message);
+        }
+        catch
+        {
+            return;
+        }
+
         await Dispatcher.InvokeAsync(() =>
         {
             if (_currentChatId != message.ChatId)
