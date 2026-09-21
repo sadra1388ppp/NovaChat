@@ -176,7 +176,7 @@ public partial class MainView
 
         return string.IsNullOrWhiteSpace(comment)
             ? forwarded
-            : $"{forwarded}\n\n{comment.Trim()}";
+            : $"{forwarded}\n\n\u200C{comment.Trim()}";
     }
 
     private void UpdateForwardUi()
