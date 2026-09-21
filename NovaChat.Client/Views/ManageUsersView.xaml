@@ -350,43 +350,106 @@
                                      FocusVisualStyle="{x:Null}"/>
                         </StackPanel>
 
-                        <StackPanel Grid.Row="3" Margin="0,16,0,0">
-                            <TextBlock Text="ACCOUNT INFORMATION"
+                        <StackPanel Grid.Row="3" Margin="0,18,0,0">
+                            <TextBlock Text="ACCOUNT OVERVIEW"
                                        FontSize="10"
                                        FontWeight="Bold"
                                        Foreground="{DynamicResource SecondaryTextBrush}"/>
-                            <Grid Margin="0,7,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="125"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                </Grid.RowDefinitions>
-                                <TextBlock Text="Username" FontWeight="SemiBold" Foreground="{DynamicResource SecondaryTextBrush}"/>
-                                <TextBlock x:Name="AccountUsernameText" Grid.Column="1" Foreground="{DynamicResource TextBrush}"/>
-                                <TextBlock Text="Password" Grid.Row="1" FontWeight="SemiBold" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0"/>
-                                <TextBlock x:Name="AccountPasswordText" Grid.Row="1" Grid.Column="1" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" Margin="0,6,0,0"/>
-                                <TextBlock Text="Phone" Grid.Row="2" FontWeight="SemiBold" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0"/>
-                                <TextBlock x:Name="AccountPhoneText" Grid.Row="2" Grid.Column="1" Foreground="{DynamicResource TextBrush}" Margin="0,6,0,0"/>
-                                <TextBlock Text="Created" Grid.Row="3" FontWeight="SemiBold" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0"/>
-                                <TextBlock x:Name="DetailCreatedText" Grid.Row="3" Grid.Column="1" Foreground="{DynamicResource TextBrush}" Margin="0,6,0,0"/>
-                                <TextBlock Text="Last seen" Grid.Row="4" FontWeight="SemiBold" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0"/>
-                                <TextBlock x:Name="DetailLastSeenText" Grid.Row="4" Grid.Column="1" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0"/>
-                                <TextBlock Text="Privacy" Grid.Row="5" FontWeight="SemiBold" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0"/>
-                                <TextBlock x:Name="AccountPrivacyText" Grid.Row="5" Grid.Column="1" Foreground="{DynamicResource TextBrush}" Margin="0,6,0,0"/>
-                                <TextBlock Text="Group adds" Grid.Row="6" FontWeight="SemiBold" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0"/>
-                                <TextBlock x:Name="AccountGroupAddsText" Grid.Row="6" Grid.Column="1" Foreground="{DynamicResource TextBrush}" Margin="0,6,0,0"/>
-                                <TextBlock Text="Avatar" Grid.Row="7" FontWeight="SemiBold" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0"/>
-                                <TextBlock x:Name="AccountAvatarText" Grid.Row="7" Grid.Column="1" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0"/>
-                            </Grid>
+
+                            <Border Margin="0,8,0,0"
+                                    Padding="14"
+                                    CornerRadius="12"
+                                    Background="{DynamicResource AppBackgroundBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="USERNAME" FontSize="9" FontWeight="Bold" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                                        <TextBlock x:Name="AccountUsernameText" Margin="0,3,12,0" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="PHONE" FontSize="9" FontWeight="Bold" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                                        <TextBlock x:Name="AccountPhoneText" Margin="0,3,0,0" FontSize="13" Foreground="{DynamicResource TextBrush}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <Border Margin="0,8,0,0"
+                                    Padding="14"
+                                    CornerRadius="12"
+                                    Background="{DynamicResource AppBackgroundBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="PASSWORD" FontSize="9" FontWeight="Bold" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                                    <TextBlock x:Name="AccountPasswordText"
+                                               Margin="0,4,0,0"
+                                               TextWrapping="Wrap"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextBrush}"/>
+                                    <TextBlock Text="Passwords are protected and are never displayed in plaintext."
+                                               Margin="0,5,0,0"
+                                               FontSize="10"
+                                               TextWrapping="Wrap"
+                                               Foreground="{DynamicResource SecondaryTextBrush}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Margin="0,8,0,0"
+                                    Padding="14"
+                                    CornerRadius="12"
+                                    Background="{DynamicResource AppBackgroundBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <StackPanel>
+                                        <TextBlock Text="CREATED" FontSize="9" FontWeight="Bold" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                                        <TextBlock x:Name="DetailCreatedText" Margin="0,3,8,0" FontSize="12" Foreground="{DynamicResource TextBrush}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="LAST SEEN" FontSize="9" FontWeight="Bold" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                                        <TextBlock x:Name="DetailLastSeenText" Margin="0,3,0,0" FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextBrush}"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Row="1" Margin="0,12,8,0">
+                                        <TextBlock Text="MESSAGE PRIVACY" FontSize="9" FontWeight="Bold" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                                        <TextBlock x:Name="AccountPrivacyText" Margin="0,3,0,0" FontSize="12" Foreground="{DynamicResource TextBrush}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,12,0,0">
+                                        <TextBlock Text="GROUP INVITES" FontSize="9" FontWeight="Bold" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                                        <TextBlock x:Name="AccountGroupAddsText" Margin="0,3,0,0" FontSize="12" Foreground="{DynamicResource TextBrush}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <Border Margin="0,8,0,0"
+                                    Padding="14"
+                                    CornerRadius="12"
+                                    Background="{DynamicResource AppBackgroundBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="AVATAR" FontSize="9" FontWeight="Bold" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                                    <TextBlock x:Name="AccountAvatarText"
+                                               Margin="0,4,0,0"
+                                               TextWrapping="Wrap"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource SecondaryTextBrush}"/>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
 
                         <Grid Grid.Row="4" Margin="0,18,0,0">
@@ -412,22 +475,50 @@
                                     Click="CancelButton_Click"/>
                         </Grid>
 
-                        <Button x:Name="DeleteButton"
-                                Grid.Row="5"
-                                Content="Delete User"
-                                Style="{StaticResource OwnerDeleteButtonStyle}"
-                                HorizontalAlignment="Stretch"
-                                Height="42"
-                                Margin="0,10,0,0"
-                                IsEnabled="False"
-                                Click="DeleteButton_Click"/>
+                        <Border Grid.Row="5"
+                                Margin="0,18,0,0"
+                                Padding="14"
+                                CornerRadius="12"
+                                Background="#1A9C3F3F"
+                                BorderBrush="#5C9C3F3F"
+                                BorderThickness="1">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="150"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="DANGER ZONE"
+                                               FontSize="9"
+                                               FontWeight="Bold"
+                                               Foreground="{DynamicResource DangerBrush}"/>
+                                    <TextBlock Text="Delete this account"
+                                               Margin="0,3,0,0"
+                                               FontSize="13"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextBrush}"/>
+                                    <TextBlock Text="Permanently removes the account and its owned data."
+                                               Margin="0,3,10,0"
+                                               FontSize="10"
+                                               TextWrapping="Wrap"
+                                               Foreground="{DynamicResource SecondaryTextBrush}"/>
+                                </StackPanel>
+                                <Button x:Name="DeleteButton"
+                                        Grid.Column="1"
+                                        Content="Delete Account"
+                                        Style="{StaticResource OwnerDeleteButtonStyle}"
+                                        Height="40"
+                                        IsEnabled="False"
+                                        Click="DeleteButton_Click"/>
+                            </Grid>
+                        </Border>
 
                         <TextBlock Grid.Row="6"
-                                   Text="Deleting an account is permanent. User ID changes are also propagated to existing chats and contacts."
-                                   Margin="0,14,0,0"
+                                   Text="User ID changes are propagated to existing chats and contacts. Account deletion cannot be undone."
+                                   Margin="0,10,0,0"
                                    TextWrapping="Wrap"
-                                   FontSize="11"
-                                   LineHeight="17"
+                                   FontSize="10"
+                                   LineHeight="16"
                                    Foreground="{DynamicResource SecondaryTextBrush}"/>
 
                         <TextBlock Grid.Row="7"
