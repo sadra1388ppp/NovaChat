@@ -441,7 +441,7 @@ public partial class MainView
                 ? destinations
                 : destinations.Where(x =>
                     x.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                    x.Chat.Chat.Type.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    x.Chat.Type.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                     x.OtherUserId.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
 
             if (visible.Count == 0)
@@ -516,8 +516,8 @@ public partial class MainView
                 });
                 info.Children.Add(new TextBlock
                 {
-                    Text = destination.Chat.Chat.IsGroup
-                        ? $"Group  •  {destination.Chat.Chat.Name}"
+                    Text = destination.Chat.IsGroup
+                        ? $"Group  •  {destination.Chat.Name}"
                         : $"Private chat  •  @{destination.OtherUserId}",
                     FontSize = 10,
                     Foreground = FindBrush("SecondaryTextBrush"),
@@ -601,8 +601,8 @@ public partial class MainView
             return null;
 
         var selected = destinations
-            .Where(x => selectedIds.Contains(x.Chat.Chat.Id))
-            .Select(x => x.Chat)
+            .Where(x => selectedIds.Contains(x.Chat.Id))
+            .Select(x => x.ChatItem)
             .ToList();
 
         return new ForwardSelectionResult(selected, commentBox.Text.Trim());
@@ -614,13 +614,16 @@ public partial class MainView
 
     private sealed class ForwardDestinationItem
     {
-        public ChatListItem Chat { get; }
+        private readonly ChatListItem _chatItem;
 
-        public string DisplayName => string.IsNullOrWhiteSpace(Chat.DisplayName)
-            ? (Chat.Chat.IsGroup ? Chat.Chat.Name : "Unknown conversation")
-            : Chat.DisplayName;
+        public ChatListItem ChatItem => _chatItem;
+        public ChatModel Chat => _chatItem.Chat;
 
-        public string OtherUserId => Chat.Chat.OtherUserId(AuthState.UserId);
+        public string DisplayName => string.IsNullOrWhiteSpace(_chatItem.DisplayName)
+            ? (Chat.IsGroup ? Chat.Name : "Unknown conversation")
+            : _chatItem.DisplayName;
+
+        public string OtherUserId => Chat.OtherUserId(AuthState.UserId);
 
         public string Initials
         {
@@ -635,7 +638,7 @@ public partial class MainView
             }
         }
 
-        public ForwardDestinationItem(ChatListItem chat) => Chat = chat;
+        public ForwardDestinationItem(ChatListItem chat) => _chatItem = chat;
     }
 
     private sealed record ForwardSelectionResult(
