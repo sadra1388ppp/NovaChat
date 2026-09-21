@@ -20,9 +20,9 @@ public sealed class HttpRequestLog
     public long? RequestContentLength { get; set; }
     public string? ResponseContentType { get; set; }
     public long? ResponseContentLength { get; set; }
+    public string? ResponseBody { get; set; }
     public DateTime StartedAt { get; set; }
     public DateTime CompletedAt { get; set; }
     public long DurationMs { get; set; }
     public bool Succeeded { get; set; }
-    public string? ExceptionType { get; set; }
 }
