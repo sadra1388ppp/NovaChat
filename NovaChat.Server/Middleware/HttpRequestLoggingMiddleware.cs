@@ -18,11 +18,15 @@ public sealed class HttpRequestLoggingMiddleware(RequestDelegate next, ILogger<H
         var startedAt = DateTime.UtcNow;
         var stopwatch = Stopwatch.StartNew();
         Exception? exception = null;
+        string? responseBody = null;
 
-        context.Response.Headers["X-Request-ID"] = context.TraceIdentifier;
+        var originalResponseBody = context.Response.Body;
+        await using var responseBuffer = new MemoryStream();
+        context.Response.Body = responseBuffer;
 
         try
         {
+            context.Response.Headers["X-Request-ID"] = context.TraceIdentifier;
             await next(context);
         }
         catch (Exception ex)
@@ -33,6 +37,17 @@ public sealed class HttpRequestLoggingMiddleware(RequestDelegate next, ILogger<H
         finally
         {
             stopwatch.Stop();
+
+            try
+            {
+                responseBody = await ReadResponseBodyAsync(responseBuffer);
+                responseBuffer.Position = 0;
+                await responseBuffer.CopyToAsync(originalResponseBody, CancellationToken.None);
+            }
+            finally
+            {
+                context.Response.Body = originalResponseBody;
+            }
 
             try
             {
@@ -65,11 +80,11 @@ public sealed class HttpRequestLoggingMiddleware(RequestDelegate next, ILogger<H
                         RequestContentLength = context.Request.ContentLength,
                         ResponseContentType = context.Response.ContentType,
                         ResponseContentLength = context.Response.ContentLength,
+                        ResponseBody = responseBody,
                         StartedAt = startedAt,
                         CompletedAt = DateTime.UtcNow,
                         DurationMs = stopwatch.ElapsedMilliseconds,
-                        Succeeded = exception == null && context.Response.StatusCode < 400,
-                        ExceptionType = exception?.GetType().FullName
+                        Succeeded = exception == null && context.Response.StatusCode < 400
                     },
                     CancellationToken.None);
             }
@@ -78,6 +93,22 @@ public sealed class HttpRequestLoggingMiddleware(RequestDelegate next, ILogger<H
                 logger.LogError(logException, "NovaChat HTTP request logging failed for {RequestId}.", context.TraceIdentifier);
             }
         }
+    }
+
+    private static async Task<string> ReadResponseBodyAsync(Stream responseStream)
+    {
+        if (responseStream.Length == 0)
+            return string.Empty;
+
+        responseStream.Position = 0;
+
+        using var reader = new StreamReader(
+            responseStream,
+            System.Text.Encoding.UTF8,
+            detectEncodingFromByteOrderMarks: true,
+            leaveOpen: true);
+
+        return await reader.ReadToEndAsync(CancellationToken.None);
     }
 
     private static string? SanitizeQueryString(string? queryString)
