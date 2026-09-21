@@ -64,7 +64,7 @@ public class OwnerChatController : ControllerBase
         pageSize = Math.Clamp(pageSize, 1, 1000);
 
         var messages = await _db.Messages.AsNoTracking()
-            .Where(m => m.ChatId == chatId && !m.DeletedForEveryone)
+            .Where(m => m.ChatId == chatId)
             .OrderBy(m => m.SentAt)
             .ThenBy(m => m.Id)
             .Take(pageSize)
