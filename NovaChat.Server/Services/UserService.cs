@@ -161,28 +161,81 @@ public class UserService
     public async Task<bool> DeleteUserAsync(string id)
     {
         if (!long.TryParse(id, out var userId)) return false;
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId); if (user == null) return false;
+
+        var user = await _context.Users
+            .AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => new { u.Id, u.Username })
+            .FirstOrDefaultAsync();
+
+        if (user == null) return false;
+
         await using var transaction = await _context.Database.BeginTransactionAsync();
-        var chats = await _context.Chats.ToListAsync();
-        foreach (var chat in chats)
+
+        try
         {
-            var members = ParseMembers(chat.Members);
-            var containsUser = members.Any(m => string.Equals(m, user.Username, StringComparison.OrdinalIgnoreCase));
-            if (!containsUser && chat.CreatedByUserId != userId) continue;
-            if (chat.CreatedByUserId == userId)
+            // Remove the user's messages first. MessageReads cascades from Messages.
+            await _context.Messages
+                .Where(m => m.SenderId == user.Username)
+                .ExecuteDeleteAsync();
+
+            // Remove contacts explicitly so this also works with databases created
+            // from older NovaChat schemas that may not have cascade rules.
+            await _context.Contacts
+                .Where(c => c.OwnerUserId == userId || c.ContactUserId == userId)
+                .ExecuteDeleteAsync();
+
+            // Chats owned by the deleted user cannot keep a CreatedByUserId foreign key
+            // pointing at a user that is about to disappear. Delete their messages first,
+            // then the chats themselves.
+            var ownedChatIds = await _context.Chats
+                .Where(c => c.CreatedByUserId == userId)
+                .Select(c => c.Id)
+                .ToListAsync();
+
+            if (ownedChatIds.Count > 0)
             {
-                var messages = await _context.Messages.Where(m => m.ChatId == chat.Id).ToListAsync();
-                if (messages.Count > 0) _context.Messages.RemoveRange(messages);
-                _context.Chats.Remove(chat); continue;
+                await _context.Messages
+                    .Where(m => ownedChatIds.Contains(m.ChatId))
+                    .ExecuteDeleteAsync();
+
+                await _context.Chats
+                    .Where(c => ownedChatIds.Contains(c.Id))
+                    .ExecuteDeleteAsync();
             }
-            members.RemoveAll(m => string.Equals(m, user.Username, StringComparison.OrdinalIgnoreCase));
-            chat.Members = string.Join(", ", members.Distinct(StringComparer.OrdinalIgnoreCase));
+
+            // For chats owned by other users, keep the conversation but remove the
+            // deleted username from the participant list.
+            var remainingChats = await _context.Chats.ToListAsync();
+            foreach (var chat in remainingChats)
+            {
+                var members = ParseMembers(chat.Members);
+                if (!members.RemoveAll(m => string.Equals(m, user.Username, StringComparison.OrdinalIgnoreCase)).Equals(0))
+                    chat.Members = string.Join(", ", members.Distinct(StringComparer.OrdinalIgnoreCase));
+            }
+
+            await _context.SaveChangesAsync();
+
+            var deleted = await _context.Users
+                .Where(u => u.Id == userId)
+                .ExecuteDeleteAsync();
+
+            if (deleted == 0)
+            {
+                await transaction.RollbackAsync();
+                return false;
+            }
+
+            await transaction.CommitAsync();
+            _context.ChangeTracker.Clear();
+            return true;
         }
-        await _context.Messages.Where(m => m.SenderId == userId.ToString(System.Globalization.CultureInfo.InvariantCulture)).ExecuteDeleteAsync();
-        await _context.Contacts.Where(c => c.OwnerUserId == userId || c.ContactUserId == userId).ExecuteDeleteAsync();
-        await _context.SaveChangesAsync();
-        var deleted = await _context.Users.Where(u => u.Id == userId).ExecuteDeleteAsync();
-        await transaction.CommitAsync(); _context.ChangeTracker.Clear(); return deleted > 0;
+        catch
+        {
+            await transaction.RollbackAsync();
+            _context.ChangeTracker.Clear();
+            throw;
+        }
     }
 
     public async Task<(bool Success, string Message)> ChangePasswordAsync(string id, ChangePasswordDto dto)
