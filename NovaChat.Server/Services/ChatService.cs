@@ -8,12 +8,10 @@ public class ChatService
 {
     private static readonly SemaphoreSlim CreateChatLock = new(1, 1);
     private readonly AppDbContext _context;
-    private readonly AuditLogService _auditLogService;
 
-    public ChatService(AppDbContext context, AuditLogService auditLogService)
+    public ChatService(AppDbContext context)
     {
         _context = context;
-        _auditLogService = auditLogService;
     }
 
     public Task<bool> UserExistsAsync(long userId) => _context.Users.AsNoTracking().AnyAsync(u => u.Id == userId);
@@ -63,17 +61,6 @@ public class ChatService
             var chat = new Chat { Type = ChatType.Private, Name = "Private Chat", Members = members, CreatedByUserId = currentUserId, IsDeleted = false, DeletedAt = null };
             _context.Chats.Add(chat);
             await _context.SaveChangesAsync();
-
-            var creator = users.FirstOrDefault(u => u.Id == currentUserId);
-            await _auditLogService.LogAsync(
-                category: "Accounting",
-                eventType: "ChatCreated",
-                userId: currentUserId,
-                username: creator?.Username,
-                targetType: "Chat",
-                targetId: chat.Id.ToString(),
-                chatId: chat.Id,
-                details: "Private chat created.");
 
             PopulatePrivateProjection(chat, users);
             PopulateCompatibilityMembers(chat, users);
@@ -134,16 +121,6 @@ public class ChatService
 
         _context.Chats.Add(chat);
         await _context.SaveChangesAsync();
-
-        await _auditLogService.LogAsync(
-            category: "Accounting",
-            eventType: "ChatCreated",
-            userId: creatorId,
-            username: creator.Username,
-            targetType: "Chat",
-            targetId: chat.Id.ToString(),
-            chatId: chat.Id,
-            details: "Group chat created.");
 
         PopulateCompatibilityMembers(chat, eligibleUsers);
         return chat;
