@@ -160,92 +160,86 @@ public partial class MainView
             });
         }
 
-        var forwardCard = new Border
-        {
-            Background = mine
-                ? (Brush)FindResource("PrimarySoftBrush")
-                : (Brush)FindResource("InputBackgroundBrush"),
-            BorderBrush = mine
-                ? Brushes.White
-                : (Brush)FindResource("BorderBrush"),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(10, 9, 10, 9),
-            HorizontalAlignment = HorizontalAlignment.Stretch
-        };
-
-        var cardGrid = new Grid();
-        cardGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3) });
-        cardGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var contentGrid = new Grid();
 
         var accent = new Border
         {
-            Background = mine ? Brushes.White : (Brush)FindResource("PrimaryBrush"),
+            Width = 3,
             CornerRadius = new CornerRadius(2),
-            Margin = new Thickness(0, 1, 9, 1)
+            Background = mine
+                ? Brushes.White
+                : (Brush)FindResource("PrimaryBrush"),
+            Opacity = mine ? 0.9 : 1,
+            Margin = new Thickness(0, 1, 10, 1),
+            VerticalAlignment = VerticalAlignment.Stretch
         };
-        Grid.SetColumn(accent, 0);
-        cardGrid.Children.Add(accent);
 
-        var cardContent = new StackPanel();
+        var forwardedStack = new StackPanel();
 
-        var header = new StackPanel
+        var senderRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             VerticalAlignment = VerticalAlignment.Center
         };
 
-        header.Children.Add(new TextBlock
+        senderRow.Children.Add(new TextBlock
         {
             Text = "↗",
-            FontSize = 13,
+            FontSize = 11,
             FontWeight = FontWeights.Bold,
-            Foreground = mine ? Brushes.White : (Brush)FindResource("PrimaryBrush"),
-            VerticalAlignment = VerticalAlignment.Center
+            Foreground = mine
+                ? Brushes.White
+                : (Brush)FindResource("PrimaryBrush"),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 5, 0)
         });
 
-        header.Children.Add(new TextBlock
+        senderRow.Children.Add(new TextBlock
         {
-            Text = "  Forwarded from ",
+            Text = "Forwarded from ",
             FontSize = 10,
-            FontWeight = FontWeights.SemiBold,
-            Foreground = mine ? Brushes.White : (Brush)FindResource("SecondaryTextBrush"),
+            Foreground = mine
+                ? Brushes.White
+                : (Brush)FindResource("SecondaryTextBrush"),
             VerticalAlignment = VerticalAlignment.Center
         });
 
-        header.Children.Add(new TextBlock
+        senderRow.Children.Add(new TextBlock
         {
             Text = forwarded.Sender,
             FontSize = 10,
-            FontWeight = FontWeights.Bold,
-            Foreground = mine ? Brushes.White : (Brush)FindResource("PrimaryBrush"),
+            FontWeight = FontWeights.SemiBold,
+            Foreground = mine
+                ? Brushes.White
+                : (Brush)FindResource("PrimaryBrush"),
             VerticalAlignment = VerticalAlignment.Center,
-            TextTrimming = TextTrimming.CharacterEllipsis
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxWidth = 220
         });
 
-        cardContent.Children.Add(header);
+        forwardedStack.Children.Add(senderRow);
 
-        cardContent.Children.Add(new Border
-        {
-            Height = 1,
-            Background = mine ? Brushes.White : (Brush)FindResource("BorderBrush"),
-            Opacity = mine ? 0.35 : 0.8,
-            Margin = new Thickness(0, 7, 0, 7)
-        });
-
-        cardContent.Children.Add(new TextBlock
+        forwardedStack.Children.Add(new TextBlock
         {
             Tag = "message-content",
             Text = forwarded.Message,
             TextWrapping = TextWrapping.Wrap,
-            Foreground = mine ? Brushes.White : (Brush)FindResource("TextBrush")
+            FontSize = 13,
+            Foreground = mine
+                ? Brushes.White
+                : (Brush)FindResource("TextBrush"),
+            Margin = new Thickness(0, 3, 0, 0)
         });
 
-        Grid.SetColumn(cardContent, 1);
-        cardGrid.Children.Add(cardContent);
+        Grid.SetColumn(accent, 0);
+        contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        contentGrid.Children.Add(accent);
 
-        forwardCard.Child = cardGrid;
-        parent.Children.Add(forwardCard);
+        Grid.SetColumn(forwardedStack, 1);
+        contentGrid.Children.Add(forwardedStack);
+
+        parent.Children.Add(contentGrid);
     }
 
     private async Task ScrollMessagesToBottomAsync()
