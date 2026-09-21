@@ -43,19 +43,19 @@ public static class DatabaseConfiguration
             });
     }
     
-    public static DbContextOptionsBuilder UseNovaChatAuditDatabase(
+    public static DbContextOptionsBuilder UseNovaChatHttpLogDatabase(
         this DbContextOptionsBuilder options, IConfiguration configuration)
     {
-        var baseConnectionString = configuration.GetConnectionString("AuditLogConnection")
+        var baseConnectionString = configuration.GetConnectionString("HttpRequestLogConnection")
             ?? configuration.GetConnectionString("DefaultConnection");
 
         if (string.IsNullOrWhiteSpace(baseConnectionString))
             throw new InvalidOperationException(
-                "Set ConnectionStrings:DefaultConnection or ConnectionStrings:AuditLogConnection to a MariaDB connection string.");
+                "Set ConnectionStrings:DefaultConnection or ConnectionStrings:HttpRequestLogConnection to a MariaDB connection string.");
 
         var connection = new MySqlConnectionStringBuilder(baseConnectionString)
         {
-            Database = configuration["AuditLog:Database"] ?? "aaa",
+            Database = configuration["HttpRequestLog:Database"] ?? "aaa",
             ConnectionTimeout = 5
         };
 
