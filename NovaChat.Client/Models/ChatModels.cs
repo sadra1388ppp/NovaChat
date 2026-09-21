@@ -34,6 +34,7 @@ public class MessageModel
     public DateTime SentAt { get; set; }
     public DateTime? EditedAt { get; set; }
     public bool IsEdited { get; set; }
+    public bool IsDeletedForEveryone { get; set; }
     public string MessageType { get; set; } = "text";
     public string? AttachmentUrl { get; set; }
     public string? FileName { get; set; }
