@@ -29,11 +29,11 @@ public partial class ManageUsersView
         if (_viewChatsButton != null || DeleteButton.Parent is not Grid grid)
             return;
 
-        while (grid.RowDefinitions.Count < 9)
+        while (grid.RowDefinitions.Count < 10)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         Grid.SetRow(DeleteButton, 6);
-        Grid.SetRow(ValidationText, 8);
+        Grid.SetRow(ValidationText, 9);
 
         var infoText = grid.Children
             .OfType<TextBlock>()
@@ -51,7 +51,7 @@ public partial class ManageUsersView
             IsEnabled = false
         };
         _viewChatsButton.Click += ViewChatsButton_Click;
-        Grid.SetRow(_viewChatsButton, 5);
+        Grid.SetRow(_viewChatsButton, 8);
         grid.Children.Add(_viewChatsButton);
 
         UsersList.SelectionChanged += (_, _) => UpdateViewChatsButtonState();
