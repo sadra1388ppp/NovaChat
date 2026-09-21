@@ -375,10 +375,10 @@ public class ChatService
         chat.DeletedAt = IranTime.Now;
         await _context.SaveChangesAsync();
 
-        var actorUsername = await _context.Users
+        var actor = await _context.Users
             .AsNoTracking()
             .Where(u => u.Id == actorUserId)
-            .Select(u => u.Username)
+            .Select(u => new { u.Username, u.DeviceId })
             .FirstOrDefaultAsync();
 
         var eventType = chat.Type == ChatType.Group
@@ -389,10 +389,11 @@ public class ChatService
             "Accounting",
             eventType,
             actorUserId,
-            actorUsername,
+            actor?.Username,
             "Chat",
             chat.Id.ToString(),
             chat.Id,
+            deviceId: actor?.DeviceId,
             details: chat.Type == ChatType.Group
                 ? "Group chat deleted."
                 : "Private chat deleted.");
