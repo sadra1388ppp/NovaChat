@@ -91,7 +91,7 @@ public partial class MainView
 
         Dispatcher.BeginInvoke(() =>
         {
-            MessageTextBox.Focus();
+            ForwardRecipientSearchTextBox.Focus();
         }, System.Windows.Threading.DispatcherPriority.Input);
     }
 
