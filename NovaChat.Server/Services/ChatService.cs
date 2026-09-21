@@ -62,9 +62,6 @@ public class ChatService
             _context.Chats.Add(chat);
             await _context.SaveChangesAsync();
 
-            var creator = users.FirstOrDefault(u => u.Id == currentUserId);
-            await _auditLogService.LogAsync("Accounting", "ChatCreated", currentUserId, creator?.Username, "Chat", chat.Id.ToString(), chat.Id, details: "Private chat created.");
-
             PopulatePrivateProjection(chat, users);
             PopulateCompatibilityMembers(chat, users);
             return chat;
@@ -124,16 +121,6 @@ public class ChatService
 
         _context.Chats.Add(chat);
         await _context.SaveChangesAsync();
-
-        await _auditLogService.LogAsync(
-            "Accounting",
-            "ChatCreated",
-            creatorId,
-            creator.Username,
-            "Chat",
-            chat.Id.ToString(),
-            chat.Id,
-            details: "Group chat created.");
 
         PopulateCompatibilityMembers(chat, eligibleUsers);
         return chat;
