@@ -38,7 +38,14 @@ public class UserService
             if (await _context.Users.AnyAsync(u => u.Username == username)) return Fail("This username is already taken.");
             if (await _context.Users.AnyAsync(u => u.Email == email)) return Fail("This Email is already registered.");
             if (await _context.Users.AnyAsync(u => u.PhoneNumber == phoneNumber)) return Fail("This phone number is already registered.");
-            var userId = await GenerateNextUserIdAsync();
+            await using var userIdLock = await DatabaseIdAllocator.AcquireTableLockAsync(
+                _context.Database.GetDbConnection(),
+                "Users");
+
+            var userId = await DatabaseIdAllocator.GetFirstAvailableIdAsync(
+                _context.Database.GetDbConnection(),
+                "Users");
+
             var createdAt = IranTime.Now;
             var passwordHash = _passwordHashService.HashPassword(dto.Password);
             await _context.Database.ExecuteSqlInterpolatedAsync($@"
@@ -266,11 +273,6 @@ public class UserService
         user.PasswordHash = _passwordHashService.HashPassword(dto.NewPassword); await _context.SaveChangesAsync(); return (true, "Password changed successfully.");
     }
 
-    private async Task<long> GenerateNextUserIdAsync()
-    {
-        var maxId = await _context.Users.AsNoTracking().MaxAsync(u => (long?)u.Id) ?? 0L;
-        if (maxId == long.MaxValue) throw new InvalidOperationException("No more user IDs are available."); return maxId + 1;
-    }
 
     private static string NormalizeMessagePrivacy(string? value) => string.Equals(value?.Trim(), "Requests", StringComparison.OrdinalIgnoreCase) ? "Requests" : "Everybody";
     private static List<string> ParseMembers(string? members) => string.IsNullOrWhiteSpace(members) ? [] : members.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
