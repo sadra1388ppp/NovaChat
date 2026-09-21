@@ -44,16 +44,12 @@ public sealed class E2eeCryptoService
         if (string.IsNullOrWhiteSpace(currentUserId))
             throw new InvalidOperationException("E2EE requires an authenticated user.");
 
-        if (_privateKey != null && !string.IsNullOrWhiteSpace(_deviceId) && _initializedUserId == currentUserId)
-            return;
-
         await _initializeLock.WaitAsync(cancellationToken);
         try
         {
-            if (_privateKey != null && !string.IsNullOrWhiteSpace(_deviceId) && _initializedUserId == currentUserId)
-                return;
-
-            _privateKey?.Dispose();
+            if (_privateKey == null || string.IsNullOrWhiteSpace(_deviceId) || _initializedUserId != currentUserId)
+            {
+                _privateKey?.Dispose();
             _privateKey = null;
             _deviceId = string.Empty;
             _initializedUserId = currentUserId;
@@ -83,14 +79,15 @@ public sealed class E2eeCryptoService
                 }
             }
 
-            if (_privateKey == null)
-            {
-                _privateKey = RSA.Create(RsaKeySize);
-                _deviceId = Guid.NewGuid().ToString("N");
-                var stored = new StoredDevice { DeviceId = _deviceId, PrivateKeyPem = _privateKey.ExportPkcs8PrivateKeyPem() };
-                var bytes = JsonSerializer.SerializeToUtf8Bytes(stored, JsonOptions);
-                var protectedBytes = ProtectedData.Protect(bytes, null, DataProtectionScope.CurrentUser);
-                await File.WriteAllBytesAsync(KeyFilePath, protectedBytes, cancellationToken);
+                if (_privateKey == null)
+                {
+                    _privateKey = RSA.Create(RsaKeySize);
+                    _deviceId = Guid.NewGuid().ToString("N");
+                    var stored = new StoredDevice { DeviceId = _deviceId, PrivateKeyPem = _privateKey.ExportPkcs8PrivateKeyPem() };
+                    var bytes = JsonSerializer.SerializeToUtf8Bytes(stored, JsonOptions);
+                    var protectedBytes = ProtectedData.Protect(bytes, null, DataProtectionScope.CurrentUser);
+                    await File.WriteAllBytesAsync(KeyFilePath, protectedBytes, cancellationToken);
+                }
             }
         }
         finally
@@ -104,7 +101,9 @@ public sealed class E2eeCryptoService
 
     public async Task<string> EncryptForChatAsync(int chatId, string plaintext, ApiService api, CancellationToken cancellationToken = default)
     {
-        await EnsureInitializedAsync(cancellationToken);
+        // Refresh the current device registration before encryption so a missing/revoked
+        // server-side device row cannot cause the message to be encrypted without this device.
+        await InitializeAsync(api, cancellationToken);
         if (string.IsNullOrWhiteSpace(plaintext))
             throw new ArgumentException("Message cannot be empty.", nameof(plaintext));
         if (plaintext.Length > MaxPlaintextLength)
