@@ -107,6 +107,7 @@ public partial class MainView
         MessageTextBox.Clear();
         MessageTextBox.ToolTip = "Write a message";
         SendButton.Content = "Send  ➤";
+        SendButton.IsEnabled = true;
 
         ForwardRecipientPanelToggleButton.Content = "＋ Add recipients";
         ForwardModeHintText.Text = string.Empty;
@@ -181,6 +182,7 @@ public partial class MainView
 
         var successCount = 0;
         var failedDestinations = new List<string>();
+        var failedDestinationIds = new HashSet<int>();
 
         try
         {
@@ -203,6 +205,7 @@ public partial class MainView
                 catch (Exception exception)
                 {
                     failedDestinations.Add(destination.DisplayName);
+                    failedDestinationIds.Add(destination.Chat.Id);
                     System.Diagnostics.Debug.WriteLine(
                         $"Forwarding failed for chat {destination.Chat.Id}: {exception}");
                 }
@@ -226,6 +229,15 @@ public partial class MainView
             }
             else
             {
+                foreach (var successfulId in destinations
+                             .Select(x => x.Chat.Id)
+                             .Where(id => !failedDestinationIds.Contains(id)))
+                {
+                    _forwardRecipientIds.Remove(successfulId);
+                }
+
+                RenderForwardRecipientChips();
+                RenderForwardRecipientPicker();
                 ForwardRecipientPanelToggleButton.IsEnabled = true;
                 ForwardCancelButton.IsEnabled = true;
                 SendButton.IsEnabled = true;
