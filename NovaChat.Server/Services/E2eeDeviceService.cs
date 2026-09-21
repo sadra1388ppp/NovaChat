@@ -107,6 +107,38 @@ ON DUPLICATE KEY UPDATE
             .ToList();
     }
 
+    public async Task<E2eeDeviceRecord?> GetDeviceAsync(string deviceId, long userId, CancellationToken cancellationToken = default)
+    {
+        await EnsureSchemaAsync(cancellationToken);
+        var connection = _db.Database.GetDbConnection();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT DeviceId, UserId, PublicKeyPem, CreatedAt, LastSeenAt FROM EncryptionDevices WHERE DeviceId = @deviceId AND UserId = @userId AND RevokedAt IS NULL LIMIT 1";
+
+        var deviceParameter = command.CreateParameter();
+        deviceParameter.ParameterName = "@deviceId";
+        deviceParameter.Value = deviceId;
+        command.Parameters.Add(deviceParameter);
+
+        var userParameter = command.CreateParameter();
+        userParameter.ParameterName = "@userId";
+        userParameter.Value = userId;
+        command.Parameters.Add(userParameter);
+
+        if (connection.State != ConnectionState.Open)
+            await connection.OpenAsync(cancellationToken);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+            return null;
+
+        return new E2eeDeviceRecord(
+            reader.GetString(0),
+            reader.GetInt64(1),
+            reader.GetString(2),
+            reader.GetDateTime(3),
+            reader.GetDateTime(4));
+    }
+
     public async Task RevokeAsync(long userId, string deviceId, CancellationToken cancellationToken = default)
     {
         await EnsureSchemaAsync(cancellationToken);
