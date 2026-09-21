@@ -69,7 +69,8 @@ app.MapControllers();
 
 app.MapPost("/api/User/logout", (
     HttpContext context,
-    JwtTokenRevocationService revocationService) =>
+    JwtTokenRevocationService revocationService,
+    AuditLogService auditLogService) =>
 {
     var authorization = context.Request.Headers.Authorization.ToString();
 
@@ -82,6 +83,17 @@ app.MapPost("/api/User/logout", (
         return Results.Unauthorized();
 
     revocationService.Revoke(token);
+
+    if (long.TryParse(context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var logoutUserId))
+    {
+        await auditLogService.LogAsync(
+            "Authentication",
+            "LogoutSucceeded",
+            logoutUserId,
+            context.User.FindFirst("username")?.Value,
+            "User",
+            logoutUserId.ToString());
+    }
 
     return Results.Ok(new
     {
