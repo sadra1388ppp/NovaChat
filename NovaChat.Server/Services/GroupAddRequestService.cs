@@ -55,11 +55,21 @@ CREATE TABLE IF NOT EXISTS `GroupAddRequests` (
         if (pending > 0) return (true, $"@{target.Username} does not allow people to add them to groups. A request is already pending.", await GetByIdAsync(pending, cancellationToken), false);
 
         var now = IranTime.Now;
+        await using var requestIdLock = await DatabaseIdAllocator.AcquireTableLockAsync(
+            _db.Database.GetDbConnection(),
+            "GroupAddRequests",
+            cancellationToken);
+
+        var requestId = await DatabaseIdAllocator.GetFirstAvailableIdAsync(
+            _db.Database.GetDbConnection(),
+            "GroupAddRequests",
+            cancellationToken);
+
         try
         {
             await _db.Database.ExecuteSqlInterpolatedAsync($@"
-INSERT INTO `GroupAddRequests` (`GroupId`,`RequesterUserId`,`TargetUserId`,`Status`,`CreatedAt`)
-VALUES ({groupId},{requesterId},{target.Id},{"Pending"},{now});", cancellationToken);
+INSERT INTO `GroupAddRequests` (`Id`,`GroupId`,`RequesterUserId`,`TargetUserId`,`Status`,`CreatedAt`)
+VALUES ({requestId},{groupId},{requesterId},{target.Id},{"Pending"},{now});", cancellationToken);
         }
         catch (MySqlConnector.MySqlException ex) when (ex.Number == 1062)
         {
@@ -70,7 +80,7 @@ VALUES ({groupId},{requesterId},{target.Id},{"Pending"},{now});", cancellationTo
             throw;
         }
 
-        var id = await _db.Database.SqlQueryRaw<long>("SELECT LAST_INSERT_ID() AS `Value`").SingleAsync(cancellationToken);
+        var id = requestId;
         return (true, $"@{target.Username} does not allow people to add them to groups. A request was sent.", await GetByIdAsync(id, cancellationToken), false);
     }
 
