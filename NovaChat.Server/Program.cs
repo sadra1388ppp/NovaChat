@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
@@ -15,7 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<AppDbContext>(options => options.UseNovaChatDatabase(builder.Configuration));
 builder.Services.AddScoped<DatabaseInitializer>();
 builder.Services.AddControllers();
-builder.Services.AddSignalR(options => options.AddFilter<AuditLogHubFilter>());
+builder.Services.AddSignalR();
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ContactService>();
 builder.Services.AddSingleton<PasswordHashService>();
@@ -62,9 +61,7 @@ Directory.CreateDirectory(Path.Combine(webRoot, "uploads", "avatars"));
 if (app.Environment.IsDevelopment()) { app.UseSwagger(); app.UseSwaggerUI(); }
 app.UseDefaultFiles();
 app.UseStaticFiles();
-app.UseRouting();
 app.UseAuthentication();
-app.UseMiddleware<AuditLogMiddleware>();
 app.UseMiddleware<JwtTokenRevocationMiddleware>();
 app.UseAuthorization();
 app.UseMiddleware<ChatPrivacyMiddleware>();
@@ -72,7 +69,8 @@ app.MapControllers();
 
 app.MapPost("/api/User/logout", (
     HttpContext context,
-    JwtTokenRevocationService revocationService) =>
+    JwtTokenRevocationService revocationService,
+    AuditLogService auditLogService) =>
 {
     var authorization = context.Request.Headers.Authorization.ToString();
 
@@ -85,6 +83,17 @@ app.MapPost("/api/User/logout", (
         return Results.Unauthorized();
 
     revocationService.Revoke(token);
+
+    if (long.TryParse(context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var logoutUserId))
+    {
+        await auditLogService.LogAsync(
+            "Authentication",
+            "LogoutSucceeded",
+            logoutUserId,
+            context.User.FindFirst("username")?.Value,
+            "User",
+            logoutUserId.ToString());
+    }
 
     return Results.Ok(new
     {
