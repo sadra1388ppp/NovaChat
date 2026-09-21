@@ -19,6 +19,7 @@ CREATE TABLE `Users` (
     `Bio` VARCHAR(160) NOT NULL,
     `AvatarUrl` VARCHAR(512) NULL,
     `LastSeenAt` DATETIME(6) NULL,
+    `DeviceId` VARCHAR(64) NULL,
     `CreatedAt` DATETIME(6) NOT NULL,
     `MessagePrivacy` VARCHAR(32) NOT NULL DEFAULT 'Everybody',
     `AllowGroupAdds` VARCHAR(5) NOT NULL DEFAULT 'true',
