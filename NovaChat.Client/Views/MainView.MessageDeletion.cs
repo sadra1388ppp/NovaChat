@@ -139,8 +139,36 @@ public partial class MainView
                 return;
             }
 
-            var editedText = ShowEditMessageDialog(decrypted.Content);
-            if (editedText == null || string.Equals(editedText, decrypted.Content, StringComparison.Ordinal))
+            string? editedText;
+
+            // A forwarded message is a structured message: the forwarded source must
+            // remain unchanged, while only the optional comment written by the sender
+            // is editable. This prevents editing from flattening the forwarded card
+            // into a normal text message.
+            if (TryParseForwardedMessage(decrypted.Content, out var forwarded))
+            {
+                var editedComment = ShowEditForwardCommentDialog(forwarded.Comment);
+                if (editedComment == null)
+                    return;
+
+                var sender = string.IsNullOrWhiteSpace(forwarded.Sender)
+                    ? "Unknown user"
+                    : forwarded.Sender.Trim();
+
+                var forwardedPayload = $"↗ {sender}\n\n{forwarded.Message.Trim()}";
+
+                editedText = string.IsNullOrWhiteSpace(editedComment)
+                    ? forwardedPayload
+                    : $"{forwardedPayload}\n\n\u200C{editedComment.Trim()}";
+            }
+            else
+            {
+                editedText = ShowEditMessageDialog(decrypted.Content);
+                if (editedText == null)
+                    return;
+            }
+
+            if (string.Equals(editedText, decrypted.Content, StringComparison.Ordinal))
                 return;
 
             if (_hubConnection == null || _hubConnection.State != HubConnectionState.Connected)
@@ -158,11 +186,11 @@ public partial class MainView
         }
     }
 
-    private string? ShowEditMessageDialog(string currentText)
+    private string? ShowEditForwardCommentDialog(string currentComment)
     {
         var dialog = new Window
         {
-            Title = "Edit Message",
+            Title = "Edit Forward Comment",
             Width = 520,
             Height = 250,
             Owner = Window.GetWindow(this),
@@ -179,7 +207,7 @@ public partial class MainView
 
         root.Children.Add(new TextBlock
         {
-            Text = "Edit your message",
+            Text = "Edit your forwarding comment",
             FontSize = 18,
             FontWeight = FontWeights.Bold,
             Foreground = (Brush)FindResource("TextBrush")
@@ -187,7 +215,7 @@ public partial class MainView
 
         var editor = new TextBox
         {
-            Text = currentText,
+            Text = currentComment,
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -225,16 +253,7 @@ public partial class MainView
         };
 
         cancel.Click += (_, _) => dialog.DialogResult = false;
-        save.Click += (_, _) =>
-        {
-            if (string.IsNullOrWhiteSpace(editor.Text))
-            {
-                MessageBox.Show("Message cannot be empty.", "Edit Message", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            dialog.DialogResult = true;
-        };
+        save.Click += (_, _) => dialog.DialogResult = true;
 
         actions.Children.Add(cancel);
         actions.Children.Add(save);
