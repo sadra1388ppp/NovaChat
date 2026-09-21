@@ -224,11 +224,11 @@ public partial class MainView
             Tag = "message-content",
             Text = forwarded.Message,
             TextWrapping = TextWrapping.Wrap,
-            FontSize = 13,
+            FontSize = 12,
             Foreground = mine
                 ? Brushes.White
                 : (Brush)FindResource("TextBrush"),
-            Margin = new Thickness(0, 3, 0, 0)
+            Margin = new Thickness(0, 7, 0, 0)
         });
 
         Grid.SetColumn(accent, 0);
