@@ -57,7 +57,12 @@ public partial class MainView : UserControl
         _hubConnection.On<ChatDeletedEvent>("ChatDeleted", OnChatDeleted);
         RegisterReadReceiptHandlers();
         _hubConnection.Reconnecting += OnSignalRReconnecting; _hubConnection.Reconnected += OnSignalRReconnected; _hubConnection.Closed += OnSignalRClosed;
-        await _hubConnection.StartAsync(); ChatStatusText.Text = "Connected"; await RefreshCurrentUserPresenceAsync();
+        await _hubConnection.StartAsync();
+        ChatStatusText.Text = "Connected";
+        await RefreshCurrentUserPresenceAsync();
+        // Now that the secure channel is active, retry chat previews so historical
+        // messages missing this device's key can trigger key recovery automatically.
+        await LoadChatsAsync();
     }
     private Task OnSignalRReconnecting(Exception? _) => Dispatcher.InvokeAsync(() => { ChatStatusText.Text = "Connecting..."; ChatStatusIndicator.Fill = Brushes.Gray; }).Task;
     private async Task OnSignalRReconnected(string? _) { ChatStatusText.Text = "Connected"; await RefreshCurrentUserPresenceAsync(); }
