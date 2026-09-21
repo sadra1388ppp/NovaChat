@@ -73,7 +73,6 @@ public partial class MainView
     private ChatListItem? ShowForwardDestinationDialog()
     {
         var available = _chats
-            .Where(x => x.Chat.Id != _currentChatId)
             .OrderBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
