@@ -24,6 +24,7 @@ public sealed class E2eeCryptoService
     private RSA? _privateKey;
     private string _deviceId = string.Empty;
     private string _initializedUserId = string.Empty;
+    private readonly Dictionary<int, string> _recoveredMessageKeys = [];
 
     private string KeyFilePath
     {
@@ -210,6 +211,39 @@ public sealed class E2eeCryptoService
            envelope != null &&
            envelope.Keys.ContainsKey(_deviceId);
 
+    public bool AcceptRecoveredMessageKey(int messageId, string envelopeJson, string wrappedKey)
+    {
+        if (messageId <= 0 ||
+            _privateKey == null ||
+            string.IsNullOrWhiteSpace(_deviceId) ||
+            string.IsNullOrWhiteSpace(wrappedKey) ||
+            !E2eeEnvelope.TryParse(envelopeJson, out var envelope) ||
+            envelope == null)
+            return false;
+
+        try
+        {
+            var key = _privateKey.Decrypt(
+                Convert.FromBase64String(wrappedKey),
+                RSAEncryptionPadding.OaepSHA256);
+            CryptographicOperations.ZeroMemory(key);
+            _recoveredMessageKeys[messageId] = wrappedKey;
+            return true;
+        }
+        catch (CryptographicException)
+        {
+            return false;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
     public async Task<MessageModel> DecryptMessageAsync(MessageModel message, CancellationToken cancellationToken = default)
     {
         await EnsureInitializedAsync(cancellationToken);
@@ -226,8 +260,11 @@ public sealed class E2eeCryptoService
 
         if (!envelope.Keys.TryGetValue(_deviceId, out var wrappedKey))
         {
-            message.Content = "[Encrypted message — this device has no key]";
-            return message;
+            if (!_recoveredMessageKeys.TryGetValue(message.Id, out wrappedKey))
+            {
+                message.Content = "[Encrypted message — this device has no key]";
+                return message;
+            }
         }
 
         try
