@@ -82,14 +82,11 @@
                     </ScrollViewer>
 
                     <Border Grid.Row="2" Padding="12" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBox x:Name="MessageInputBox" Height="46" Padding="12" VerticalContentAlignment="Center" AcceptsReturn="True" TextWrapping="Wrap" Background="{DynamicResource AppBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource BorderBrush}" KeyDown="MessageBox_KeyDown"/>
-                            <Button x:Name="SendButton" Grid.Column="1" Content="Send as user" Width="118" Height="46" Margin="10,0,0,0" Style="{DynamicResource PrimaryButtonStyle}" Click="SendButton_Click" IsEnabled="False"/>
-                        </Grid>
+                        <TextBlock Text="Message sending is disabled in Owner User Management. Messages can only be created from a user's own device."
+                                   TextWrapping="Wrap"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource SecondaryTextBrush}"
+                                   HorizontalAlignment="Center"/>
                     </Border>
                 </Grid>
             </Border>
