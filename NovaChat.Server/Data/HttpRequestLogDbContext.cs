@@ -38,11 +38,11 @@ public sealed class HttpRequestLogDbContext(DbContextOptions<HttpRequestLogDbCon
             entity.Property(e => e.UserAgent).HasMaxLength(1024);
             entity.Property(e => e.RequestContentType).HasMaxLength(255);
             entity.Property(e => e.ResponseContentType).HasMaxLength(255);
+            entity.Property(e => e.ResponseBody).HasColumnType("LONGTEXT");
             entity.Property(e => e.StartedAt).HasColumnType("datetime(6)");
             entity.Property(e => e.CompletedAt).HasColumnType("datetime(6)");
             entity.Property(e => e.DurationMs).HasColumnType("bigint");
             entity.Property(e => e.Succeeded).HasColumnType("tinyint(1)");
-            entity.Property(e => e.ExceptionType).HasMaxLength(512);
         });
     }
 
