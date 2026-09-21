@@ -20,17 +20,20 @@ public class MessageDeletionController : ControllerBase
     private readonly ChatService _chatService;
     private readonly IConfiguration _configuration;
     private readonly IHubContext<ChatHub> _hub;
+    private readonly AuditLogService _auditLogService;
 
     public MessageDeletionController(
         AppDbContext db,
         ChatService chatService,
         IConfiguration configuration,
-        IHubContext<ChatHub> hub)
+        IHubContext<ChatHub> hub,
+        AuditLogService auditLogService)
     {
         _db = db;
         _chatService = chatService;
         _configuration = configuration;
         _hub = hub;
+        _auditLogService = auditLogService;
     }
 
     [HttpDelete("{messageId:int}")]
@@ -78,6 +81,7 @@ public class MessageDeletionController : ControllerBase
             // The original message remains intact in MariaDB for audit/history.
             message.DeletedForEveryone = true;
             await _db.SaveChangesAsync();
+            await _auditLogService.LogAsync("Accounting", "MessageDeletedForEveryone", userId, User.FindFirst("username")?.Value, "Message", message.Id.ToString(), message.ChatId, message.Id, details: "Message logically deleted for everyone.");
 
             var deletedPayload = new
             {
@@ -99,6 +103,7 @@ public class MessageDeletionController : ControllerBase
         {
             AddDeletedForUser(message, userId.ToString());
             await _db.SaveChangesAsync();
+            await _auditLogService.LogAsync("Accounting", "MessageDeletedForUser", userId, User.FindFirst("username")?.Value, "Message", message.Id.ToString(), message.ChatId, message.Id, details: "Message hidden for the current user.");
 
         }
 
