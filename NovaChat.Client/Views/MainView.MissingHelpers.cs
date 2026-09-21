@@ -154,7 +154,7 @@ public partial class MainView
             return true;
         }
 
-        const commentMarker = "\u200C";
+        const string commentMarker = "\u200C";
         var commentMarkerIndex = remainder.LastIndexOf(commentMarker, StringComparison.Ordinal);
         if (commentMarkerIndex >= 0)
         {
