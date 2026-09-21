@@ -367,13 +367,36 @@ public class ChatService
         return true;
     }
 
-    public async Task<bool> DeleteChatAsync(int chatId)
+    public async Task<bool> DeleteChatAsync(int chatId, long actorUserId)
     {
         var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId && !c.IsDeleted);
         if (chat == null) return false;
         chat.IsDeleted = true;
         chat.DeletedAt = IranTime.Now;
         await _context.SaveChangesAsync();
+
+        var actorUsername = await _context.Users
+            .AsNoTracking()
+            .Where(u => u.Id == actorUserId)
+            .Select(u => u.Username)
+            .FirstOrDefaultAsync();
+
+        var eventType = chat.Type == ChatType.Group
+            ? "GroupDeleted"
+            : "PrivateChatDeleted";
+
+        await _auditLogService.LogAsync(
+            "Accounting",
+            eventType,
+            actorUserId,
+            actorUsername,
+            "Chat",
+            chat.Id.ToString(),
+            chat.Id,
+            details: chat.Type == ChatType.Group
+                ? "Group chat deleted."
+                : "Private chat deleted.");
+
         return true;
     }
 
