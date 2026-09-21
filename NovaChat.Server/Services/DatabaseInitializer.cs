@@ -39,7 +39,8 @@ public sealed class DatabaseInitializer(AppDbContext context, MessageReadService
         try
         {
             await chatRequestService.EnsureSchemaAsync(cancellationToken);
-                await context.Users.AsNoTracking().Take(1).ToListAsync(cancellationToken);
+            await EnsureUserDeviceIdSchemaAsync(cancellationToken);
+            await context.Users.AsNoTracking().Take(1).ToListAsync(cancellationToken);
             await context.Chats.AsNoTracking().Take(1).ToListAsync(cancellationToken);
             await EnsureMessageEditSchemaAsync(cancellationToken);
             await context.Messages.AsNoTracking().Take(1).ToListAsync(cancellationToken);
