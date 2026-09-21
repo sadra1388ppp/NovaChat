@@ -67,7 +67,6 @@ public class ChatHub : Hub
         else
             await Clients.Users(Recipients(chat)).SendAsync("ReceiveMessage", MessageDtoMapper.Map(message));
 
-        await _auditLogService.LogAsync("Accounting", "MessageSent", userId, CurrentUsername(), "Message", message.Id.ToString(), chatId, message.Id);
     }
 
     public async Task EditMessage(int messageId, string encryptedContent)
@@ -92,7 +91,6 @@ public class ChatHub : Hub
         await Clients.Users(Recipients(chat))
             .SendAsync("MessageEdited", MessageDtoMapper.Map(message));
 
-        await _auditLogService.LogAsync("Accounting", "MessageEdited", userId, CurrentUsername(), "Message", message.Id.ToString(), message.ChatId, message.Id);
     }
 
     public async Task RequestMessageKey(int messageId, string requesterDeviceId)
