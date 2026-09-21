@@ -76,6 +76,9 @@ public partial class MainView
             : $"@{message.SenderId}";
 
         ForwardSourceContentText.Text = _forwardMessageContent;
+        ForwardTargetText.Text = _currentChatId.HasValue
+            ? $"Forwarding to {(_chats.FirstOrDefault(x => x.Chat.Id == _currentChatId.Value)?.DisplayName ?? "this conversation")}"
+            : "Forwarding in the current conversation";
         ForwardModeHintText.Text = "Forwarding in this conversation";
         UpdateForwardUi();
 
@@ -122,7 +125,6 @@ public partial class MainView
         }
 
         var destinationChatId = _currentChatId.Value;
-        var destination = _chats.FirstOrDefault(x => x.Chat.Id == destinationChatId);
         var comment = MessageTextBox.Text.Trim();
         var forwardedText = BuildForwardedMessage(_forwardMessage, _forwardMessageContent, comment);
 
