@@ -130,15 +130,15 @@ public sealed class AuditLogHubFilter : IHubFilter
 
     private static string ResolveCategory(string method)
     {
+        if (method.Contains("Key", StringComparison.OrdinalIgnoreCase) ||
+            method.Contains("Security", StringComparison.OrdinalIgnoreCase))
+            return "Security";
+
         if (method.Contains("Message", StringComparison.OrdinalIgnoreCase) ||
             method.Contains("Chat", StringComparison.OrdinalIgnoreCase) ||
             method.Contains("Group", StringComparison.OrdinalIgnoreCase) ||
             method.Contains("Contact", StringComparison.OrdinalIgnoreCase))
             return "Accounting";
-
-        if (method.Contains("Key", StringComparison.OrdinalIgnoreCase) ||
-            method.Contains("Security", StringComparison.OrdinalIgnoreCase))
-            return "Security";
 
         return "Operations";
     }
