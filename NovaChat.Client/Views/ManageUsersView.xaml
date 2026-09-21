@@ -351,19 +351,42 @@
                         </StackPanel>
 
                         <StackPanel Grid.Row="3" Margin="0,16,0,0">
-                            <TextBlock Text="ACCOUNT INFO"
+                            <TextBlock Text="ACCOUNT INFORMATION"
                                        FontSize="10"
                                        FontWeight="Bold"
                                        Foreground="{DynamicResource SecondaryTextBrush}"/>
-                            <TextBlock x:Name="DetailCreatedText"
-                                       Margin="0,6,0,0"
-                                       FontSize="13"
-                                       Foreground="{DynamicResource TextBrush}"/>
-                            <TextBlock x:Name="DetailLastSeenText"
-                                       Margin="0,4,0,0"
-                                       FontSize="12"
-                                       TextWrapping="Wrap"
-                                       Foreground="{DynamicResource SecondaryTextBrush}"/>
+                            <Grid Margin="0,7,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="125"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="Username" FontWeight="SemiBold" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                                <TextBlock x:Name="AccountUsernameText" Grid.Column="1" Foreground="{DynamicResource TextBrush}"/>
+                                <TextBlock Text="Password" Grid.Row="1" FontWeight="SemiBold" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0"/>
+                                <TextBlock x:Name="AccountPasswordText" Grid.Row="1" Grid.Column="1" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                                <TextBlock Text="Phone" Grid.Row="2" FontWeight="SemiBold" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0"/>
+                                <TextBlock x:Name="AccountPhoneText" Grid.Row="2" Grid.Column="1" Foreground="{DynamicResource TextBrush}" Margin="0,6,0,0"/>
+                                <TextBlock Text="Created" Grid.Row="3" FontWeight="SemiBold" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0"/>
+                                <TextBlock x:Name="DetailCreatedText" Grid.Row="3" Grid.Column="1" Foreground="{DynamicResource TextBrush}" Margin="0,6,0,0"/>
+                                <TextBlock Text="Last seen" Grid.Row="4" FontWeight="SemiBold" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0"/>
+                                <TextBlock x:Name="DetailLastSeenText" Grid.Row="4" Grid.Column="1" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0"/>
+                                <TextBlock Text="Privacy" Grid.Row="5" FontWeight="SemiBold" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0"/>
+                                <TextBlock x:Name="AccountPrivacyText" Grid.Row="5" Grid.Column="1" Foreground="{DynamicResource TextBrush}" Margin="0,6,0,0"/>
+                                <TextBlock Text="Group adds" Grid.Row="6" FontWeight="SemiBold" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0"/>
+                                <TextBlock x:Name="AccountGroupAddsText" Grid.Row="6" Grid.Column="1" Foreground="{DynamicResource TextBrush}" Margin="0,6,0,0"/>
+                                <TextBlock Text="Avatar" Grid.Row="7" FontWeight="SemiBold" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0"/>
+                                <TextBlock x:Name="AccountAvatarText" Grid.Row="7" Grid.Column="1" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,6,0,0"/>
+                            </Grid>
                         </StackPanel>
 
                         <Grid Grid.Row="4" Margin="0,18,0,0">
