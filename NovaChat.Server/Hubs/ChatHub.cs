@@ -17,8 +17,9 @@ public class ChatHub : Hub
     private readonly MessageReadService _messageReadService;
     private readonly IConfiguration _configuration;
     private readonly E2eeDeviceService _e2eeDevices;
+    private readonly AuditLogService _auditLogService;
 
-    public ChatHub(ChatService chatService, PresenceService presenceService, UserService userService, MessageReadService messageReadService, IConfiguration configuration, E2eeDeviceService e2eeDevices)
+    public ChatHub(ChatService chatService, PresenceService presenceService, UserService userService, MessageReadService messageReadService, IConfiguration configuration, E2eeDeviceService e2eeDevices, AuditLogService auditLogService)
     {
         _chatService = chatService;
         _presenceService = presenceService;
@@ -26,6 +27,7 @@ public class ChatHub : Hub
         _messageReadService = messageReadService;
         _configuration = configuration;
         _e2eeDevices = e2eeDevices;
+        _auditLogService = auditLogService;
     }
 
     public override async Task OnConnectedAsync()
@@ -66,6 +68,8 @@ public class ChatHub : Hub
             await Clients.Group($"chat-{chatId}").SendAsync("ReceiveMessage", MessageDtoMapper.Map(message));
         else
             await Clients.Users(Recipients(chat)).SendAsync("ReceiveMessage", MessageDtoMapper.Map(message));
+
+        await _auditLogService.LogAsync("Accounting", "MessageSent", userId, CurrentUsername(), "Message", message.Id.ToString(), chatId, message.Id);
     }
 
     public async Task EditMessage(int messageId, string encryptedContent)
@@ -89,6 +93,8 @@ public class ChatHub : Hub
 
         await Clients.Users(Recipients(chat))
             .SendAsync("MessageEdited", MessageDtoMapper.Map(message));
+
+        await _auditLogService.LogAsync("Accounting", "MessageEdited", userId, CurrentUsername(), "Message", message.Id.ToString(), message.ChatId, message.Id);
     }
 
     public async Task RequestMessageKey(int messageId, string requesterDeviceId)
