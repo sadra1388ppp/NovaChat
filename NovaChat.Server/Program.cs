@@ -12,6 +12,7 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<AppDbContext>(options => options.UseNovaChatDatabase(builder.Configuration));
+builder.Services.AddDbContext<AuditDbContext>(options => options.UseNovaChatAuditDatabase(builder.Configuration));
 builder.Services.AddScoped<DatabaseInitializer>();
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
@@ -26,6 +27,7 @@ builder.Services.AddScoped<ChatRequestService>();
 builder.Services.AddScoped<GroupAddRequestService>();
 builder.Services.AddScoped<MessageReadService>();
 builder.Services.AddScoped<E2eeDeviceService>();
+builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddSingleton<PresenceService>();
 builder.Services.AddSingleton<IAuthorizationHandler, OwnerAuthorizationHandler>();
 builder.Services.AddAuthorization(options => options.AddPolicy("OwnerOnly", policy => { policy.RequireAuthenticatedUser(); policy.AddRequirements(new OwnerRequirement()); }));
@@ -48,6 +50,7 @@ try
 {
     await using var scope = app.Services.CreateAsyncScope();
     await scope.ServiceProvider.GetRequiredService<DatabaseInitializer>().ValidateSchemaAsync();
+    await scope.ServiceProvider.GetRequiredService<AuditDbContext>().Database.EnsureCreatedAsync();
 }
 catch (Exception exception) when (exception is not OperationCanceledException)
 {
@@ -66,9 +69,10 @@ app.UseAuthorization();
 app.UseMiddleware<ChatPrivacyMiddleware>();
 app.MapControllers();
 
-app.MapPost("/api/User/logout", (
+app.MapPost("/api/User/logout", async (
     HttpContext context,
-    JwtTokenRevocationService revocationService) =>
+    JwtTokenRevocationService revocationService,
+    AuditLogService auditLogService) =>
 {
     var authorization = context.Request.Headers.Authorization.ToString();
 
@@ -81,6 +85,17 @@ app.MapPost("/api/User/logout", (
         return Results.Unauthorized();
 
     revocationService.Revoke(token);
+
+    if (long.TryParse(context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var logoutUserId))
+    {
+        await auditLogService.LogAsync(
+            category: "Authentication",
+            eventType: "LogoutSucceeded",
+            userId: logoutUserId,
+            username: context.User.FindFirst("username")?.Value,
+            targetType: "User",
+            targetId: logoutUserId.ToString());
+    }
 
     return Results.Ok(new
     {
