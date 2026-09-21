@@ -166,9 +166,11 @@ public partial class MainView
         string decryptedContent,
         string comment)
     {
-        var senderName = string.IsNullOrWhiteSpace(sourceMessage.SenderId)
-            ? "Unknown user"
-            : $"@{sourceMessage.SenderId}";
+        var senderName = !string.IsNullOrWhiteSpace(sourceMessage.SenderName)
+            ? sourceMessage.SenderName.Trim()
+            : !string.IsNullOrWhiteSpace(sourceMessage.SenderId)
+                ? $"@{sourceMessage.SenderId}"
+                : "Unknown user";
 
         var forwarded = $"↪ Forwarded from {senderName}\n\n{decryptedContent.Trim()}";
 
