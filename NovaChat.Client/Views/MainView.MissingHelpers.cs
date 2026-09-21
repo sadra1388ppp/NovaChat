@@ -147,23 +147,22 @@ public partial class MainView
         if (remainder.Length == 0)
             return false;
 
-        var comment = content[..markerIndex].Trim();
-
-        // New forwarding format stores the optional comment after the forwarded message.
-        // Legacy messages stored it before the forward marker, so preserve both formats.
-        if (!string.IsNullOrWhiteSpace(comment))
+        var legacyComment = content[..markerIndex].Trim();
+        if (!string.IsNullOrWhiteSpace(legacyComment))
         {
-            forwarded = (comment, sender, remainder);
+            forwarded = (legacyComment, sender, remainder);
             return true;
         }
 
-        var separator = remainder.LastIndexOf("\n\n", StringComparison.Ordinal);
-        if (separator > 0)
+        const commentMarker = "\u200C";
+        var commentMarkerIndex = remainder.LastIndexOf(commentMarker, StringComparison.Ordinal);
+        if (commentMarkerIndex >= 0)
         {
-            var possibleComment = remainder[(separator + 2)..].Trim();
-            if (!string.IsNullOrWhiteSpace(possibleComment))
+            var forwardedText = remainder[..commentMarkerIndex].TrimEnd();
+            var comment = remainder[(commentMarkerIndex + commentMarker.Length)..].Trim();
+            if (!string.IsNullOrWhiteSpace(forwardedText) && !string.IsNullOrWhiteSpace(comment))
             {
-                forwarded = (possibleComment, sender, remainder[..separator].Trim());
+                forwarded = (comment, sender, forwardedText);
                 return true;
             }
         }
