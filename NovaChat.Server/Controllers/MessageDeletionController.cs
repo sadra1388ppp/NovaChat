@@ -20,20 +20,17 @@ public class MessageDeletionController : ControllerBase
     private readonly ChatService _chatService;
     private readonly IConfiguration _configuration;
     private readonly IHubContext<ChatHub> _hub;
-    private readonly AuditLogService _auditLogService;
 
     public MessageDeletionController(
         AppDbContext db,
         ChatService chatService,
         IConfiguration configuration,
-        IHubContext<ChatHub> hub,
-        AuditLogService auditLogService)
+        IHubContext<ChatHub> hub)
     {
         _db = db;
         _chatService = chatService;
         _configuration = configuration;
         _hub = hub;
-        _auditLogService = auditLogService;
     }
 
     [HttpDelete("{messageId:int}")]
