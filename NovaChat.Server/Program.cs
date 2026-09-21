@@ -14,7 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<AppDbContext>(options => options.UseNovaChatDatabase(builder.Configuration));
 builder.Services.AddScoped<DatabaseInitializer>();
 builder.Services.AddControllers();
-builder.Services.AddSignalR(options => options.AddFilter<AuditLogHubFilter>());
+builder.Services.AddSignalR(options => options.AddFilter(typeof(AuditLogHubFilter)));
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ContactService>();
 builder.Services.AddSingleton<PasswordHashService>();
@@ -63,8 +63,8 @@ if (app.Environment.IsDevelopment()) { app.UseSwagger(); app.UseSwaggerUI(); }
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseRouting();
-app.UseMiddleware<AuditLogMiddleware>();
 app.UseAuthentication();
+app.UseMiddleware<AuditLogMiddleware>();
 app.UseMiddleware<JwtTokenRevocationMiddleware>();
 app.UseAuthorization();
 app.UseMiddleware<ChatPrivacyMiddleware>();
