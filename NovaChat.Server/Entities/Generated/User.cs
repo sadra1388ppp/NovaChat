@@ -14,6 +14,7 @@ public partial class User
     public string Bio { get; set; } = null!;
     public string? AvatarUrl { get; set; }
     public DateTime? LastSeenAt { get; set; }
+    public string? DeviceId { get; set; }
     public DateTime CreatedAt { get; set; }
     public string MessagePrivacy { get; set; } = "Everybody";
     public bool AllowGroupAdds { get; set; } = true;
