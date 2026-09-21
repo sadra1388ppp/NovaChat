@@ -13,6 +13,7 @@ public class MessageDto
     public DateTime SentAt { get; set; }
     public DateTime? EditedAt { get; set; }
     public bool IsEdited => EditedAt.HasValue;
+    public bool IsDeletedForEveryone { get; set; }
     public string MessageType { get; set; } = "text";
     public string? AttachmentUrl { get; set; }
     public string? FileName { get; set; }
@@ -57,7 +58,8 @@ public static class MessageDtoMapper
             SenderName = message.SenderId,
             Content = message.Content,
             SentAt = message.SentAt,
-            EditedAt = message.EditedAt
+            EditedAt = message.EditedAt,
+            IsDeletedForEveryone = message.DeletedForEveryone
         };
 
         if (E2eeMediaMessageEnvelope.TryParse(message.Content, out _))
