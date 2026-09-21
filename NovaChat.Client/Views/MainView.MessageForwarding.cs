@@ -601,7 +601,7 @@ public partial class MainView
             return null;
 
         var selected = destinations
-            .Where(x => selectedIds.Contains(x.Chat.Id))
+            .Where(x => selectedIds.Contains(x.Chat.Chat.Id))
             .ToList();
 
         return new ForwardSelectionResult(selected, commentBox.Text.Trim());
