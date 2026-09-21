@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
@@ -14,7 +15,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<AppDbContext>(options => options.UseNovaChatDatabase(builder.Configuration));
 builder.Services.AddScoped<DatabaseInitializer>();
 builder.Services.AddControllers();
-builder.Services.AddSignalR(options => options.AddFilter(new AuditLogHubFilter()));
+builder.Services.AddSignalR(options => options.AddFilter<AuditLogHubFilter>());
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ContactService>();
 builder.Services.AddSingleton<PasswordHashService>();
