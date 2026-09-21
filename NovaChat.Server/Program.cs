@@ -12,7 +12,7 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<AppDbContext>(options => options.UseNovaChatDatabase(builder.Configuration));
-builder.Services.AddDbContext<AuditDbContext>(options => options.UseNovaChatAuditDatabase(builder.Configuration));
+builder.Services.AddDbContext<HttpRequestLogDbContext>(options => options.UseNovaChatHttpLogDatabase(builder.Configuration));
 builder.Services.AddScoped<DatabaseInitializer>();
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
@@ -27,7 +27,7 @@ builder.Services.AddScoped<ChatRequestService>();
 builder.Services.AddScoped<GroupAddRequestService>();
 builder.Services.AddScoped<MessageReadService>();
 builder.Services.AddScoped<E2eeDeviceService>();
-builder.Services.AddScoped<AuditLogService>();
+builder.Services.AddScoped<HttpRequestLogService>();
 builder.Services.AddSingleton<PresenceService>();
 builder.Services.AddSingleton<IAuthorizationHandler, OwnerAuthorizationHandler>();
 builder.Services.AddAuthorization(options => options.AddPolicy("OwnerOnly", policy => { policy.RequireAuthenticatedUser(); policy.AddRequirements(new OwnerRequirement()); }));
@@ -50,7 +50,9 @@ try
 {
     await using var scope = app.Services.CreateAsyncScope();
     await scope.ServiceProvider.GetRequiredService<DatabaseInitializer>().ValidateSchemaAsync();
-    await scope.ServiceProvider.GetRequiredService<AuditDbContext>().Database.EnsureCreatedAsync();
+    var httpRequestLogDb = scope.ServiceProvider.GetRequiredService<HttpRequestLogDbContext>();
+    await httpRequestLogDb.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS AuditLogs;");
+    await httpRequestLogDb.Database.EnsureCreatedAsync();
 }
 catch (Exception exception) when (exception is not OperationCanceledException)
 {
@@ -61,6 +63,7 @@ catch (Exception exception) when (exception is not OperationCanceledException)
 var webRoot = app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
 Directory.CreateDirectory(Path.Combine(webRoot, "uploads", "avatars"));
 if (app.Environment.IsDevelopment()) { app.UseSwagger(); app.UseSwaggerUI(); }
+app.UseMiddleware<HttpRequestLoggingMiddleware>();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseAuthentication();
@@ -68,40 +71,6 @@ app.UseMiddleware<JwtTokenRevocationMiddleware>();
 app.UseAuthorization();
 app.UseMiddleware<ChatPrivacyMiddleware>();
 app.MapControllers();
-
-app.MapPost("/api/User/logout", async (
-    HttpContext context,
-    JwtTokenRevocationService revocationService,
-    AuditLogService auditLogService) =>
-{
-    var authorization = context.Request.Headers.Authorization.ToString();
-
-    if (!authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-        return Results.Unauthorized();
-
-    var token = authorization["Bearer ".Length..].Trim();
-
-    if (string.IsNullOrWhiteSpace(token))
-        return Results.Unauthorized();
-
-    revocationService.Revoke(token);
-
-    if (long.TryParse(context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var logoutUserId))
-    {
-        await auditLogService.LogAsync(
-            category: "Authentication",
-            eventType: "LogoutSucceeded",
-            userId: logoutUserId,
-            username: context.User.FindFirst("username")?.Value,
-            targetType: "User",
-            targetId: logoutUserId.ToString());
-    }
-
-    return Results.Ok(new
-    {
-        message = "Logged out successfully."
-    });
-}).RequireAuthorization();
 
 app.MapHub<ChatHub>("/hubs/chat");
 app.Run();
