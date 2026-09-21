@@ -441,7 +441,7 @@ public partial class MainView
                 ? destinations
                 : destinations.Where(x =>
                     x.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                    x.Chat.Type.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    x.Chat.Chat.Type.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                     x.OtherUserId.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
 
             if (visible.Count == 0)
@@ -516,8 +516,8 @@ public partial class MainView
                 });
                 info.Children.Add(new TextBlock
                 {
-                    Text = destination.Chat.IsGroup
-                        ? $"Group  •  {destination.Chat.Name}"
+                    Text = destination.Chat.Chat.IsGroup
+                        ? $"Group  •  {destination.Chat.Chat.Name}"
                         : $"Private chat  •  @{destination.OtherUserId}",
                     FontSize = 10,
                     Foreground = FindBrush("SecondaryTextBrush"),
@@ -602,6 +602,7 @@ public partial class MainView
 
         var selected = destinations
             .Where(x => selectedIds.Contains(x.Chat.Chat.Id))
+            .Select(x => x.Chat)
             .ToList();
 
         return new ForwardSelectionResult(selected, commentBox.Text.Trim());
