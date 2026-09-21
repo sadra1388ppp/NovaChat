@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.SignalR.Client;
 using NovaChat.Client.Models;
 using NovaChat.Client.Services;
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 
 namespace NovaChat.Client.Views;
@@ -32,14 +34,14 @@ public partial class MainView
             if (!string.Equals(message.MessageType, "text", StringComparison.OrdinalIgnoreCase))
             {
                 MessageBox.Show(
-                    "Forwarding currently supports text messages. Media forwarding will be added separately so encrypted files are re-encrypted safely for the destination.",
+                    "Forwarding currently supports text messages. Media forwarding will be added separately so encrypted files can be re-encrypted safely for each destination.",
                     "Forward Message",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
                 return;
             }
 
-            var decrypted = await _e2ee.DecryptMessageAsync(message);
+            var decrypted = await DecryptMessageWithRecoveryAsync(message);
             if (string.IsNullOrWhiteSpace(decrypted.Content) ||
                 decrypted.Content.StartsWith("[Encrypted message", StringComparison.Ordinal))
             {
@@ -47,8 +49,8 @@ public partial class MainView
                 return;
             }
 
-            var target = ShowForwardDestinationDialog();
-            if (target == null)
+            var selection = ShowForwardDestinationDialog(message, decrypted.Content);
+            if (selection == null || selection.Destinations.Count == 0)
                 return;
 
             if (_hubConnection == null || _hubConnection.State != HubConnectionState.Connected)
@@ -57,157 +59,564 @@ public partial class MainView
                 return;
             }
 
-            var forwardedText = $"↪ Forwarded from @{message.SenderId}\n\n{decrypted.Content}";
-            var encrypted = await _e2ee.EncryptForChatAsync(target.Chat.Id, forwardedText, _apiService);
-            await _hubConnection.InvokeAsync("SendMessage", target.Chat.Id, encrypted);
-            await LoadChatsAsync();
+            var forwardedText = BuildForwardedMessage(message, decrypted.Content, selection.Comment);
 
+            var successCount = 0;
+            var failedDestinations = new List<string>();
+
+            foreach (var destination in selection.Destinations)
+            {
+                try
+                {
+                    var encrypted = await _e2ee.EncryptForChatAsync(
+                        destination.Chat.Id,
+                        forwardedText,
+                        _apiService);
+
+                    await _hubConnection.InvokeAsync(
+                        "SendMessage",
+                        destination.Chat.Id,
+                        encrypted);
+
+                    successCount++;
+                }
+                catch (Exception exception)
+                {
+                    failedDestinations.Add(destination.DisplayName);
+                    System.Diagnostics.Debug.WriteLine(
+                        $"Forwarding failed for chat {destination.Chat.Id}: {exception}");
+                }
+            }
+
+            await LoadChatsAsync();
             System.Media.SystemSounds.Asterisk.Play();
+
+            if (failedDestinations.Count == 0)
+            {
+                if (successCount == 1)
+                {
+                    return;
+                }
+
+                MessageBox.Show(
+                    $"Message forwarded to {successCount} conversations.",
+                    "Forward Message",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+            else
+            {
+                MessageBox.Show(
+                    $"Forwarded to {successCount} of {selection.Destinations.Count} conversations.\n\nFailed:\n• {string.Join("\n• ", failedDestinations)}",
+                    "Forward Message",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Could not forward the message.\n\n{ex.Message}", "Forward Message", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(
+                $"Could not forward the message.\n\n{ex.Message}",
+                "Forward Message",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
         }
     }
 
-    private ChatListItem? ShowForwardDestinationDialog()
+    private static string BuildForwardedMessage(
+        MessageModel sourceMessage,
+        string decryptedContent,
+        string comment)
     {
-        var available = _chats
+        var sender = string.IsNullOrWhiteSpace(sourceMessage.SenderName)
+            ? sourceMessage.SenderId
+            : sourceMessage.SenderName;
+
+        var header = $"↪ Forwarded from @{sourceMessage.SenderId}";
+        var body = $"{header}\n\n{decryptedContent.Trim()}";
+
+        return string.IsNullOrWhiteSpace(comment)
+            ? body
+            : $"{comment.Trim()}\n\n{body}";
+    }
+
+    private ForwardSelectionResult? ShowForwardDestinationDialog(
+        MessageModel sourceMessage,
+        string decryptedContent)
+    {
+        var destinations = _chats
             .OrderBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .Select(x => new ForwardDestinationItem(x))
             .ToList();
 
-        if (available.Count == 0)
+        if (destinations.Count == 0)
         {
-            MessageBox.Show("There are no other conversations available.", "Forward Message", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(
+                "There are no conversations available to receive this message.",
+                "Forward Message",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return null;
         }
 
+        var selectedIds = new HashSet<int>();
         var dialog = new Window
         {
             Title = "Forward Message",
-            Width = 520,
-            Height = 620,
+            Width = 620,
+            Height = 760,
             Owner = Window.GetWindow(this),
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ResizeMode = ResizeMode.CanResizeWithGrip,
-            MinWidth = 460,
-            MinHeight = 500,
+            MinWidth = 560,
+            MinHeight = 650,
             ShowInTaskbar = false,
-            Background = FindResource("AppBackgroundBrush") as Brush
+            Background = FindBrush("AppBackgroundBrush")
         };
 
         var root = new Grid { Margin = new Thickness(22) };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        root.Children.Add(new TextBlock
+        var titleRow = new Grid();
+        titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var icon = new Border
         {
-            Text = "Forward message",
+            Width = 48,
+            Height = 48,
+            CornerRadius = new CornerRadius(16),
+            Background = FindBrush("PrimarySoftBrush")
+        };
+        icon.Child = new TextBlock
+        {
+            Text = "↗",
+            FontSize = 24,
+            FontWeight = FontWeights.Bold,
+            Foreground = FindBrush("PrimaryBrush"),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var titlePanel = new StackPanel
+        {
+            Margin = new Thickness(13, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        titlePanel.Children.Add(new TextBlock
+        {
+            Text = "Forward Message",
             FontSize = 21,
             FontWeight = FontWeights.Bold,
-            Foreground = FindResource("TextBrush") as Brush
+            Foreground = FindBrush("TextBrush")
+        });
+        titlePanel.Children.Add(new TextBlock
+        {
+            Text = "Select one or more conversations",
+            FontSize = 11,
+            Foreground = FindBrush("SecondaryTextBrush"),
+            Margin = new Thickness(0, 3, 0, 0)
         });
 
-        root.Children.Add(new TextBlock
-        {
-            Text = "Choose the conversation where this message should be sent.",
-            FontSize = 12,
-            Foreground = FindResource("SecondaryTextBrush") as Brush,
-            Margin = new Thickness(0, 5, 0, 14)
-        });
+        titleRow.Children.Add(icon);
+        Grid.SetColumn(titlePanel, 1);
+        titleRow.Children.Add(titlePanel);
+        root.Children.Add(titleRow);
 
-        var list = new ListBox
+        var previewCard = new Border
         {
-            ItemsSource = available,
+            Margin = new Thickness(0, 18, 0, 0),
+            Padding = new Thickness(14, 12, 14, 12),
+            CornerRadius = new CornerRadius(13),
+            Background = FindBrush("PanelBackgroundBrush"),
+            BorderBrush = FindBrush("BorderBrush"),
             BorderThickness = new Thickness(1),
-            BorderBrush = FindResource("BorderBrush") as Brush,
-            Background = FindResource("PanelBackgroundBrush") as Brush,
-            Foreground = FindResource("TextBrush") as Brush,
-            Padding = new Thickness(4)
+            MaxHeight = 120
         };
 
-        list.ItemTemplate = new DataTemplate
+        var previewStack = new StackPanel();
+        previewStack.Children.Add(new TextBlock
         {
-            VisualTree = BuildForwardDestinationTemplate()
-        };
+            Text = string.IsNullOrWhiteSpace(sourceMessage.SenderId)
+                ? "Forwarded message"
+                : $"Forwarded from @{sourceMessage.SenderId}",
+            FontSize = 11,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = FindBrush("PrimaryBrush")
+        });
 
-        Grid.SetRow(list, 2);
-        root.Children.Add(list);
-
-        var actions = new StackPanel
+        previewStack.Children.Add(new TextBlock
         {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 14, 0, 0)
+            Text = decryptedContent.Trim(),
+            FontSize = 13,
+            Foreground = FindBrush("TextBrush"),
+            TextWrapping = TextWrapping.Wrap,
+            MaxHeight = 58,
+            Margin = new Thickness(0, 6, 0, 0)
+        });
+
+        previewStack.Children.Add(new TextBlock
+        {
+            Text = "This message will be re-encrypted separately for every selected conversation.",
+            FontSize = 10,
+            Foreground = FindBrush("SecondaryTextBrush"),
+            Margin = new Thickness(0, 8, 0, 0)
+        });
+
+        previewCard.Child = previewStack;
+        Grid.SetRow(previewCard, 1);
+        root.Children.Add(previewCard);
+
+        var search = new TextBox
+        {
+            Height = 42,
+            Margin = new Thickness(0, 14, 0, 8),
+            Padding = new Thickness(14, 0, 12, 0),
+            Text = string.Empty,
+            ToolTip = "Search conversations"
         };
+
+        var searchContainer = new Border
+        {
+            Height = 42,
+            CornerRadius = new CornerRadius(12),
+            Background = FindBrush("InputBackgroundBrush"),
+            BorderBrush = FindBrush("BorderBrush"),
+            BorderThickness = new Thickness(1)
+        };
+
+        var searchGrid = new Grid();
+        searchGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(38) });
+        searchGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        searchGrid.Children.Add(new TextBlock
+        {
+            Text = "⌕",
+            FontSize = 19,
+            Foreground = FindBrush("SecondaryTextBrush"),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        search.Margin = new Thickness(0);
+        search.Background = Brushes.Transparent;
+        search.BorderThickness = new Thickness(0);
+        Grid.SetColumn(search, 1);
+        searchGrid.Children.Add(search);
+        searchContainer.Child = searchGrid;
+
+        Grid.SetRow(searchContainer, 2);
+        root.Children.Add(searchContainer);
+
+        var listBorder = new Border
+        {
+            CornerRadius = new CornerRadius(13),
+            Background = FindBrush("PanelBackgroundBrush"),
+            BorderBrush = FindBrush("BorderBrush"),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(5)
+        };
+
+        var scroll = new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+        };
+
+        var recipientsPanel = new StackPanel();
+        scroll.Content = recipientsPanel;
+        listBorder.Child = scroll;
+        Grid.SetRow(listBorder, 3);
+        root.Children.Add(listBorder);
+
+        var selectedSummary = new TextBlock
+        {
+            Text = "0 conversations selected",
+            FontSize = 11,
+            Foreground = FindBrush("SecondaryTextBrush"),
+            Margin = new Thickness(2, 9, 2, 8)
+        };
+        Grid.SetRow(selectedSummary, 4);
+        root.Children.Add(selectedSummary);
+
+        var commentBox = new TextBox
+        {
+            Height = 58,
+            TextWrapping = TextWrapping.Wrap,
+            AcceptsReturn = true,
+            VerticalContentAlignment = VerticalAlignment.Top,
+            Padding = new Thickness(12),
+            ToolTip = "Optional comment to send with the forwarded message"
+        };
+
+        var commentContainer = new Border
+        {
+            CornerRadius = new CornerRadius(12),
+            Background = FindBrush("InputBackgroundBrush"),
+            BorderBrush = FindBrush("BorderBrush"),
+            BorderThickness = new Thickness(1),
+            Child = commentBox
+        };
+
+        var commentLabel = new TextBlock
+        {
+            Text = "Add a comment (optional)",
+            FontSize = 10,
+            Foreground = FindBrush("SecondaryTextBrush"),
+            Margin = new Thickness(2, 0, 2, 6)
+        };
+
+        var commentStack = new StackPanel();
+        commentStack.Children.Add(commentLabel);
+        commentStack.Children.Add(commentContainer);
+        Grid.SetRow(commentStack, 5);
+        root.Children.Add(commentStack);
+
+        var actions = new Grid { Margin = new Thickness(0, 16, 0, 0) };
+        actions.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        actions.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var status = new TextBlock
+        {
+            Text = "Choose at least one conversation.",
+            FontSize = 11,
+            Foreground = FindBrush("SecondaryTextBrush"),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.Wrap
+        };
+
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
 
         var cancel = new Button
         {
             Content = "Cancel",
-            Width = 100,
-            Height = 38,
+            Width = 96,
+            Height = 40,
             Margin = new Thickness(0, 0, 9, 0),
-            Style = FindResource("SecondaryButtonStyle") as Style
+            Style = FindStyle("SecondaryButtonStyle")
         };
+
         var forward = new Button
         {
             Content = "Forward",
-            Width = 110,
-            Height = 38,
-            Style = FindResource("PrimaryButtonStyle") as Style,
-            IsEnabled = false
+            Width = 125,
+            Height = 40,
+            IsEnabled = false,
+            Style = FindStyle("PrimaryButtonStyle")
         };
 
-        list.SelectionChanged += (_, _) => forward.IsEnabled = list.SelectedItem is ChatListItem;
+        buttons.Children.Add(cancel);
+        buttons.Children.Add(forward);
+
+        Grid.SetColumn(status, 0);
+        actions.Children.Add(status);
+        Grid.SetColumn(buttons, 1);
+        actions.Children.Add(buttons);
+        Grid.SetRow(actions, 6);
+        root.Children.Add(actions);
+
+        void UpdateSelectionUi()
+        {
+            var count = selectedIds.Count;
+            selectedSummary.Text = count == 0
+                ? "0 conversations selected"
+                : $"{count} conversation{(count == 1 ? "" : "s")} selected";
+
+            forward.Content = count == 0 ? "Forward" : $"Forward  •  {count}";
+            forward.IsEnabled = count > 0;
+
+            status.Text = count == 0
+                ? "Choose at least one conversation."
+                : "Ready to forward securely.";
+        }
+
+        void RenderRecipients()
+        {
+            recipientsPanel.Children.Clear();
+
+            var query = search.Text.Trim();
+            var visible = string.IsNullOrWhiteSpace(query)
+                ? destinations
+                : destinations.Where(x =>
+                    x.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    x.Chat.Type.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    x.OtherUserId.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+
+            if (visible.Count == 0)
+            {
+                recipientsPanel.Children.Add(new TextBlock
+                {
+                    Text = "No conversations match your search.",
+                    FontSize = 12,
+                    Foreground = FindBrush("SecondaryTextBrush"),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Margin = new Thickness(20)
+                });
+                return;
+            }
+
+            foreach (var destination in visible)
+            {
+                var check = new CheckBox
+                {
+                    IsChecked = selectedIds.Contains(destination.Chat.Id),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+
+                var avatar = new Border
+                {
+                    Width = 40,
+                    Height = 40,
+                    CornerRadius = new CornerRadius(14),
+                    Background = FindBrush("PrimarySoftBrush"),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(10, 0, 11, 0)
+                };
+                avatar.Child = new TextBlock
+                {
+                    Text = destination.Initials,
+                    FontSize = 12,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = FindBrush("PrimaryBrush"),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+
+                var info = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+                info.Children.Add(new TextBlock
+                {
+                    Text = destination.DisplayName,
+                    FontSize = 13,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = FindBrush("TextBrush"),
+                    TextTrimming = TextTrimming.CharacterEllipsis
+                });
+                info.Children.Add(new TextBlock
+                {
+                    Text = destination.Chat.IsGroup
+                        ? $"Group  •  {destination.Chat.Name}"
+                        : $"Private chat  •  @{destination.OtherUserId}",
+                    FontSize = 10,
+                    Foreground = FindBrush("SecondaryTextBrush"),
+                    Margin = new Thickness(0, 3, 0, 0),
+                    TextTrimming = TextTrimming.CharacterEllipsis
+                });
+
+                var rowGrid = new Grid { MinHeight = 58 };
+                rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+                rowGrid.Children.Add(check);
+                Grid.SetColumn(avatar, 1);
+                rowGrid.Children.Add(avatar);
+                Grid.SetColumn(info, 2);
+                rowGrid.Children.Add(info);
+
+                var row = new Border
+                {
+                    Padding = new Thickness(8, 3, 8, 3),
+                    Margin = new Thickness(0, 1, 0, 1),
+                    CornerRadius = new CornerRadius(11),
+                    Background = selectedIds.Contains(destination.Chat.Id)
+                        ? FindBrush("PrimarySoftBrush")
+                        : Brushes.Transparent,
+                    Child = rowGrid
+                };
+
+                void SetSelected(bool value)
+                {
+                    if (value)
+                        selectedIds.Add(destination.Chat.Id);
+                    else
+                        selectedIds.Remove(destination.Chat.Id);
+
+                    row.Background = value
+                        ? FindBrush("PrimarySoftBrush")
+                        : Brushes.Transparent;
+                    UpdateSelectionUi();
+                }
+
+                check.Checked += (_, _) => SetSelected(true);
+                check.Unchecked += (_, _) => SetSelected(false);
+
+                row.MouseLeftButtonUp += (_, args) =>
+                {
+                    if (args.OriginalSource is CheckBox)
+                        return;
+
+                    check.IsChecked = !check.IsChecked;
+                    args.Handled = true;
+                };
+
+                recipientsPanel.Children.Add(row);
+            }
+        }
+
+        search.TextChanged += (_, _) => RenderRecipients();
         cancel.Click += (_, _) => dialog.DialogResult = false;
         forward.Click += (_, _) =>
         {
-            if (list.SelectedItem is ChatListItem)
+            if (selectedIds.Count > 0)
                 dialog.DialogResult = true;
         };
 
-        actions.Children.Add(cancel);
-        actions.Children.Add(forward);
-        Grid.SetRow(actions, 3);
-        root.Children.Add(actions);
-
         dialog.Content = root;
-        dialog.Loaded += (_, _) => list.Focus();
+        dialog.Loaded += (_, _) =>
+        {
+            search.Focus();
+            RenderRecipients();
+            UpdateSelectionUi();
+        };
 
-        return dialog.ShowDialog() == true ? list.SelectedItem as ChatListItem : null;
+        if (dialog.ShowDialog() != true)
+            return null;
+
+        var selected = destinations
+            .Where(x => selectedIds.Contains(x.Chat.Id))
+            .Select(x => x.Chat)
+            .ToList();
+
+        return new ForwardSelectionResult(selected, commentBox.Text.Trim());
     }
 
-    private FrameworkElementFactory BuildForwardDestinationTemplate()
+    private Style? FindStyle(string key) => FindResource(key) as Style;
+
+    private Brush FindBrush(string key) => FindResource(key) as Brush ?? Brushes.Gray;
+
+    private sealed class ForwardDestinationItem
     {
-        var border = new FrameworkElementFactory(typeof(Border));
-        border.SetValue(Border.PaddingProperty, new Thickness(10));
-        border.SetValue(Border.MarginProperty, new Thickness(2));
-        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(10));
+        public ChatListItem Chat { get; }
 
-        var grid = new FrameworkElementFactory(typeof(Grid));
-        grid.SetValue(Grid.MinHeightProperty, 54d);
+        public string DisplayName => string.IsNullOrWhiteSpace(Chat.DisplayName)
+            ? (Chat.Chat.IsGroup ? Chat.Chat.Name : "Unknown conversation")
+            : Chat.DisplayName;
 
-        var stack = new FrameworkElementFactory(typeof(StackPanel));
-        stack.SetValue(StackPanel.VerticalAlignmentProperty, VerticalAlignment.Center);
+        public string OtherUserId => Chat.Chat.OtherUserId(AuthState.UserId);
 
-        var name = new FrameworkElementFactory(typeof(TextBlock));
-        name.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(ChatListItem.DisplayName)));
-        name.SetValue(TextBlock.FontSizeProperty, 14d);
-        name.SetValue(TextBlock.FontWeightProperty, FontWeights.SemiBold);
-        name.SetValue(TextBlock.ForegroundProperty, FindResource("TextBrush") as Brush);
+        public string Initials
+        {
+            get
+            {
+                var value = DisplayName.Trim();
+                if (string.IsNullOrWhiteSpace(value)) return "?";
+                var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                return parts.Length >= 2
+                    ? $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant()
+                    : value[..Math.Min(2, value.Length)].ToUpperInvariant();
+            }
+        }
 
-        var subtitle = new FrameworkElementFactory(typeof(TextBlock));
-        subtitle.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("Chat.Type"));
-        subtitle.SetValue(TextBlock.FontSizeProperty, 11d);
-        subtitle.SetValue(TextBlock.MarginProperty, new Thickness(0, 3, 0, 0));
-        subtitle.SetValue(TextBlock.ForegroundProperty, FindResource("SecondaryTextBrush") as Brush);
-
-        stack.AppendChild(name);
-        stack.AppendChild(subtitle);
-        grid.AppendChild(stack);
-        border.AppendChild(grid);
-        return border;
+        public ForwardDestinationItem(ChatListItem chat) => Chat = chat;
     }
+
+    private sealed record ForwardSelectionResult(
+        List<ChatListItem> Destinations,
+        string Comment);
 }
