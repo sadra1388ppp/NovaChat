@@ -256,7 +256,7 @@ public partial class ChatController : ControllerBase
         if (!IsOwner() && !await _chatService.CanAccessChatAsync(chatId, userId)) return Forbid();
         var chat = await _chatService.GetChatByIdAsync(chatId);
         if (chat == null) return NotFound(new { message = "Chat not found." });
-        if (!await _chatService.DeleteChatAsync(chatId, userId)) return NotFound();
+        if (!await _chatService.DeleteChatAsync(chatId)) return NotFound();
         await _hub.Clients.Users(RecipientIds(chat)).SendAsync("ChatDeleted", new { chatId = chat.Id, deletedBy = userId.ToString() });
         return Ok(new { message = "Chat deleted successfully." });
     }
