@@ -38,11 +38,11 @@ public sealed class AuditLogMiddleware(RequestDelegate next)
                     ? $"Http.{context.Request.Method}.{NormalizePath(path)}"
                     : $"Http.{controller}.{action}";
 
+                var statusCode = context.Response.StatusCode;
                 var category = ResolveCategory(path, controller, action, statusCode);
                 var userId = TryGetUserId(context.User);
                 var username = context.User.FindFirst("username")?.Value;
                 var targetId = ResolveTargetId(context);
-                var statusCode = context.Response.StatusCode;
 
                 await auditLogService.LogAsync(
                     category: category,
