@@ -80,7 +80,14 @@ public partial class MainView
                 .OfType<Border>()
                 .FirstOrDefault(x => x.Tag is int id && id == message.Id);
 
-            if (bubble?.Child is StackPanel panel)
+            // Forwarded messages render their content inside a nested Grid, so updating
+            // only a direct child TextBlock would leave the old forwarded card on screen.
+            // Reload the current chat for forwarded edits to rebuild the complete bubble.
+            if (TryParseForwardedMessage(message.Content, out _))
+            {
+                _ = ReloadCurrentChatMessagesAfterEditAsync(message.ChatId);
+            }
+            else if (bubble?.Child is StackPanel panel)
             {
                 var text = panel.Children
                     .OfType<TextBlock>()
@@ -109,6 +116,10 @@ public partial class MainView
                             });
                         }
                     }
+                }
+                else
+                {
+                    _ = ReloadCurrentChatMessagesAfterEditAsync(message.ChatId);
                 }
             }
             else
