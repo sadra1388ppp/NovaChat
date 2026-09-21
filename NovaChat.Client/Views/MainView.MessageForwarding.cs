@@ -66,6 +66,7 @@ public partial class MainView
             var forwardedText = $"↪ Forwarded from @{message.SenderId}\n\n{decrypted.Content}";
             var encrypted = await _e2ee.EncryptForChatAsync(target.Chat.Id, forwardedText, _apiService);
             await _hubConnection.InvokeAsync("SendMessage", target.Chat.Id, encrypted);
+            await LoadChatsAsync();
 
             System.Media.SystemSounds.Asterisk.Play();
         }
