@@ -1,4 +1,5 @@
 using NovaChat.Client.Models;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -24,7 +25,7 @@ public sealed class E2eeCryptoService
     private RSA? _privateKey;
     private string _deviceId = string.Empty;
     private string _initializedUserId = string.Empty;
-    private readonly Dictionary<int, string> _recoveredMessageKeys = [];
+    private readonly ConcurrentDictionary<int, string> _recoveredMessageKeys = new();
 
     private string KeyFilePath
     {
