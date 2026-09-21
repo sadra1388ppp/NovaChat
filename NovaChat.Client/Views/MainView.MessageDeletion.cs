@@ -151,11 +151,11 @@ public partial class MainView
                 if (editedComment == null)
                     return;
 
-                var sender = string.IsNullOrWhiteSpace(forwarded.Sender)
+                var forwardedSender = string.IsNullOrWhiteSpace(forwarded.Sender)
                     ? "Unknown user"
                     : forwarded.Sender.Trim();
 
-                var forwardedPayload = $"↗ {sender}\n\n{forwarded.Message.Trim()}";
+                var forwardedPayload = $"↗ {forwardedSender}\n\n{forwarded.Message.Trim()}";
 
                 editedText = string.IsNullOrWhiteSpace(editedComment)
                     ? forwardedPayload
@@ -184,6 +184,99 @@ public partial class MainView
         {
             MessageBox.Show($"Could not edit the message.\n\n{ex.Message}", "Edit Message", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private string? ShowEditMessageDialog(string currentText)
+    {
+        var dialog = new Window
+        {
+            Title = "Edit Message",
+            Width = 520,
+            Height = 250,
+            Owner = Window.GetWindow(this),
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.NoResize,
+            ShowInTaskbar = false,
+            Background = (Brush)FindResource("PanelBackgroundBrush")
+        };
+
+        var root = new Grid { Margin = new Thickness(20) };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        root.Children.Add(new TextBlock
+        {
+            Text = "Edit your message",
+            FontSize = 18,
+            FontWeight = FontWeights.Bold,
+            Foreground = (Brush)FindResource("TextBrush")
+        });
+
+        var editor = new TextBox
+        {
+            Text = currentText,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Margin = new Thickness(0, 14, 0, 14),
+            Padding = new Thickness(10),
+            MinHeight = 80,
+            Background = (Brush)FindResource("InputBackgroundBrush"),
+            Foreground = (Brush)FindResource("TextBrush"),
+            BorderBrush = (Brush)FindResource("BorderBrush")
+        };
+        Grid.SetRow(editor, 1);
+        root.Children.Add(editor);
+
+        var actions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+
+        var cancel = new Button
+        {
+            Content = "Cancel",
+            Width = 90,
+            Height = 36,
+            Margin = new Thickness(0, 0, 8, 0),
+            Style = (Style)FindResource("SecondaryButtonStyle")
+        };
+
+        var save = new Button
+        {
+            Content = "Save",
+            Width = 90,
+            Height = 36,
+            Style = (Style)FindResource("PrimaryButtonStyle")
+        };
+
+        cancel.Click += (_, _) => dialog.DialogResult = false;
+        save.Click += (_, _) =>
+        {
+            if (string.IsNullOrWhiteSpace(editor.Text))
+            {
+                MessageBox.Show("Message cannot be empty.", "Edit Message", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            dialog.DialogResult = true;
+        };
+
+        actions.Children.Add(cancel);
+        actions.Children.Add(save);
+        Grid.SetRow(actions, 2);
+        root.Children.Add(actions);
+
+        dialog.Content = root;
+        dialog.Loaded += (_, _) =>
+        {
+            editor.Focus();
+            editor.SelectAll();
+        };
+
+        return dialog.ShowDialog() == true ? editor.Text.Trim() : null;
     }
 
     private string? ShowEditForwardCommentDialog(string currentComment)
