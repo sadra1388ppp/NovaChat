@@ -118,8 +118,18 @@ public partial class MainView
         if (string.IsNullOrWhiteSpace(content))
             return false;
 
-        const string marker = "↪ Forwarded from ";
-        var markerIndex = content.IndexOf(marker, StringComparison.Ordinal);
+        const string newMarker = "↗ ";
+        const string legacyMarker = "↪ Forwarded from ";
+
+        var markerIndex = content.IndexOf(newMarker, StringComparison.Ordinal);
+        var markerLength = newMarker.Length;
+
+        if (markerIndex < 0)
+        {
+            markerIndex = content.IndexOf(legacyMarker, StringComparison.Ordinal);
+            markerLength = legacyMarker.Length;
+        }
+
         if (markerIndex < 0)
             return false;
 
@@ -128,18 +138,37 @@ public partial class MainView
             return false;
 
         var header = content[markerIndex..headerEnd].Trim();
-        var sender = header[marker.Length..].Trim();
-        if (string.IsNullOrWhiteSpace(sender))
+        var sender = header[markerLength..].Trim();
+        if (sender.Length == 0)
             return false;
 
         var messageStart = headerEnd + 2;
-        var forwardedText = content[messageStart..].Trim();
-        if (string.IsNullOrWhiteSpace(forwardedText))
+        var remainder = content[messageStart..].Trim();
+        if (remainder.Length == 0)
             return false;
 
         var comment = content[..markerIndex].Trim();
 
-        forwarded = (comment, sender, forwardedText);
+        // New forwarding format stores the optional comment after the forwarded message.
+        // Legacy messages stored it before the forward marker, so preserve both formats.
+        if (!string.IsNullOrWhiteSpace(comment))
+        {
+            forwarded = (comment, sender, remainder);
+            return true;
+        }
+
+        var separator = remainder.LastIndexOf("\n\n", StringComparison.Ordinal);
+        if (separator > 0)
+        {
+            var possibleComment = remainder[(separator + 2)..].Trim();
+            if (!string.IsNullOrWhiteSpace(possibleComment))
+            {
+                forwarded = (possibleComment, sender, remainder[..separator].Trim());
+                return true;
+            }
+        }
+
+        forwarded = (string.Empty, sender, remainder);
         return true;
     }
 
@@ -148,18 +177,6 @@ public partial class MainView
         (string Comment, string Sender, string Message) forwarded,
         bool mine)
     {
-        if (!string.IsNullOrWhiteSpace(forwarded.Comment))
-        {
-            parent.Children.Add(new TextBlock
-            {
-                Tag = "forward-comment",
-                Text = forwarded.Comment,
-                TextWrapping = TextWrapping.Wrap,
-                Foreground = mine ? Brushes.White : (Brush)FindResource("TextBrush"),
-                Margin = new Thickness(0, 0, 0, 8)
-            });
-        }
-
         var contentGrid = new Grid();
 
         var accent = new Border
@@ -192,16 +209,6 @@ public partial class MainView
                 : (Brush)FindResource("PrimaryBrush"),
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 5, 0)
-        });
-
-        senderRow.Children.Add(new TextBlock
-        {
-            Text = "Forwarded from ",
-            FontSize = 10,
-            Foreground = mine
-                ? Brushes.White
-                : (Brush)FindResource("SecondaryTextBrush"),
-            VerticalAlignment = VerticalAlignment.Center
         });
 
         senderRow.Children.Add(new TextBlock
@@ -240,6 +247,18 @@ public partial class MainView
         contentGrid.Children.Add(forwardedStack);
 
         parent.Children.Add(contentGrid);
+
+        if (!string.IsNullOrWhiteSpace(forwarded.Comment))
+        {
+            parent.Children.Add(new TextBlock
+            {
+                Tag = "forward-comment",
+                Text = forwarded.Comment,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = mine ? Brushes.White : (Brush)FindResource("TextBrush"),
+                Margin = new Thickness(0, 9, 0, 0)
+            });
+        }
     }
 
     private async Task ScrollMessagesToBottomAsync()
