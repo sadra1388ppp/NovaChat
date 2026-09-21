@@ -26,7 +26,6 @@ builder.Services.AddScoped<ChatRequestService>();
 builder.Services.AddScoped<GroupAddRequestService>();
 builder.Services.AddScoped<MessageReadService>();
 builder.Services.AddScoped<E2eeDeviceService>();
-builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddSingleton<PresenceService>();
 builder.Services.AddSingleton<IAuthorizationHandler, OwnerAuthorizationHandler>();
 builder.Services.AddAuthorization(options => options.AddPolicy("OwnerOnly", policy => { policy.RequireAuthenticatedUser(); policy.AddRequirements(new OwnerRequirement()); }));
@@ -67,10 +66,9 @@ app.UseAuthorization();
 app.UseMiddleware<ChatPrivacyMiddleware>();
 app.MapControllers();
 
-app.MapPost("/api/User/logout", async (
+app.MapPost("/api/User/logout", (
     HttpContext context,
-    JwtTokenRevocationService revocationService,
-    AuditLogService auditLogService) =>
+    JwtTokenRevocationService revocationService) =>
 {
     var authorization = context.Request.Headers.Authorization.ToString();
 
@@ -83,17 +81,6 @@ app.MapPost("/api/User/logout", async (
         return Results.Unauthorized();
 
     revocationService.Revoke(token);
-
-    if (long.TryParse(context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var logoutUserId))
-    {
-        await auditLogService.LogAsync(
-            "Authentication",
-            "LogoutSucceeded",
-            logoutUserId,
-            context.User.FindFirst("username")?.Value,
-            "User",
-            logoutUserId.ToString());
-    }
 
     return Results.Ok(new
     {
