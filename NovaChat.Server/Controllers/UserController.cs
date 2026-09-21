@@ -19,11 +19,11 @@ public class UserController : ControllerBase
     private readonly UserService _userService; private readonly JwtService _jwtService; private readonly IWebHostEnvironment _environment; private readonly IHubContext<ChatHub> _hub;
     public UserController(UserService userService, JwtService jwtService, IWebHostEnvironment environment, IHubContext<ChatHub> hub) { _userService = userService; _jwtService = jwtService; _environment = environment; _hub = hub; }
     [AllowAnonymous, HttpPost("register")]
-    public async Task<IActionResult> Register(RegisterDto dto) { var result = await _userService.RegisterAsync(dto); if (!result.Success) return Conflict(new { message = result.Message }); }
+    public async Task<IActionResult> Register(RegisterDto dto) { var result = await _userService.RegisterAsync(dto); if (!result.Success) return Conflict(new { message = result.Message }); return Ok(new { message = result.Message, user = result.User }); }
     [AllowAnonymous, HttpGet("registration-availability")]
     public async Task<IActionResult> RegistrationAvailability([FromQuery] string? username, [FromQuery] string? email, [FromQuery] string? phoneNumber) { var result = await _userService.CheckRegistrationAvailabilityAsync(username, email, phoneNumber); return Ok(new { usernameTaken = result.UsernameTaken, emailTaken = result.EmailTaken, phoneTaken = result.PhoneTaken }); }
     [AllowAnonymous, HttpPost("login")]
-    public async Task<IActionResult> Login(LoginDto dto) { var user = await _userService.LoginAsync(dto); if (user == null) return Unauthorized(new { message = "Invalid username/phone number or password." }); var token = _jwtService.GenerateToken(user); var id = user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture); }
+    public async Task<IActionResult> Login(LoginDto dto) { var user = await _userService.LoginAsync(dto); if (user == null) return Unauthorized(new { message = "Invalid username/phone number or password." }); var token = _jwtService.GenerateToken(user); var id = user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture); return Ok(new { message = "Login successful.", token, user = await _userService.GetUserByIdAsync(id) }); }
     [Authorize, HttpGet("profile/me")]
     public async Task<IActionResult> GetMyProfile() { var id = CurrentUserId(); if (id == null) return Unauthorized(); var user = await _userService.GetUserByIdAsync(id, true); return user == null ? NotFound(new { message = "User not found." }) : Ok(user); }
     [Authorize, HttpGet("profile/{id}")]
