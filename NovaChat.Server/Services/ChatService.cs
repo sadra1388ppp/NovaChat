@@ -8,12 +8,10 @@ public class ChatService
 {
     private static readonly SemaphoreSlim CreateChatLock = new(1, 1);
     private readonly AppDbContext _context;
-    private readonly AuditLogService _auditLogService;
 
-    public ChatService(AppDbContext context, AuditLogService auditLogService)
+    public ChatService(AppDbContext context)
     {
         _context = context;
-        _auditLogService = auditLogService;
     }
 
     public Task<bool> UserExistsAsync(long userId) => _context.Users.AsNoTracking().AnyAsync(u => u.Id == userId);
@@ -374,29 +372,6 @@ public class ChatService
         chat.IsDeleted = true;
         chat.DeletedAt = IranTime.Now;
         await _context.SaveChangesAsync();
-
-        var actor = await _context.Users
-            .AsNoTracking()
-            .Where(u => u.Id == actorUserId)
-            .Select(u => new { u.Username, u.DeviceId })
-            .FirstOrDefaultAsync();
-
-        var eventType = chat.Type == ChatType.Group
-            ? "GroupDeleted"
-            : "PrivateChatDeleted";
-
-        await _auditLogService.LogAsync(
-            "Accounting",
-            eventType,
-            actorUserId,
-            actor?.Username,
-            "Chat",
-            chat.Id.ToString(),
-            chat.Id,
-            deviceId: actor?.DeviceId,
-            details: chat.Type == ChatType.Group
-                ? "Group chat deleted."
-                : "Private chat deleted.");
 
         return true;
     }
