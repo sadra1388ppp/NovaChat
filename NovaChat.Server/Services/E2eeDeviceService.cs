@@ -40,6 +40,9 @@ ON DUPLICATE KEY UPDATE
     LastSeenAt = VALUES(LastSeenAt),
     RevokedAt = NULL;";
         await _db.Database.ExecuteSqlRawAsync(sql, [deviceId, userId, publicKeyPem, now], cancellationToken);
+        await _db.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE `Users` SET `DeviceId` = {deviceId} WHERE `Id` = {userId};",
+            cancellationToken);
     }
 
     public async Task<List<E2eeDeviceRecord>> GetChatDevicesAsync(int chatId, long userId, CancellationToken cancellationToken = default)
@@ -145,5 +148,8 @@ ON DUPLICATE KEY UPDATE
         var now = IranTime.Now;
         const string sql = "UPDATE EncryptionDevices SET RevokedAt = {2} WHERE DeviceId = {0} AND UserId = {1};";
         await _db.Database.ExecuteSqlRawAsync(sql, [deviceId, userId, now], cancellationToken);
+        await _db.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE `Users` SET `DeviceId` = NULL WHERE `Id` = {userId} AND `DeviceId` = {deviceId};",
+            cancellationToken);
     }
 }
