@@ -38,7 +38,7 @@ public sealed class AuditLogMiddleware(RequestDelegate next)
                     ? $"Http.{context.Request.Method}.{NormalizePath(path)}"
                     : $"Http.{controller}.{action}";
 
-                var category = ResolveCategory(path, controller, action);
+                var category = ResolveCategory(path, controller, action, statusCode);
                 var userId = TryGetUserId(context.User);
                 var username = context.User.FindFirst("username")?.Value;
                 var targetId = ResolveTargetId(context);
@@ -66,8 +66,14 @@ public sealed class AuditLogMiddleware(RequestDelegate next)
         }
     }
 
-    private static string ResolveCategory(string path, string? controller, string? action)
+    private static string ResolveCategory(string path, string? controller, string? action, int statusCode)
     {
+        if (statusCode == StatusCodes.Status403Forbidden)
+            return "Authorization";
+
+        if (statusCode == StatusCodes.Status401Unauthorized)
+            return "Authentication";
+
         if (path.StartsWith("/api/User/login", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("/api/User/register", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("/api/User/logout", StringComparison.OrdinalIgnoreCase) ||
