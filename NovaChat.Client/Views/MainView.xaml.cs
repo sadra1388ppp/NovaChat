@@ -162,11 +162,6 @@ public partial class MainView : UserControl
             await SendCurrentMessageAsync();
     }
 
-    private void ForwardRecipientSearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        if (_forwardMessage != null)
-            RenderForwardRecipientPicker();
-    }
     private async Task SendCurrentMessageAsync()
     {
         if (!_currentChatId.HasValue) { MessageBox.Show("Please select a chat first.", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Information); return; }
