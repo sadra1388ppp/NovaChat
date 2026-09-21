@@ -51,7 +51,6 @@ try
     await using var scope = app.Services.CreateAsyncScope();
     await scope.ServiceProvider.GetRequiredService<DatabaseInitializer>().ValidateSchemaAsync();
     var httpRequestLogDb = scope.ServiceProvider.GetRequiredService<HttpRequestLogDbContext>();
-    await httpRequestLogDb.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS AuditLogs;");
     await httpRequestLogDb.Database.EnsureCreatedAsync();
 }
 catch (Exception exception) when (exception is not OperationCanceledException)
