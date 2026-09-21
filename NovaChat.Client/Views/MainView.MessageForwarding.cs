@@ -128,10 +128,6 @@ public partial class MainView
         string decryptedContent,
         string comment)
     {
-        var sender = string.IsNullOrWhiteSpace(sourceMessage.SenderName)
-            ? sourceMessage.SenderId
-            : sourceMessage.SenderName;
-
         var header = $"↪ Forwarded from @{sourceMessage.SenderId}";
         var body = $"{header}\n\n{decryptedContent.Trim()}";
 
@@ -463,11 +459,32 @@ public partial class MainView
 
             foreach (var destination in visible)
             {
-                var check = new CheckBox
+                var selectionIndicator = new Border
                 {
-                    IsChecked = selectedIds.Contains(destination.Chat.Id),
+                    Width = 22,
+                    Height = 22,
+                    CornerRadius = new CornerRadius(11),
+                    BorderThickness = new Thickness(1.5),
+                    BorderBrush = FindBrush("BorderBrush"),
+                    Background = selectedIds.Contains(destination.Chat.Id)
+                        ? FindBrush("PrimaryBrush")
+                        : Brushes.Transparent,
                     VerticalAlignment = VerticalAlignment.Center
                 };
+
+                var selectionText = new TextBlock
+                {
+                    Text = "✓",
+                    FontSize = 12,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = Brushes.White,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Visibility = selectedIds.Contains(destination.Chat.Id)
+                        ? Visibility.Visible
+                        : Visibility.Collapsed
+                };
+                selectionIndicator.Child = selectionText;
 
                 var avatar = new Border
                 {
@@ -513,7 +530,7 @@ public partial class MainView
                 rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-                rowGrid.Children.Add(check);
+                rowGrid.Children.Add(selectionIndicator);
                 Grid.SetColumn(avatar, 1);
                 rowGrid.Children.Add(avatar);
                 Grid.SetColumn(info, 2);
@@ -540,18 +557,23 @@ public partial class MainView
                     row.Background = value
                         ? FindBrush("PrimarySoftBrush")
                         : Brushes.Transparent;
+
+                    selectionIndicator.Background = value
+                        ? FindBrush("PrimaryBrush")
+                        : Brushes.Transparent;
+                    selectionIndicator.BorderBrush = value
+                        ? FindBrush("PrimaryBrush")
+                        : FindBrush("BorderBrush");
+                    selectionText.Visibility = value
+                        ? Visibility.Visible
+                        : Visibility.Collapsed;
+
                     UpdateSelectionUi();
                 }
 
-                check.Checked += (_, _) => SetSelected(true);
-                check.Unchecked += (_, _) => SetSelected(false);
-
                 row.MouseLeftButtonUp += (_, args) =>
                 {
-                    if (args.OriginalSource is CheckBox)
-                        return;
-
-                    check.IsChecked = !check.IsChecked;
+                    SetSelected(!selectedIds.Contains(destination.Chat.Id));
                     args.Handled = true;
                 };
 
