@@ -78,7 +78,6 @@ public class MessageDeletionController : ControllerBase
             // The original message remains intact in MariaDB for audit/history.
             message.DeletedForEveryone = true;
             await _db.SaveChangesAsync();
-            await _auditLogService.LogAsync("Accounting", "MessageDeletedForEveryone", userId, User.FindFirst("username")?.Value, "Message", message.Id.ToString(), message.ChatId, message.Id, details: "Message logically deleted for everyone.");
 
             var deletedPayload = new
             {
@@ -100,7 +99,6 @@ public class MessageDeletionController : ControllerBase
         {
             AddDeletedForUser(message, userId.ToString());
             await _db.SaveChangesAsync();
-            await _auditLogService.LogAsync("Accounting", "MessageDeletedForUser", userId, User.FindFirst("username")?.Value, "Message", message.Id.ToString(), message.ChatId, message.Id, details: "Message hidden for the current user.");
 
         }
 
