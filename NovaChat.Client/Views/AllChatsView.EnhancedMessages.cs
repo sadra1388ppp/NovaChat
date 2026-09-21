@@ -54,6 +54,9 @@ public partial class AllChatsView
                 var message = original;
                 await _ownerEnhancedE2ee.DecryptMessageAsync(message);
 
+                if (message.IsDeletedForEveryone)
+                    message.Content = "این پیام را کاربر فرستنده پاک کرده است.";
+
                 var element = await OwnerMessageRenderer.BuildAsync(
                     this,
                     _apiService,
