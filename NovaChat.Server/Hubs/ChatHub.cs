@@ -16,14 +16,16 @@ public class ChatHub : Hub
     private readonly UserService _userService;
     private readonly MessageReadService _messageReadService;
     private readonly IConfiguration _configuration;
+    private readonly E2eeDeviceService _e2eeDevices;
 
-    public ChatHub(ChatService chatService, PresenceService presenceService, UserService userService, MessageReadService messageReadService, IConfiguration configuration)
+    public ChatHub(ChatService chatService, PresenceService presenceService, UserService userService, MessageReadService messageReadService, IConfiguration configuration, E2eeDeviceService e2eeDevices)
     {
         _chatService = chatService;
         _presenceService = presenceService;
         _userService = userService;
         _messageReadService = messageReadService;
         _configuration = configuration;
+        _e2eeDevices = e2eeDevices;
     }
 
     public override async Task OnConnectedAsync()
@@ -87,6 +89,86 @@ public class ChatHub : Hub
 
         await Clients.Users(Recipients(chat))
             .SendAsync("MessageEdited", MessageDtoMapper.Map(message));
+    }
+
+    public async Task RequestMessageKey(int messageId, string requesterDeviceId)
+    {
+        if (!TryGetCurrentUserId(out var requesterUserId))
+            throw new HubException("Unauthorized.");
+
+        if (messageId <= 0 || string.IsNullOrWhiteSpace(requesterDeviceId))
+            throw new HubException("Invalid key recovery request.");
+
+        var targetDevice = await _e2eeDevices.GetDeviceAsync(requesterDeviceId.Trim(), requesterUserId);
+        if (targetDevice == null)
+            throw new HubException("The requested encryption device is not registered.");
+
+        var message = await _chatService.GetMessageByIdAsync(messageId);
+        if (message == null || message.DeletedForEveryone)
+            throw new HubException("Message not found.");
+
+        var chat = await _chatService.GetChatByIdAsync(message.ChatId);
+        if (chat == null)
+            throw new HubException("Chat not found.");
+
+        var requesterIsMember = chat.ChatMembers.Any(m => m.UserId == requesterUserId);
+        if (!requesterIsMember)
+            throw new HubException("You do not have access to this chat.");
+
+        var requesterUsername = Context.User?.FindFirst("username")?.Value ?? string.Empty;
+        var senderIds = chat.ChatMembers
+            .Select(m => m.UserId.ToString())
+            .Where(id => !string.Equals(id, requesterUserId.ToString(), StringComparison.Ordinal))
+            .Distinct()
+            .ToList();
+
+        if (senderIds.Count == 0)
+            return;
+
+        await Clients.Users(senderIds).SendAsync("MessageKeyRequested", new
+        {
+            messageId = message.Id,
+            chatId = message.ChatId,
+            requesterUserId = requesterUserId.ToString(),
+            requesterDeviceId = targetDevice.DeviceId,
+            requesterPublicKeyPem = targetDevice.PublicKeyPem,
+            requesterUsername
+        });
+    }
+
+    public async Task DeliverMessageKey(int messageId, int chatId, string targetUserId, string targetDeviceId, string wrappedKey)
+    {
+        if (!TryGetCurrentUserId(out var senderUserId))
+            throw new HubException("Unauthorized.");
+
+        if (messageId <= 0 || chatId <= 0 || string.IsNullOrWhiteSpace(targetUserId) || string.IsNullOrWhiteSpace(targetDeviceId) || string.IsNullOrWhiteSpace(wrappedKey))
+            throw new HubException("Invalid key delivery.");
+
+        if (!long.TryParse(targetUserId, out var receiverUserId) || receiverUserId <= 0 || receiverUserId == senderUserId)
+            throw new HubException("Invalid recipient.");
+
+        var message = await _chatService.GetMessageByIdAsync(messageId);
+        if (message == null || message.ChatId != chatId || message.DeletedForEveryone)
+            throw new HubException("Message not found.");
+
+        var chat = await _chatService.GetChatByIdAsync(chatId);
+        if (chat == null || !chat.ChatMembers.Any(m => m.UserId == senderUserId) || !chat.ChatMembers.Any(m => m.UserId == receiverUserId))
+            throw new HubException("You do not have access to this chat.");
+
+        var targetDevice = await _e2eeDevices.GetDeviceAsync(targetDeviceId.Trim(), receiverUserId);
+        if (targetDevice == null)
+            throw new HubException("The target encryption device is not registered.");
+
+        if (wrappedKey.Length > 2000)
+            throw new HubException("Wrapped message key is too large.");
+
+        await Clients.User(receiverUserId.ToString()).SendAsync("MessageKeyDelivered", new
+        {
+            messageId,
+            chatId,
+            deviceId = targetDevice.DeviceId,
+            wrappedKey
+        });
     }
 
     public async Task MarkChatAsRead(int chatId)
