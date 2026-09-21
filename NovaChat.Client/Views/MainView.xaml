@@ -19,6 +19,7 @@
 <StackPanel Grid.Column="1" Margin="9,0,8,0" VerticalAlignment="Center">
 <TextBlock Text="Forward message" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource TextBrush}"/>
 <TextBlock x:Name="ForwardSourceText" Text="" FontSize="10" Foreground="{DynamicResource PrimaryBrush}" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"/>
+<TextBlock x:Name="ForwardModeHintText" Text="" FontSize="9" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"/>
 </StackPanel>
 <Button x:Name="ForwardCancelButton" Grid.Column="2" Content="×" Width="32" Height="32" Style="{StaticResource IconButtonStyle}" Click="ForwardCancelButton_Click" ToolTip="Cancel forwarding"/>
 </Grid>
