@@ -20,17 +20,20 @@ public class MessageDeletionController : ControllerBase
     private readonly ChatService _chatService;
     private readonly IConfiguration _configuration;
     private readonly IHubContext<ChatHub> _hub;
+    private readonly AuditLogService _auditLogService;
 
     public MessageDeletionController(
         AppDbContext db,
         ChatService chatService,
         IConfiguration configuration,
-        IHubContext<ChatHub> hub)
+        IHubContext<ChatHub> hub,
+        AuditLogService auditLogService)
     {
         _db = db;
         _chatService = chatService;
         _configuration = configuration;
         _hub = hub;
+        _auditLogService = auditLogService;
     }
 
     [HttpDelete("{messageId:int}")]
@@ -79,6 +82,17 @@ public class MessageDeletionController : ControllerBase
             message.DeletedForEveryone = true;
             await _db.SaveChangesAsync();
 
+            await _auditLogService.LogAsync(
+                category: "Accounting",
+                eventType: "MessageDeletedForEveryone",
+                userId: userId,
+                username: User.FindFirst("username")?.Value,
+                targetType: "Message",
+                targetId: message.Id.ToString(),
+                chatId: message.ChatId,
+                messageId: message.Id,
+                details: "Message logically deleted for everyone.");
+
             var deletedPayload = new
             {
                 id = message.Id,
@@ -99,6 +113,18 @@ public class MessageDeletionController : ControllerBase
         {
             AddDeletedForUser(message, userId.ToString());
             await _db.SaveChangesAsync();
+
+            await _auditLogService.LogAsync(
+                category: "Accounting",
+                eventType: "MessageDeletedForUser",
+                userId: userId,
+                username: User.FindFirst("username")?.Value,
+                targetType: "Message",
+                targetId: message.Id.ToString(),
+                chatId: message.ChatId,
+                messageId: message.Id,
+                details: "Message hidden for the current user.");
+
         }
 
         return Ok(new { message = "Message deleted successfully.", mode });
