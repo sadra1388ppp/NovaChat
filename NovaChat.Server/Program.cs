@@ -67,7 +67,7 @@ app.UseAuthorization();
 app.UseMiddleware<ChatPrivacyMiddleware>();
 app.MapControllers();
 
-app.MapPost("/api/User/logout", (
+app.MapPost("/api/User/logout", async (
     HttpContext context,
     JwtTokenRevocationService revocationService,
     AuditLogService auditLogService) =>
