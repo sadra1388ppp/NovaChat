@@ -71,11 +71,21 @@ ALTER TABLE `ChatRequests`
         }
 
         var now = IranTime.Now;
+        await using var requestIdLock = await DatabaseIdAllocator.AcquireTableLockAsync(
+            _db.Database.GetDbConnection(),
+            "ChatRequests",
+            cancellationToken);
+
+        var requestId = await DatabaseIdAllocator.GetFirstAvailableIdAsync(
+            _db.Database.GetDbConnection(),
+            "ChatRequests",
+            cancellationToken);
+
         try
         {
             await _db.Database.ExecuteSqlInterpolatedAsync($@"
-INSERT INTO `ChatRequests` (`RequesterUserId`,`TargetUserId`,`Status`,`CreatedAt`)
-VALUES ({requester.Id},{target.Id},{"Pending"},{now});", cancellationToken);
+INSERT INTO `ChatRequests` (`Id`,`RequesterUserId`,`TargetUserId`,`Status`,`CreatedAt`)
+VALUES ({requestId},{requester.Id},{target.Id},{"Pending"},{now});", cancellationToken);
         }
         catch (Exception exception) when (exception is MySqlConnector.MySqlException { Number: 1062 })
         {
@@ -87,7 +97,7 @@ VALUES ({requester.Id},{target.Id},{"Pending"},{now});", cancellationToken);
             throw;
         }
 
-        var id = await _db.Database.SqlQueryRaw<long>("SELECT LAST_INSERT_ID() AS `Value`").SingleAsync(cancellationToken);
+        var id = requestId;
         var result = new ChatRequestDto
         {
             Id = id,
