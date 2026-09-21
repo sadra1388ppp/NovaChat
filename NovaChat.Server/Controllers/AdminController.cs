@@ -39,7 +39,25 @@ public class AdminController : ControllerBase
     public async Task<IActionResult> GetUser(string id)
     {
         if (!long.TryParse(id, out var userId)) return BadRequest(new { message = "Invalid user ID." });
-        var user = await _db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => new { u.Id, u.Username, u.DisplayName, u.Email, u.CreatedAt }).FirstOrDefaultAsync();
+        var user = await _db.Users.AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => new
+            {
+                u.Id,
+                u.Username,
+                u.DisplayName,
+                u.Email,
+                u.PhoneNumber,
+                u.Bio,
+                u.AvatarUrl,
+                u.LastSeenAt,
+                u.CreatedAt,
+                u.MessagePrivacy,
+                u.AllowGroupAdds,
+                PasswordStatus = "Protected — password is not retrievable"
+            })
+            .FirstOrDefaultAsync();
+
         return user == null ? NotFound(new { message = "User not found." }) : Ok(user);
     }
 
@@ -179,10 +197,6 @@ public class AdminController : ControllerBase
         return Ok(messages.Select(MapAdminSafeMessage).ToList());
     }
 
-    [HttpPost("chats/{chatId}/messages")]
-    public IActionResult SendMessageAsUser(int chatId, [FromBody] AdminSendMessageDto dto)
-        => StatusCode(StatusCodes.Status403Forbidden, new { message = "Administrators cannot create plaintext messages. Messages must be encrypted on a user device." });
-
     [HttpPut("messages/{messageId}")]
     public IActionResult EditMessage(int messageId, [FromBody] AdminEditMessageDto dto)
         => StatusCode(StatusCodes.Status403Forbidden, new { message = "Administrators cannot edit encrypted message contents." });
@@ -251,11 +265,6 @@ public class AdminController : ControllerBase
         public MessageDto? LastMessage { get; set; }
     }
 
-    public sealed class AdminSendMessageDto
-    {
-        public long SenderUserId { get; set; }
-        public string Content { get; set; } = string.Empty;
-    }
 
     public sealed class AdminEditMessageDto
     {
