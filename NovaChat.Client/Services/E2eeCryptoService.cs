@@ -154,6 +154,62 @@ public sealed class E2eeCryptoService
         }
     }
 
+    public string DeviceId
+        => _deviceId;
+
+    public string PublicKeyPem
+        => _privateKey?.ExportSubjectPublicKeyInfoPem() ?? string.Empty;
+
+    public bool TryRewrapMessageKeyForDevice(string envelopeJson, string targetPublicKeyPem, out string wrappedKey)
+    {
+        wrappedKey = string.Empty;
+        if (_privateKey == null || string.IsNullOrWhiteSpace(_deviceId) ||
+            string.IsNullOrWhiteSpace(targetPublicKeyPem) ||
+            !E2eeEnvelope.TryParse(envelopeJson, out var envelope) || envelope == null ||
+            !envelope.Keys.TryGetValue(_deviceId, out var localWrappedKey) ||
+            string.IsNullOrWhiteSpace(localWrappedKey))
+            return false;
+
+        try
+        {
+            var aesKey = _privateKey.Decrypt(
+                Convert.FromBase64String(localWrappedKey),
+                RSAEncryptionPadding.OaepSHA256);
+
+            try
+            {
+                using var rsa = RSA.Create();
+                rsa.ImportFromPem(targetPublicKeyPem);
+                wrappedKey = Convert.ToBase64String(
+                    rsa.Encrypt(aesKey, RSAEncryptionPadding.OaepSHA256));
+                return true;
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(aesKey);
+            }
+        }
+        catch (CryptographicException)
+        {
+            return false;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    public bool HasLocalMessageKey(string envelopeJson)
+        => _privateKey != null &&
+           !string.IsNullOrWhiteSpace(_deviceId) &&
+           E2eeEnvelope.TryParse(envelopeJson, out var envelope) &&
+           envelope != null &&
+           envelope.Keys.ContainsKey(_deviceId);
+
     public async Task<MessageModel> DecryptMessageAsync(MessageModel message, CancellationToken cancellationToken = default)
     {
         await EnsureInitializedAsync(cancellationToken);
