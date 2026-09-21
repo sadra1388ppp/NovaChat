@@ -29,6 +29,11 @@ public partial class MainView
         copyItem.Click += mainView.CopyMessageMenuItem_Click;
         menu.Items.Add(copyItem);
 
+        var forwardItem = new MenuItem { Header = "Forward message" };
+        forwardItem.Tag = new MessageBubbleInfo(messageBorder, messageId.Value);
+        forwardItem.Click += mainView.ForwardMessageMenuItem_Click;
+        menu.Items.Add(forwardItem);
+
         if (messageBorder.HorizontalAlignment == HorizontalAlignment.Right)
         {
             var editItem = new MenuItem { Header = "Edit message" };
