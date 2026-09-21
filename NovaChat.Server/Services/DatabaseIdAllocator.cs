@@ -78,7 +78,6 @@ public static class DatabaseIdAllocator
             case "Chats":
             case "Contacts":
             case "Messages":
-            case "AuditLogs":
             case "ChatRequests":
             case "GroupAddRequests":
                 return;
