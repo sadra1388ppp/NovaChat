@@ -44,6 +44,29 @@ public partial class AppDbContext
             foreach (var group in byTable)
             {
                 var reservedIds = new HashSet<long>();
+
+                foreach (var item in group)
+                {
+                    switch (item.Entity)
+                    {
+                        case User user when user.Id > 0:
+                            reservedIds.Add(user.Id);
+                            break;
+                        case Chat chat when chat.Id > 0:
+                            reservedIds.Add(chat.Id);
+                            break;
+                        case Contact contact when contact.Id > 0:
+                            reservedIds.Add(contact.Id);
+                            break;
+                        case Message message when message.Id > 0:
+                            reservedIds.Add(message.Id);
+                            break;
+                        case AuditLog auditLog when auditLog.Id > 0:
+                            reservedIds.Add(auditLog.Id);
+                            break;
+                    }
+                }
+
                 foreach (var item in group)
                 {
                     switch (item.Entity)
