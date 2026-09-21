@@ -16,7 +16,7 @@ namespace NovaChat.Server.Controllers;
 public class UserController : ControllerBase
 {
     private const long MaxAvatarBytes = 5 * 1024 * 1024;
-    private readonly UserService _userService; private readonly JwtService _jwtService; private readonly IWebHostEnvironment _environment; private readonly IHubContext<ChatHub> _hub;
+    private readonly UserService _userService; private readonly JwtService _jwtService; private readonly IWebHostEnvironment _environment; private readonly IHubContext<ChatHub> _hub; private readonly AuditLogService _auditLogService;
     public UserController(UserService userService, JwtService jwtService, IWebHostEnvironment environment, IHubContext<ChatHub> hub, AuditLogService auditLogService) { _userService = userService; _jwtService = jwtService; _environment = environment; _hub = hub; _auditLogService = auditLogService; }
     [AllowAnonymous, HttpPost("register")]
     public async Task<IActionResult> Register(RegisterDto dto) { var result = await _userService.RegisterAsync(dto); if (!result.Success) return Conflict(new { message = result.Message }); if (result.User != null && long.TryParse(result.User.Id, out var registeredUserId)) await _auditLogService.LogAsync("Authentication", "RegistrationSucceeded", registeredUserId, result.User.Username, "User", registeredUserId.ToString()); return Ok(new { message = result.Message, user = result.User }); }
