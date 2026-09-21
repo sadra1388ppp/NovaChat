@@ -176,8 +176,15 @@ public class UserService
         {
             // Remove explicit read-receipt rows first. Older NovaChat databases
             // may not have the same cascade rules as the current schema.
-            await _context.Database.ExecuteSqlInterpolatedAsync(
-                $"DELETE FROM MessageReads WHERE UserId = {userId}");
+            try
+            {
+                await _context.Database.ExecuteSqlInterpolatedAsync(
+                    $"DELETE FROM MessageReads WHERE UserId = {userId}");
+            }
+            catch (MySqlException exception) when (exception.Number == 1146)
+            {
+                // Older local databases may not have MessageReads yet.
+            }
 
             // Remove the user's messages. This is done before deleting chats/users so
             // message foreign keys cannot keep the account alive.
