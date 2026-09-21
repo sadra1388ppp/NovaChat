@@ -16,14 +16,14 @@ namespace NovaChat.Server.Controllers;
 public class UserController : ControllerBase
 {
     private const long MaxAvatarBytes = 5 * 1024 * 1024;
-    private readonly UserService _userService; private readonly JwtService _jwtService; private readonly IWebHostEnvironment _environment; private readonly IHubContext<ChatHub> _hub; private readonly AuditLogService _auditLogService;
-    public UserController(UserService userService, JwtService jwtService, IWebHostEnvironment environment, IHubContext<ChatHub> hub, AuditLogService auditLogService) { _userService = userService; _jwtService = jwtService; _environment = environment; _hub = hub; _auditLogService = auditLogService; }
+    private readonly UserService _userService; private readonly JwtService _jwtService; private readonly IWebHostEnvironment _environment; private readonly IHubContext<ChatHub> _hub;
+    public UserController(UserService userService, JwtService jwtService, IWebHostEnvironment environment, IHubContext<ChatHub> hub) { _userService = userService; _jwtService = jwtService; _environment = environment; _hub = hub; }
     [AllowAnonymous, HttpPost("register")]
-    public async Task<IActionResult> Register(RegisterDto dto) { var result = await _userService.RegisterAsync(dto); if (!result.Success) return Conflict(new { message = result.Message }); if (result.User != null && long.TryParse(result.User.Id, out var registeredUserId)) await _auditLogService.LogAsync("Authentication", "RegistrationSucceeded", registeredUserId, result.User.Username, "User", registeredUserId.ToString()); return Ok(new { message = result.Message, user = result.User }); }
+    public async Task<IActionResult> Register(RegisterDto dto) { var result = await _userService.RegisterAsync(dto); if (!result.Success) return Conflict(new { message = result.Message }); }
     [AllowAnonymous, HttpGet("registration-availability")]
     public async Task<IActionResult> RegistrationAvailability([FromQuery] string? username, [FromQuery] string? email, [FromQuery] string? phoneNumber) { var result = await _userService.CheckRegistrationAvailabilityAsync(username, email, phoneNumber); return Ok(new { usernameTaken = result.UsernameTaken, emailTaken = result.EmailTaken, phoneTaken = result.PhoneTaken }); }
     [AllowAnonymous, HttpPost("login")]
-    public async Task<IActionResult> Login(LoginDto dto) { var user = await _userService.LoginAsync(dto); if (user == null) return Unauthorized(new { message = "Invalid username/phone number or password." }); var token = _jwtService.GenerateToken(user); var id = user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture); await _auditLogService.LogAsync("Authentication", "LoginSucceeded", user.Id, user.Username, "User", id, deviceId: user.DeviceId); return Ok(new { message = "Login successful.", token, user = await _userService.GetUserByIdAsync(id) }); }
+    public async Task<IActionResult> Login(LoginDto dto) { var user = await _userService.LoginAsync(dto); if (user == null) return Unauthorized(new { message = "Invalid username/phone number or password." }); var token = _jwtService.GenerateToken(user); var id = user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture); }
     [Authorize, HttpGet("profile/me")]
     public async Task<IActionResult> GetMyProfile() { var id = CurrentUserId(); if (id == null) return Unauthorized(); var user = await _userService.GetUserByIdAsync(id, true); return user == null ? NotFound(new { message = "User not found." }) : Ok(user); }
     [Authorize, HttpGet("profile/{id}")]
