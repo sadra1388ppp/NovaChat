@@ -49,6 +49,8 @@ public partial class MainView : UserControl
         if (!AuthState.IsAuthenticated || _hubConnection != null) return;
         _hubConnection = new HubConnectionBuilder().WithUrl("http://localhost:5256/hubs/chat", o => o.AccessTokenProvider = () => Task.FromResult(AuthState.Token)!).WithAutomaticReconnect().Build();
         _hubConnection.On<MessageModel>("ReceiveMessage", OnMessageReceived);
+        _hubConnection.On<MessageKeyRequestedPayload>("MessageKeyRequested", OnMessageKeyRequested);
+        _hubConnection.On<MessageKeyDeliveredPayload>("MessageKeyDelivered", OnMessageKeyDelivered);
         _hubConnection.On<List<string>>("PresenceSnapshot", OnPresenceSnapshot);
         _hubConnection.On<string>("UserOnline", OnUserOnline);
         _hubConnection.On<string>("UserOffline", OnUserOffline);
@@ -72,7 +74,7 @@ public partial class MainView : UserControl
     private async void OnMessageReceived(MessageModel message)
     {
         if (message == null || message.Id <= 0 || message.ChatId <= 0) return;
-        try { message = await _e2ee.DecryptMessageAsync(message); }
+        try { message = await DecryptMessageWithRecoveryAsync(message); }
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"E2EE message decryption failed: {ex}"); message.Content = "[Encrypted message — unable to decrypt]"; }
         await Dispatcher.InvokeAsync(() =>
         {
@@ -124,7 +126,9 @@ public partial class MainView : UserControl
     private async Task LoadInitialMessagesAsync(int chatId)
     {
         var response = await _apiService.GetAsync<ChatHistoryResponse>($"api/Chat/{chatId}/messages?pageSize={MessagePageSize}"); if (response == null) return;
-        foreach (var message in response.Messages.OrderBy(x => x.SentAt)) if (_loadedMessageIds.Add(message.Id)) AddMessageToUi(await _e2ee.DecryptMessageAsync(message));
+        foreach (var message in response.Messages.OrderBy(x => x.SentAt))
+            if (_loadedMessageIds.Add(message.Id))
+                AddMessageToUi(await DecryptMessageWithRecoveryAsync(message));
         _oldestLoadedMessageId = response.NextBeforeMessageId; _hasMoreMessages = response.HasMore; UpdateLoadOlderButton();
     }
     private async Task LoadOlderMessagesAsync() { if (!_currentChatId.HasValue || !_hasMoreMessages || _isLoadingOlderMessages || !_oldestLoadedMessageId.HasValue) return; _isLoadingOlderMessages = true; try { var oldHeight = MessagesScrollViewer.ExtentHeight; var oldOffset = MessagesScrollViewer.VerticalOffset; var response = await _apiService.GetAsync<ChatHistoryResponse>($"api/Chat/{_currentChatId.Value}/messages?beforeMessageId={_oldestLoadedMessageId.Value}&pageSize={MessagePageSize}"); if (response == null) return; foreach (var message in response.Messages.OrderByDescending(x => x.SentAt)) if (_loadedMessageIds.Add(message.Id)) AddMessageToUi(await _e2ee.DecryptMessageAsync(message), true); await Dispatcher.InvokeAsync(() => MessagesScrollViewer.ScrollToVerticalOffset(oldOffset + (MessagesScrollViewer.ExtentHeight - oldHeight)), System.Windows.Threading.DispatcherPriority.Loaded); _oldestLoadedMessageId = response.NextBeforeMessageId; _hasMoreMessages = response.HasMore; } catch (Exception ex) { MessageBox.Show($"Could not load older messages.\n\n{ex.Message}", "NovaChat", MessageBoxButton.OK, MessageBoxImage.Error); } finally { _isLoadingOlderMessages = false; UpdateLoadOlderButton(); } }
