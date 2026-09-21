@@ -602,7 +602,6 @@ public partial class MainView
 
         var selected = destinations
             .Where(x => selectedIds.Contains(x.Chat.Id))
-            .Select(x => x.Chat)
             .ToList();
 
         return new ForwardSelectionResult(selected, commentBox.Text.Trim());
