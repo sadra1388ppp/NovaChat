@@ -165,7 +165,11 @@ public partial class AllChatsView : UserControl
             // The server returns only the encrypted envelope. Decrypting here
             // guarantees the message plaintext never travels through the API.
             foreach (var message in messages)
+            {
                 await _e2ee.DecryptMessageAsync(message);
+                if (message.IsDeletedForEveryone)
+                    message.Content = "این پیام را کاربر فرستنده پاک کرده است.";
+            }
 
             MessagesList.ItemsSource = messages.Select(m => new AdminMessageItem(m)).ToList();
             NoMessagesText.Visibility = messages.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -350,7 +354,9 @@ public partial class AllChatsView : UserControl
         {
             SenderName = string.IsNullOrWhiteSpace(message.SenderName) ? message.SenderId : message.SenderName;
             Content = string.IsNullOrWhiteSpace(message.Content) ? "[No text content]" : message.Content;
-            TimeText = IranTime.Format(message.SentAt);
+            TimeText = message.IsDeletedForEveryone
+                ? $"{IranTime.Format(message.SentAt)}  •  DELETED BY SENDER"
+                : IranTime.Format(message.SentAt);
         }
     }
 }
