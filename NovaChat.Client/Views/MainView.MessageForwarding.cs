@@ -51,12 +51,6 @@ public partial class MainView
             if (target == null)
                 return;
 
-            if (target.Chat.Id == message.ChatId)
-            {
-                MessageBox.Show("Choose a different conversation.", "Forward Message", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
             if (_hubConnection == null || _hubConnection.State != HubConnectionState.Connected)
             {
                 MessageBox.Show("NovaChat is not connected to the server.", "Forward Message", MessageBoxButton.OK, MessageBoxImage.Warning);
