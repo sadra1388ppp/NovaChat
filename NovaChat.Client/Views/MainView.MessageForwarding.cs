@@ -172,11 +172,11 @@ public partial class MainView
                 ? $"@{sourceMessage.SenderId}"
                 : "Unknown user";
 
-        var forwarded = $"↪ Forwarded from {senderName}\n\n{decryptedContent.Trim()}";
+        var forwarded = $"↗ {senderName}\n\n{decryptedContent.Trim()}";
 
         return string.IsNullOrWhiteSpace(comment)
             ? forwarded
-            : $"{comment.Trim()}\n\n{forwarded}";
+            : $"{forwarded}\n\n{comment.Trim()}";
     }
 
     private void UpdateForwardUi()
