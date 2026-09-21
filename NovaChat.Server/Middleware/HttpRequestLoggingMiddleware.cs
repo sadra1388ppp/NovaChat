@@ -1,7 +1,4 @@
-using System.Diagnostics;
-using System.Security.Claims;
-using System.Text.RegularExpressions;
-using Microsoft.AspNetCore.WebUtilities;
+using System.Text;
 using NovaChat.Server.Entities;
 using NovaChat.Server.Services;
 
@@ -9,94 +6,75 @@ namespace NovaChat.Server.Middleware;
 
 public sealed class HttpRequestLoggingMiddleware(RequestDelegate next, ILogger<HttpRequestLoggingMiddleware> logger)
 {
-    private static readonly Regex SensitiveQueryKey = new(
-        "(^|[_-])(access_token|token|password|passwd|secret|api[_-]?key)([_-]|$)",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-
     public async Task InvokeAsync(HttpContext context, HttpRequestLogService logService)
     {
-        var startedAt = DateTime.UtcNow;
-        var stopwatch = Stopwatch.StartNew();
-        Exception? exception = null;
-
-        context.Response.Headers["X-Request-ID"] = context.TraceIdentifier;
-
         try
         {
+            var requestText = await BuildRequestTextAsync(context);
+
             await next(context);
+
+            await logService.LogAsync(
+                new HttpRequestLog
+                {
+                    Request = requestText
+                },
+                CancellationToken.None);
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            exception = ex;
+            logger.LogError(
+                exception,
+                "NovaChat HTTP request logging failed.");
             throw;
-        }
-        finally
-        {
-            stopwatch.Stop();
-
-            try
-            {
-                var userId = long.TryParse(
-                    context.User.FindFirstValue(ClaimTypes.NameIdentifier),
-                    out var parsedUserId)
-                    ? parsedUserId
-                    : (long?)null;
-
-                var username = context.User.FindFirst("username")?.Value;
-                var query = SanitizeQueryString(context.Request.QueryString.Value);
-
-                await logService.LogAsync(
-                    new HttpRequestLog
-                    {
-                        RequestId = context.TraceIdentifier,
-                        Method = context.Request.Method,
-                        Scheme = context.Request.Scheme,
-                        Host = context.Request.Host.Value,
-                        Path = context.Request.Path.Value ?? string.Empty,
-                        QueryString = query,
-                        Protocol = context.Request.Protocol,
-                        StatusCode = context.Response.StatusCode,
-                        IsAuthenticated = context.User.Identity?.IsAuthenticated == true,
-                        UserId = userId,
-                        Username = string.IsNullOrWhiteSpace(username) ? null : username,
-                        IpAddress = context.Connection.RemoteIpAddress?.ToString(),
-                        UserAgent = context.Request.Headers.UserAgent.ToString(),
-                        RequestContentType = context.Request.ContentType,
-                        RequestContentLength = context.Request.ContentLength,
-                        ResponseContentType = context.Response.ContentType,
-                        ResponseContentLength = context.Response.ContentLength,
-                        StartedAt = startedAt,
-                        CompletedAt = DateTime.UtcNow,
-                        DurationMs = stopwatch.ElapsedMilliseconds,
-                        Succeeded = exception == null && context.Response.StatusCode < 400,
-                        ExceptionType = exception?.GetType().FullName
-                    },
-                    CancellationToken.None);
-            }
-            catch (Exception logException)
-            {
-                logger.LogError(logException, "NovaChat HTTP request logging failed for {RequestId}.", context.TraceIdentifier);
-            }
         }
     }
 
-    private static string? SanitizeQueryString(string? queryString)
+    private static async Task<string> BuildRequestTextAsync(HttpContext context)
     {
-        if (string.IsNullOrWhiteSpace(queryString))
-            return null;
+        var request = context.Request;
+        var builder = new StringBuilder();
 
-        var parsed = QueryHelpers.ParseQuery(queryString);
-        var parts = new List<string>();
+        var query = request.QueryString.Value ?? string.Empty;
+        builder.Append(request.Method)
+            .Append(' ')
+            .Append(request.Path.Value ?? "/")
+            .Append(query)
+            .Append(' ')
+            .Append(request.Protocol)
+            .Append("\r\n");
 
-        foreach (var pair in parsed)
+        foreach (var header in request.Headers)
         {
-            if (SensitiveQueryKey.IsMatch(pair.Key))
-                continue;
+            var value = header.Key.Equals("Authorization", StringComparison.OrdinalIgnoreCase)
+                ? "[REDACTED]"
+                : header.Value.ToString();
 
-            foreach (var value in pair.Value)
-                parts.Add(Uri.EscapeDataString(pair.Key) + "=" + Uri.EscapeDataString(value ?? string.Empty));
+            builder.Append(header.Key)
+                .Append(": ")
+                .Append(value)
+                .Append("\r\n");
         }
 
-        return parts.Count == 0 ? null : "?" + string.Join("&", parts);
+        builder.Append("\r\n");
+
+        if (request.ContentLength is > 0)
+        {
+            request.EnableBuffering();
+            request.Body.Position = 0;
+
+            using var reader = new StreamReader(
+                request.Body,
+                Encoding.UTF8,
+                detectEncodingFromByteOrderMarks: true,
+                leaveOpen: true);
+
+            var body = await reader.ReadToEndAsync(CancellationToken.None);
+            request.Body.Position = 0;
+
+            builder.Append(body);
+        }
+
+        return builder.ToString();
     }
 }
