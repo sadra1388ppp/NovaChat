@@ -3,7 +3,7 @@
 -- CREATE DATABASE aaa CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `HttpRequests` (
-    `Id` BIGINT NOT NULL AUTO_INCREMENT,
+    `Id` BIGINT NOT NULL,
     `RequestId` VARCHAR(100) NOT NULL,
     `Method` VARCHAR(16) NOT NULL,
     `Scheme` VARCHAR(16) NOT NULL,
@@ -21,11 +21,11 @@ CREATE TABLE IF NOT EXISTS `HttpRequests` (
     `RequestContentLength` BIGINT NULL,
     `ResponseContentType` VARCHAR(255) NULL,
     `ResponseContentLength` BIGINT NULL,
+    `ResponseBody` LONGTEXT NULL,
     `StartedAt` DATETIME(6) NOT NULL,
     `CompletedAt` DATETIME(6) NOT NULL,
     `DurationMs` BIGINT NOT NULL,
     `Succeeded` TINYINT(1) NOT NULL,
-    `ExceptionType` VARCHAR(512) NULL,
     PRIMARY KEY (`Id`),
     INDEX `IX_HttpRequests_RequestId` (`RequestId`),
     INDEX `IX_HttpRequests_UserId` (`UserId`),
