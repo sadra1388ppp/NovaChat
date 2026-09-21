@@ -352,7 +352,7 @@ public class ChatService
         return true;
     }
 
-    public async Task<bool> DeleteChatAsync(int chatId, long actorUserId)
+    public async Task<bool> DeleteChatAsync(int chatId)
     {
         var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId && !c.IsDeleted);
         if (chat == null) return false;
