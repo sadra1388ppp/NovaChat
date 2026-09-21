@@ -23,7 +23,7 @@ public partial class OwnerUserChatsWindow : Window
         _userId = userId;
         _displayName = displayName;
         TitleText.Text = $"Chats of {displayName}";
-        SubtitleText.Text = $"Owner control • @{userId} • Read, send, edit and delete messages";
+        SubtitleText.Text = $"Owner control • @{userId} • Read and manage messages";
         Loaded += OwnerUserChatsWindow_Loaded;
     }
 
@@ -63,7 +63,6 @@ public partial class OwnerUserChatsWindow : Window
         _selectedChat = chat;
         ConversationTitleText.Text = chat.OtherDisplayName;
         ConversationMetaText.Text = $"@{chat.OtherUsername}  •  {chat.MessageCount} message{(chat.MessageCount == 1 ? "" : "s")}  •  Chat #{chat.Id}";
-        SendButton.IsEnabled = true;
         await LoadMessagesAsync(chat.Id);
     }
 
@@ -229,39 +228,6 @@ public partial class OwnerUserChatsWindow : Window
         }
     }
 
-    private async Task SendMessageAsync()
-    {
-        if (_selectedChat == null || _busy) return;
-        var content = MessageInputBox.Text.Trim();
-        if (string.IsNullOrWhiteSpace(content)) return;
-
-        if (!long.TryParse(_userId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var senderUserId))
-        {
-            MessageBox.Show("The selected user's internal ID is invalid.", "Owner Chat Administration", MessageBoxButton.OK, MessageBoxImage.Error);
-            return;
-        }
-
-        try
-        {
-            _busy = true;
-            SendButton.IsEnabled = false;
-            var response = await _apiService.PostAsync<SendAsUserRequest, ActionResponse>($"api/Admin/chats/{_selectedChat.Id}/messages", new SendAsUserRequest { SenderUserId = senderUserId, Content = content });
-            if (response == null) throw new InvalidOperationException("The server returned no response.");
-            MessageInputBox.Clear();
-            await LoadMessagesAsync(_selectedChat.Id);
-            await RefreshChatsAsync();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"Could not send the message as {_displayName}.\n\n{ex.Message}", "Owner Chat Administration", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-        finally
-        {
-            _busy = false;
-            SendButton.IsEnabled = _selectedChat != null;
-        }
-    }
-
     private async Task RefreshChatsAsync()
     {
         _chats = await _apiService.GetAsync<List<AdminChatModel>>($"api/Admin/users/{Uri.EscapeDataString(_userId)}/chats") ?? [];
@@ -278,17 +244,6 @@ public partial class OwnerUserChatsWindow : Window
         ConversationTitleText.Text = "Select a conversation";
         ConversationMetaText.Text = string.Empty;
         MessagesPanel.Children.Clear();
-        SendButton.IsEnabled = false;
-    }
-
-    private void SendButton_Click(object sender, RoutedEventArgs e) => _ = SendMessageAsync();
-    private async void MessageBox_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.Enter && !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
-        {
-            e.Handled = true;
-            await SendMessageAsync();
-        }
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
@@ -308,11 +263,6 @@ public partial class OwnerUserChatsWindow : Window
         public MessageModel? LastMessage { get; set; }
     }
 
-    private sealed class SendAsUserRequest
-    {
-        public long SenderUserId { get; set; }
-        public string Content { get; set; } = string.Empty;
-    }
 
     private sealed class EditMessageRequest
     {
