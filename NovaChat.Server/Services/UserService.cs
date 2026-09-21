@@ -174,7 +174,13 @@ public class UserService
 
         try
         {
-            // Remove the user's messages first. MessageReads cascades from Messages.
+            // Remove explicit read-receipt rows first. Older NovaChat databases
+            // may not have the same cascade rules as the current schema.
+            await _context.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM MessageReads WHERE UserId = {userId}");
+
+            // Remove the user's messages. This is done before deleting chats/users so
+            // message foreign keys cannot keep the account alive.
             await _context.Messages
                 .Where(m => m.SenderId == user.Username)
                 .ExecuteDeleteAsync();
