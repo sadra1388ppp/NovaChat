@@ -54,7 +54,7 @@ try
 }
 catch (Exception exception) when (exception is not OperationCanceledException)
 {
-    app.Logger.LogCritical(exception, "NovaChat server startup database validation failed. The HTTP listener was not started.");
+    app.Logger.LogCritical(exception, "NovaChat server startup database initialization failed. The HTTP listener was not started.");
     throw;
 }
 
