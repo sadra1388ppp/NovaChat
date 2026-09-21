@@ -42,4 +42,41 @@ public static class DatabaseConfiguration
                     errorNumbersToAdd: null);
             });
     }
+    
+    public static DbContextOptionsBuilder UseNovaChatAuditDatabase(
+        this DbContextOptionsBuilder options, IConfiguration configuration)
+    {
+        var baseConnectionString = configuration.GetConnectionString("AuditLogConnection")
+            ?? configuration.GetConnectionString("DefaultConnection");
+
+        if (string.IsNullOrWhiteSpace(baseConnectionString))
+            throw new InvalidOperationException(
+                "Set ConnectionStrings:DefaultConnection or ConnectionStrings:AuditLogConnection to a MariaDB connection string.");
+
+        var connection = new MySqlConnectionStringBuilder(baseConnectionString)
+        {
+            Database = configuration["AuditLog:Database"] ?? "aaa",
+            ConnectionTimeout = 5
+        };
+
+        if (connection.Server is "localhost" or "127.0.0.1" or "::1")
+            connection.SslMode = MySqlSslMode.None;
+
+        connection.DateTimeKind = MySqlDateTimeKind.Unspecified;
+
+        var versionText = configuration["Database:ServerVersion"] ?? "11.8.0";
+        if (!Version.TryParse(versionText, out var version))
+            throw new InvalidOperationException("Database:ServerVersion must be a version such as 11.8.0.");
+
+        return options.UseMySql(
+            connection.ConnectionString,
+            new MariaDbServerVersion(version),
+            mysqlOptions =>
+            {
+                mysqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 1,
+                    maxRetryDelay: TimeSpan.FromSeconds(2),
+                    errorNumbersToAdd: null);
+            });
+    }
 }
