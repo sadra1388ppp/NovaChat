@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.WebUtilities;
 using NovaChat.Server.Entities;
+using NovaChat.Server.Services;
 
 namespace NovaChat.Server.Middleware;
 
