@@ -37,13 +37,20 @@ public partial class MainView
             });
         }
 
-        panel.Children.Add(new TextBlock
+        if (TryParseForwardedMessage(message.Content, out var forwarded))
         {
-            Tag = "message-content",
-            Text = message.Content,
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = mine ? Brushes.White : (Brush)FindResource("TextBrush")
-        });
+            AddForwardedMessageContent(panel, forwarded, mine);
+        }
+        else
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Tag = "message-content",
+                Text = message.Content,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = mine ? Brushes.White : (Brush)FindResource("TextBrush")
+            });
+        }
 
         var meta = new StackPanel
         {
@@ -99,6 +106,146 @@ public partial class MainView
 
         if (mine)
             Dispatcher.InvokeAsync(UpdateMessageReceiptsUi, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+
+    private static bool TryParseForwardedMessage(
+        string? content,
+        out (string Comment, string Sender, string Message) forwarded)
+    {
+        forwarded = default;
+
+        if (string.IsNullOrWhiteSpace(content))
+            return false;
+
+        const string marker = "↪ Forwarded from ";
+        var markerIndex = content.IndexOf(marker, StringComparison.Ordinal);
+        if (markerIndex < 0)
+            return false;
+
+        var headerEnd = content.IndexOf("\n\n", markerIndex, StringComparison.Ordinal);
+        if (headerEnd < 0)
+            return false;
+
+        var header = content[markerIndex..headerEnd].Trim();
+        var sender = header[marker.Length..].Trim();
+        if (string.IsNullOrWhiteSpace(sender))
+            return false;
+
+        var messageStart = headerEnd + 2;
+        var forwardedText = content[messageStart..].Trim();
+        if (string.IsNullOrWhiteSpace(forwardedText))
+            return false;
+
+        var comment = content[..markerIndex].Trim();
+
+        forwarded = (comment, sender, forwardedText);
+        return true;
+    }
+
+    private void AddForwardedMessageContent(
+        Panel parent,
+        (string Comment, string Sender, string Message) forwarded,
+        bool mine)
+    {
+        if (!string.IsNullOrWhiteSpace(forwarded.Comment))
+        {
+            parent.Children.Add(new TextBlock
+            {
+                Tag = "forward-comment",
+                Text = forwarded.Comment,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = mine ? Brushes.White : (Brush)FindResource("TextBrush"),
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+        }
+
+        var forwardCard = new Border
+        {
+            Background = mine
+                ? (Brush)FindResource("PrimarySoftBrush")
+                : (Brush)FindResource("InputBackgroundBrush"),
+            BorderBrush = mine
+                ? Brushes.White
+                : (Brush)FindResource("BorderBrush"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(10, 9, 10, 9),
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+
+        var cardGrid = new Grid();
+        cardGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3) });
+        cardGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var accent = new Border
+        {
+            Background = mine ? Brushes.White : (Brush)FindResource("PrimaryBrush"),
+            CornerRadius = new CornerRadius(2),
+            Margin = new Thickness(0, 1, 9, 1)
+        };
+        Grid.SetColumn(accent, 0);
+        cardGrid.Children.Add(accent);
+
+        var cardContent = new StackPanel();
+
+        var header = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        header.Children.Add(new TextBlock
+        {
+            Text = "↗",
+            FontSize = 13,
+            FontWeight = FontWeights.Bold,
+            Foreground = mine ? Brushes.White : (Brush)FindResource("PrimaryBrush"),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        header.Children.Add(new TextBlock
+        {
+            Text = "  Forwarded from ",
+            FontSize = 10,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = mine ? Brushes.White : (Brush)FindResource("SecondaryTextBrush"),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        header.Children.Add(new TextBlock
+        {
+            Text = forwarded.Sender,
+            FontSize = 10,
+            FontWeight = FontWeights.Bold,
+            Foreground = mine ? Brushes.White : (Brush)FindResource("PrimaryBrush"),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        });
+
+        cardContent.Children.Add(header);
+
+        cardContent.Children.Add(new Border
+        {
+            Height = 1,
+            Background = mine ? Brushes.White : (Brush)FindResource("BorderBrush"),
+            Opacity = mine ? 0.35 : 0.8,
+            Margin = new Thickness(0, 7, 0, 7)
+        });
+
+        cardContent.Children.Add(new TextBlock
+        {
+            Tag = "message-content",
+            Text = forwarded.Message,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = mine ? Brushes.White : (Brush)FindResource("TextBrush")
+        });
+
+        Grid.SetColumn(cardContent, 1);
+        cardGrid.Children.Add(cardContent);
+
+        forwardCard.Child = cardGrid;
+        parent.Children.Add(forwardCard);
     }
 
     private async Task ScrollMessagesToBottomAsync()
