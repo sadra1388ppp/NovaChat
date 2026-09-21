@@ -22,9 +22,6 @@ public sealed class DatabaseInitializer(AppDbContext context, MessageReadService
             "ALTER TABLE Users ADD COLUMN IF NOT EXISTS DeviceId VARCHAR(64) NULL;",
             cancellationToken);
 
-        await context.Database.ExecuteSqlRawAsync(
-            "DROP TABLE IF EXISTS AuditLogs;",
-            cancellationToken);
     }
 
     private async Task EnsureMessageEditSchemaAsync(CancellationToken cancellationToken)
