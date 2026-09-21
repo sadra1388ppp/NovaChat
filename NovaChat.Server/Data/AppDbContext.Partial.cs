@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using NovaChat.Server.Entities;
+using NovaChat.Server.Services;
 
 namespace NovaChat.Server.Data;
 
@@ -39,7 +40,7 @@ public partial class AppDbContext
         try
         {
             foreach (var group in byTable)
-                locks.Add(await Services.DatabaseIdAllocator.AcquireTableLockAsync(connection, group.Key, cancellationToken));
+                locks.Add(await DatabaseIdAllocator.AcquireTableLockAsync(connection, group.Key, cancellationToken));
 
             foreach (var group in byTable)
             {
@@ -72,23 +73,23 @@ public partial class AppDbContext
                     switch (item.Entity)
                     {
                         case User user when user.Id == 0:
-                            user.Id = await Services.DatabaseIdAllocator.GetFirstAvailableIdAsync(connection, group.Key, reservedIds, cancellationToken);
+                            user.Id = await DatabaseIdAllocator.GetFirstAvailableIdAsync(connection, group.Key, reservedIds, cancellationToken);
                             break;
 
                         case Chat chat when chat.Id == 0:
-                            chat.Id = checked((int)await Services.DatabaseIdAllocator.GetFirstAvailableIdAsync(connection, group.Key, reservedIds, cancellationToken));
+                            chat.Id = checked((int)await DatabaseIdAllocator.GetFirstAvailableIdAsync(connection, group.Key, reservedIds, cancellationToken));
                             break;
 
                         case Contact contact when contact.Id == 0:
-                            contact.Id = checked((int)await Services.DatabaseIdAllocator.GetFirstAvailableIdAsync(connection, group.Key, reservedIds, cancellationToken));
+                            contact.Id = checked((int)await DatabaseIdAllocator.GetFirstAvailableIdAsync(connection, group.Key, reservedIds, cancellationToken));
                             break;
 
                         case Message message when message.Id == 0:
-                            message.Id = checked((int)await Services.DatabaseIdAllocator.GetFirstAvailableIdAsync(connection, group.Key, reservedIds, cancellationToken));
+                            message.Id = checked((int)await DatabaseIdAllocator.GetFirstAvailableIdAsync(connection, group.Key, reservedIds, cancellationToken));
                             break;
 
                         case AuditLog auditLog when auditLog.Id == 0:
-                            auditLog.Id = await Services.DatabaseIdAllocator.GetFirstAvailableIdAsync(connection, group.Key, reservedIds, cancellationToken);
+                            auditLog.Id = await DatabaseIdAllocator.GetFirstAvailableIdAsync(connection, group.Key, reservedIds, cancellationToken);
                             break;
                     }
                 }
