@@ -1,3 +1,5 @@
+using Elastic.Clients.Elasticsearch;
+using Elastic.Transport;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
@@ -11,6 +13,31 @@ using NovaChat.Server.Services;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var elasticsearchUrl = builder.Configuration["Elasticsearch:Url"];
+var elasticsearchUsername = builder.Configuration["Elasticsearch:Username"];
+var elasticsearchPassword = builder.Configuration["Elasticsearch:Password"];
+var elasticsearchFingerprint = builder.Configuration["Elasticsearch:Fingerprint"];
+
+if (string.IsNullOrWhiteSpace(elasticsearchUrl))
+    throw new InvalidOperationException("Elasticsearch URL is not configured.");
+
+if (string.IsNullOrWhiteSpace(elasticsearchUsername))
+    throw new InvalidOperationException("Elasticsearch username is not configured.");
+
+if (string.IsNullOrWhiteSpace(elasticsearchPassword))
+    throw new InvalidOperationException("Elasticsearch password is not configured.");
+
+if (string.IsNullOrWhiteSpace(elasticsearchFingerprint))
+    throw new InvalidOperationException("Elasticsearch certificate fingerprint is not configured.");
+
+var elasticsearchSettings = new ElasticsearchClientSettings(new Uri(elasticsearchUrl))
+    .CertificateFingerprint(elasticsearchFingerprint)
+    .Authentication(new BasicAuthentication(elasticsearchUsername, elasticsearchPassword));
+
+builder.Services.AddSingleton(new ElasticsearchClient(elasticsearchSettings));
+builder.Services.AddSingleton<ElasticsearchMessageService>();
+
 builder.Services.AddDbContext<AppDbContext>(options => options.UseNovaChatDatabase(builder.Configuration));
 builder.Services.AddDbContext<HttpRequestLogDbContext>(options => options.UseNovaChatHttpLogDatabase(builder.Configuration));
 builder.Services.AddScoped<DatabaseInitializer>();
@@ -53,6 +80,10 @@ try
     var httpRequestLogDb = scope.ServiceProvider.GetRequiredService<HttpRequestLogDbContext>();
     await httpRequestLogDb.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS AuditLogs;");
     await httpRequestLogDb.Database.EnsureCreatedAsync();
+
+    await scope.ServiceProvider
+        .GetRequiredService<ElasticsearchMessageService>()
+        .EnsureIndexAsync();
 }
 catch (Exception exception) when (exception is not OperationCanceledException)
 {
