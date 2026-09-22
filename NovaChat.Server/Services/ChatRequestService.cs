@@ -40,7 +40,7 @@ FROM INFORMATION_SCHEMA.STATISTICS
 WHERE TABLE_SCHEMA = DATABASE()
   AND TABLE_NAME = 'ChatRequests'
   AND INDEX_NAME = 'UX_ChatRequests_Pending'
-  AND INDEX_TYPE <> 'PRIMARY';").SingleAsync(cancellationToken);
+  AND INDEX_TYPE <> 'PRIMARY'").SingleAsync(cancellationToken);
 
         if (pendingIndexExists > 0)
         {
