@@ -116,7 +116,7 @@ public partial class HttpRequestLogsView : UserControl
             PageText.Text = $"Page {_page}";
 
             StatusText.Text = string.IsNullOrWhiteSpace(query)
-                ? "Latest indexed requests"
+                ? "Indexed requests"
                 : $"Search: {query}";
 
             if (_logs.Count == 0)
