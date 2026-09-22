@@ -211,7 +211,7 @@ public sealed class ElasticsearchHttpRequestLogService(
         CancellationToken cancellationToken = default)
     {
         page = Math.Max(1, page);
-        pageSize = Math.Clamp(pageSize, 1, 100);
+        pageSize = Math.Clamp(pageSize, 1, 10000);
 
         try
         {
@@ -220,12 +220,14 @@ public sealed class ElasticsearchHttpRequestLogService(
                     .Indices(IndexName)
                     .From((page - 1) * pageSize)
                     .Size(pageSize)
-                    .Query(q => q.MatchAll()), cancellationToken)
+                    .Query(q => q.MatchAll())
+                    .Sort(sort => sort.Field(f => f.StartedAt, field => field.Order(SortOrder.Desc))), cancellationToken)
                 : await _client.SearchAsync<HttpRequestLogSearchDocument>(search => search
                     .Indices(IndexName)
                     .From((page - 1) * pageSize)
                     .Size(pageSize)
-                    .Query(q => q.QueryString(qs => qs.Query(query))), cancellationToken);
+                    .Query(q => q.QueryString(qs => qs.Query(query)))
+                    .Sort(sort => sort.Field(f => f.StartedAt, field => field.Order(SortOrder.Desc))), cancellationToken);
 
             if (!response.IsValidResponse)
             {
