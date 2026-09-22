@@ -142,6 +142,97 @@ public sealed class ElasticsearchHttpRequestLogService(
         }
     }
 
+    public async Task<DeleteHttpRequestResult> DeleteAsync(
+        HttpRequestLogDbContext db,
+        IEnumerable<long> ids,
+        CancellationToken cancellationToken = default)
+    {
+        var uniqueIds = ids
+            .Where(id => id > 0)
+            .Distinct()
+            .ToArray();
+
+        if (uniqueIds.Length == 0)
+            return new DeleteHttpRequestResult(0, 0, true);
+
+        var rows = await db.HttpRequests
+            .Where(x => uniqueIds.Contains(x.Id))
+            .ToListAsync(cancellationToken);
+
+        if (rows.Count == 0)
+            return new DeleteHttpRequestResult(0, 0, true);
+
+        db.HttpRequests.RemoveRange(rows);
+        await db.SaveChangesAsync(cancellationToken);
+
+        var elasticsearchDeleted = 0L;
+        var elasticsearchSucceeded = true;
+
+        foreach (var row in rows)
+        {
+            try
+            {
+                var response = await _client.DeleteAsync(
+                    IndexName,
+                    Id.From(row.Id),
+                    cancellationToken);
+
+                if (response.IsValidResponse)
+                    elasticsearchDeleted++;
+                else
+                {
+                    elasticsearchSucceeded = false;
+                    _logger.LogWarning(
+                        "Elasticsearch failed to delete HTTP request {RequestId}. DebugInformation: {DebugInformation}",
+                        row.RequestId,
+                        response.DebugInformation);
+                }
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                elasticsearchSucceeded = false;
+                _logger.LogWarning(
+                    exception,
+                    "Elasticsearch deletion failed for HTTP request {RequestId}.",
+                    row.RequestId);
+            }
+        }
+
+        return new DeleteHttpRequestResult(
+            rows.Count,
+            elasticsearchDeleted,
+            elasticsearchSucceeded);
+    }
+
+    public async Task<DeleteAllHttpRequestResult> DeleteAllAsync(
+        HttpRequestLogDbContext db,
+        CancellationToken cancellationToken = default)
+    {
+        var deletedInDatabase = await db.HttpRequests
+            .ExecuteDeleteAsync(cancellationToken);
+
+        try
+        {
+            var response = await _client.DeleteByQueryAsync<HttpRequestLogSearchDocument>(
+                request => request
+                    .Indices(IndexName)
+                    .Query(query => query.MatchAll()),
+                cancellationToken);
+
+            return new DeleteAllHttpRequestResult(
+                deletedInDatabase,
+                response.IsValidResponse ? response.Deleted : 0,
+                response.IsValidResponse);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogWarning(
+                exception,
+                "Elasticsearch could not delete all HTTP request documents.");
+            return new DeleteAllHttpRequestResult(deletedInDatabase, 0, false);
+        }
+    }
+
     public async Task<ReindexResult> ReindexAsync(
         HttpRequestLogDbContext db,
         CancellationToken cancellationToken = default)
@@ -287,5 +378,9 @@ public sealed class ElasticsearchHttpRequestLogService(
         Succeeded = row.Succeeded
     };
 }
+
+public sealed record DeleteHttpRequestResult(int DeletedInDatabase, long DeletedInElasticsearch, bool ElasticsearchSucceeded);
+
+public sealed record DeleteAllHttpRequestResult(long DeletedInDatabase, long DeletedInElasticsearch, bool ElasticsearchSucceeded);
 
 public sealed record ReindexResult(int Indexed, int Failed);
