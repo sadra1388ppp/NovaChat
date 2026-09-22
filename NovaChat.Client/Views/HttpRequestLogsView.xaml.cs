@@ -58,7 +58,7 @@ public partial class HttpRequestLogsView : UserControl
                 throw new InvalidOperationException("The server returned an empty reindex response.");
 
             StatusText.Text = $"Indexed {result.Indexed:n0}; failed {result.Failed:n0}.";
-            await SearchAsync(_page);
+            await SearchAsync();
         }
         catch (Exception ex)
         {
@@ -216,7 +216,7 @@ public partial class HttpRequestLogsView : UserControl
     }
 
     private static string FormatDate(DateTime value)
-        => value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+        => value.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 
     private sealed class HttpRequestSearchResponse
     {
