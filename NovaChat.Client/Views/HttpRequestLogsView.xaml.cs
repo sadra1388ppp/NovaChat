@@ -263,9 +263,4 @@ public partial class HttpRequestLogsView : UserControl
         public string StartedAtText { get; set; } = string.Empty;
     }
 
-    private sealed class ReindexResponse
-    {
-        public int Indexed { get; set; }
-        public int Failed { get; set; }
-    }
 }
