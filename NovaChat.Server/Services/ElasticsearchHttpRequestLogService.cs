@@ -38,7 +38,7 @@ public sealed class ElasticsearchHttpRequestLogService(
                 IndexName,
                 descriptor => descriptor.Mappings(mappings => mappings
                     .Properties(properties => properties
-                        .IntegerNumber(p => p.Id)
+                        .LongNumber(p => p.Id)
                         .Text(p => p.RequestId)
                         .Text(p => p.Method)
                         .Text(p => p.Scheme)
