@@ -37,6 +37,7 @@ var elasticsearchSettings = new ElasticsearchClientSettings(new Uri(elasticsearc
 
 builder.Services.AddSingleton(new ElasticsearchClient(elasticsearchSettings));
 builder.Services.AddSingleton<ElasticsearchMessageService>();
+builder.Services.AddSingleton<ElasticsearchHttpRequestLogService>();
 
 builder.Services.AddDbContext<AppDbContext>(options => options.UseNovaChatDatabase(builder.Configuration));
 builder.Services.AddDbContext<HttpRequestLogDbContext>(options => options.UseNovaChatHttpLogDatabase(builder.Configuration));
@@ -83,6 +84,10 @@ try
 
     await scope.ServiceProvider
         .GetRequiredService<ElasticsearchMessageService>()
+        .EnsureIndexAsync();
+
+    await scope.ServiceProvider
+        .GetRequiredService<ElasticsearchHttpRequestLogService>()
         .EnsureIndexAsync();
 }
 catch (Exception exception) when (exception is not OperationCanceledException)
