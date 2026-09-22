@@ -85,6 +85,34 @@ public sealed class ElasticsearchHttpRequestLogService(
     public Task IndexAsync(HttpRequestLog row, CancellationToken cancellationToken = default)
         => IndexAsync(Map(row), cancellationToken);
 
+    public async Task ReindexIfEmptyAsync(
+        HttpRequestLogDbContext db,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var countResponse = await _client.CountAsync<HttpRequestLogSearchDocument>(
+                request => request.Indices(IndexName),
+                cancellationToken);
+
+            if (!countResponse.IsValidResponse || countResponse.Count > 0)
+                return;
+
+            var result = await ReindexAsync(db, cancellationToken);
+
+            _logger.LogInformation(
+                "Initial Elasticsearch HTTP request sync completed. Indexed: {Indexed}, Failed: {Failed}.",
+                result.Indexed,
+                result.Failed);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogWarning(
+                exception,
+                "Initial Elasticsearch HTTP request sync could not be completed.");
+        }
+    }
+
     public async Task IndexAsync(
         HttpRequestLogSearchDocument document,
         CancellationToken cancellationToken = default)
