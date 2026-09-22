@@ -17,8 +17,16 @@ public class ChatHub : Hub
     private readonly MessageReadService _messageReadService;
     private readonly IConfiguration _configuration;
     private readonly E2eeDeviceService _e2eeDevices;
+    private readonly ElasticsearchMessageService _elasticsearchMessageService;
 
-    public ChatHub(ChatService chatService, PresenceService presenceService, UserService userService, MessageReadService messageReadService, IConfiguration configuration, E2eeDeviceService e2eeDevices)
+    public ChatHub(
+        ChatService chatService,
+        PresenceService presenceService,
+        UserService userService,
+        MessageReadService messageReadService,
+        IConfiguration configuration,
+        E2eeDeviceService e2eeDevices,
+        ElasticsearchMessageService elasticsearchMessageService)
     {
         _chatService = chatService;
         _presenceService = presenceService;
@@ -26,6 +34,7 @@ public class ChatHub : Hub
         _messageReadService = messageReadService;
         _configuration = configuration;
         _e2eeDevices = e2eeDevices;
+        _elasticsearchMessageService = elasticsearchMessageService;
     }
 
     public override async Task OnConnectedAsync()
@@ -62,6 +71,8 @@ public class ChatHub : Hub
         var chat = await _chatService.GetChatByIdAsync(chatId);
         if (message == null || chat == null) throw new HubException("Unable to send message.");
 
+        await _elasticsearchMessageService.IndexMessageAsync(message);
+
         if (chat.Type == ChatType.Group)
             await Clients.Group($"chat-{chatId}").SendAsync("ReceiveMessage", MessageDtoMapper.Map(message));
         else
@@ -87,6 +98,8 @@ public class ChatHub : Hub
         var chat = await _chatService.GetChatByIdAsync(message.ChatId);
         if (chat == null)
             throw new HubException("Chat not found.");
+
+        await _elasticsearchMessageService.IndexMessageAsync(message);
 
         await Clients.Users(Recipients(chat))
             .SendAsync("MessageEdited", MessageDtoMapper.Map(message));
@@ -191,6 +204,9 @@ public class ChatHub : Hub
         if (!IsOwner() && (!string.Equals(message.SenderId, username, StringComparison.OrdinalIgnoreCase) || !await _chatService.CanAccessChatAsync(message.ChatId, userId))) throw new HubException("You do not have permission to delete this message.");
         var chat = await _chatService.GetChatByIdAsync(message.ChatId);
         if (chat == null || !await _chatService.DeleteMessageAsync(messageId)) throw new HubException("Unable to send deletion.");
+
+        await _elasticsearchMessageService.DeleteMessageAsync(messageId);
+
         await Clients.Users(Recipients(chat)).SendAsync("MessageDeleted", new { id = message.Id, chatId = message.ChatId, senderId = message.SenderId, content = message.Content, sentAt = message.SentAt });
     }
 
