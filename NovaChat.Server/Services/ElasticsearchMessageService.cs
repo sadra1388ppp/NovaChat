@@ -105,7 +105,7 @@ public sealed class ElasticsearchMessageService(
                 Id.From(messageId),
                 cancellationToken);
 
-            if (!response.IsValidResponse && response.Result != Result.NotFound)
+            if (!response.IsValidResponse)
             {
                 _logger.LogWarning(
                     "Elasticsearch failed to delete message {MessageId}. DebugInformation: {DebugInformation}",
