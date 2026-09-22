@@ -61,6 +61,10 @@
                            Margin="0,7,0,0"
                            FontSize="14"
                            Foreground="{DynamicResource SecondaryTextBrush}"/>
+                <TextBlock x:Name="StatusText"
+                           Margin="0,4,0,0"
+                           FontSize="11"
+                           Foreground="{DynamicResource SecondaryTextBrush}"/>
             </StackPanel>
 
             <Button x:Name="ReindexButton"
