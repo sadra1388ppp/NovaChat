@@ -10,4 +10,10 @@ public partial class MainView
         if (!_isOwner) return;
         (Window.GetWindow(this) as MainWindow)?.ShowManageUsers();
     }
+
+    private void HttpRequestLogsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_isOwner) return;
+        (Window.GetWindow(this) as MainWindow)?.ShowHttpRequestLogs();
+    }
 }
