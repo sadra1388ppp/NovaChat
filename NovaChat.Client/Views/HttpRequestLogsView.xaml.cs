@@ -33,6 +33,8 @@ public partial class HttpRequestLogsView : UserControl
 
     private async void SearchButton_Click(object sender, RoutedEventArgs e) => await SearchAsync(1);
 
+    private void BackButton_Click(object sender, RoutedEventArgs e) => BackToChatRequested?.Invoke();
+
     private async void SearchBox_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter) return;
