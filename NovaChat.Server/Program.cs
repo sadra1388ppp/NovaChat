@@ -86,9 +86,12 @@ try
         .GetRequiredService<ElasticsearchMessageService>()
         .EnsureIndexAsync();
 
-    await scope.ServiceProvider
-        .GetRequiredService<ElasticsearchHttpRequestLogService>()
-        .EnsureIndexAsync();
+    var httpRequestSearch = scope.ServiceProvider
+        .GetRequiredService<ElasticsearchHttpRequestLogService>();
+
+    await httpRequestSearch.EnsureIndexAsync();
+    await httpRequestSearch.ReindexIfEmptyAsync(
+        scope.ServiceProvider.GetRequiredService<HttpRequestLogDbContext>());
 }
 catch (Exception exception) when (exception is not OperationCanceledException)
 {
