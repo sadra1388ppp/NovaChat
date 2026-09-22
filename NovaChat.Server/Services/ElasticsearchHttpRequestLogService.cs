@@ -153,6 +153,20 @@ public sealed class ElasticsearchHttpRequestLogService(
         const int batchSize = 250;
         var lastId = 0L;
 
+        var clearResponse = await _client.DeleteByQueryAsync<HttpRequestLogSearchDocument>(
+            request => request
+                .Indices(IndexName)
+                .Query(query => query.MatchAll()),
+            cancellationToken);
+
+        if (!clearResponse.IsValidResponse)
+        {
+            _logger.LogWarning(
+                "Elasticsearch HTTP request index {IndexName} could not be cleared before reindex. DebugInformation: {DebugInformation}",
+                IndexName,
+                clearResponse.DebugInformation);
+        }
+
         while (true)
         {
             var rows = await db.HttpRequests
