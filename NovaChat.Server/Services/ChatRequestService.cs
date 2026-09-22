@@ -34,9 +34,20 @@ CREATE TABLE IF NOT EXISTS `ChatRequests` (
     CONSTRAINT `FK_ChatRequests_Target` FOREIGN KEY (`TargetUserId`) REFERENCES `Users`(`Id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;", cancellationToken);
 
-        await _db.Database.ExecuteSqlRawAsync(@"
+        var pendingIndexExists = await _db.Database.SqlQueryRaw<int>(@"
+SELECT COUNT(*) AS Value
+FROM INFORMATION_SCHEMA.STATISTICS
+WHERE TABLE_SCHEMA = DATABASE()
+  AND TABLE_NAME = 'ChatRequests'
+  AND INDEX_NAME = 'UX_ChatRequests_Pending'
+  AND INDEX_TYPE <> 'PRIMARY';").SingleAsync(cancellationToken);
+
+        if (pendingIndexExists > 0)
+        {
+            await _db.Database.ExecuteSqlRawAsync(@"
 ALTER TABLE `ChatRequests`
     DROP INDEX `UX_ChatRequests_Pending`;", cancellationToken);
+        }
 
         await _db.Database.ExecuteSqlRawAsync(@"
 ALTER TABLE `ChatRequests`
