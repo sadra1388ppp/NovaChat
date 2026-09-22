@@ -59,7 +59,8 @@
                            Foreground="{DynamicResource SecondaryTextBrush}"/>
             </StackPanel>
 
-            <Button Grid.Column="1"
+            <Button x:Name="ReindexButton"
+                    Grid.Column="1"
                     Content="↻  Reindex"
                     Style="{DynamicResource SecondaryButtonStyle}"
                     Height="42"
@@ -105,7 +106,8 @@
                 </Grid>
             </Border>
 
-            <Button Grid.Column="1"
+            <Button x:Name="SearchButton"
+                    Grid.Column="1"
                     Content="Search"
                     Style="{DynamicResource PrimaryButtonStyle}"
                     Height="50"
