@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NovaChat.Server.Data;
+using NovaChat.Server.Services;
 
 namespace NovaChat.Server.Controllers;
 
