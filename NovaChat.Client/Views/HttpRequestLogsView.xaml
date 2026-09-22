@@ -9,15 +9,17 @@
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="RowBackground" Value="{DynamicResource PanelBackgroundBrush}"/>
             <Setter Property="AlternatingRowBackground" Value="{DynamicResource AppBackgroundBrush}"/>
-            <Setter Property="GridLinesVisibility" Value="Horizontal"/>
+            <Setter Property="GridLinesVisibility" Value="All"/>
             <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource BorderBrush}"/>
-            <Setter Property="VerticalGridLinesBrush" Value="Transparent"/>
+            <Setter Property="VerticalGridLinesBrush" Value="{DynamicResource BorderBrush}"/>
             <Setter Property="HeadersVisibility" Value="Column"/>
             <Setter Property="CanUserAddRows" Value="False"/>
             <Setter Property="AutoGenerateColumns" Value="False"/>
             <Setter Property="SelectionMode" Value="Single"/>
             <Setter Property="SelectionUnit" Value="FullRow"/>
             <Setter Property="IsReadOnly" Value="True"/>
+            <Setter Property="EnableRowVirtualization" Value="True"/>
+            <Setter Property="EnableColumnVirtualization" Value="True"/>
         </Style>
         <Style TargetType="DataGridColumnHeader">
             <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}"/>
@@ -26,22 +28,24 @@
             <Setter Property="FontSize" Value="10"/>
             <Setter Property="Padding" Value="10,8"/>
             <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="BorderThickness" Value="0,0,1,1"/>
         </Style>
         <Style TargetType="DataGridCell">
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="BorderThickness" Value="0,0,1,0"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="Padding" Value="8,7"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
     </UserControl.Resources>
 
-    <Grid Margin="34">
+    <Grid Margin="30">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0" Margin="0,0,0,22">
+        <Grid Grid.Row="0" Margin="0,0,0,18">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
@@ -49,11 +53,11 @@
             </Grid.ColumnDefinitions>
 
             <StackPanel>
-                <TextBlock Text="HTTP Request Search"
+                <TextBlock Text="HTTP Requests"
                            FontSize="30"
                            FontWeight="Bold"
                            Foreground="{DynamicResource TextBrush}"/>
-                <TextBlock Text="Search indexed HTTP request logs from the aaa database."
+                <TextBlock Text="All indexed records from aaa.HttpRequests"
                            Margin="0,7,0,0"
                            FontSize="14"
                            Foreground="{DynamicResource SecondaryTextBrush}"/>
@@ -65,6 +69,7 @@
                     Style="{DynamicResource SecondaryButtonStyle}"
                     Height="42"
                     Margin="12,0,0,0"
+                    Padding="14,0"
                     Click="ReindexButton_Click"/>
 
             <Button Grid.Column="2"
@@ -72,10 +77,11 @@
                     Style="{DynamicResource SecondaryButtonStyle}"
                     Height="42"
                     Margin="12,0,0,0"
+                    Padding="14,0"
                     Click="BackButton_Click"/>
         </Grid>
 
-        <Grid Grid.Row="1" Margin="0,0,0,18">
+        <Grid Grid.Row="1" Margin="0,0,0,14">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
@@ -83,7 +89,7 @@
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0"
-                    Height="50"
+                    Height="48"
                     Background="{DynamicResource PanelBackgroundBrush}"
                     BorderBrush="{DynamicResource BorderBrush}"
                     BorderThickness="1"
@@ -110,14 +116,14 @@
                     Grid.Column="1"
                     Content="Search"
                     Style="{DynamicResource PrimaryButtonStyle}"
-                    Height="50"
+                    Height="48"
                     MinWidth="110"
                     Margin="12,0,0,0"
                     Click="SearchButton_Click"/>
 
             <Border Grid.Column="2"
                     Margin="12,0,0,0"
-                    Height="50"
+                    Height="48"
                     MinWidth="120"
                     Background="{DynamicResource PanelBackgroundBrush}"
                     BorderBrush="{DynamicResource BorderBrush}"
@@ -130,7 +136,7 @@
                                FontWeight="Bold"
                                Foreground="{DynamicResource TextBrush}"
                                Text="0"/>
-                    <TextBlock Text="RESULTS"
+                    <TextBlock Text="MATCHES"
                                FontSize="9"
                                FontWeight="Bold"
                                Foreground="{DynamicResource SecondaryTextBrush}"/>
@@ -138,219 +144,76 @@
             </Border>
         </Grid>
 
-        <Grid Grid.Row="2">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="2.1*"/>
-                <ColumnDefinition Width="1*"/>
-            </Grid.ColumnDefinitions>
+        <Border Grid.Row="2"
+                Background="{DynamicResource PanelBackgroundBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="1"
+                CornerRadius="18"
+                Padding="8">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
 
-            <Border Grid.Column="0"
-                    Background="{DynamicResource PanelBackgroundBrush}"
-                    BorderBrush="{DynamicResource BorderBrush}"
-                    BorderThickness="1"
-                    CornerRadius="18"
-                    Padding="8">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-
-                    <Grid Margin="10,8,10,10">
-                        <TextBlock Text="HTTP Requests"
-                                   FontSize="16"
-                                   FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextBrush}"/>
-                        <TextBlock x:Name="StatusText"
-                                   HorizontalAlignment="Right"
-                                   VerticalAlignment="Center"
-                                   Foreground="{DynamicResource SecondaryTextBrush}"/>
-                    </Grid>
-
-                    <DataGrid x:Name="LogsGrid"
-                              Grid.Row="1"
-                              Style="{StaticResource LogDataGridStyle}"
-                              SelectionChanged="LogsGrid_SelectionChanged">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="68"/>
-                            <DataGridTextColumn Header="TIME" Binding="{Binding StartedAtText}" Width="150"/>
-                            <DataGridTextColumn Header="METHOD" Binding="{Binding Method}" Width="85"/>
-                            <DataGridTextColumn Header="STATUS" Binding="{Binding StatusCode}" Width="72"/>
-                            <DataGridTextColumn Header="PATH" Binding="{Binding Path}" Width="*"/>
-                            <DataGridTextColumn Header="USER" Binding="{Binding Username}" Width="110"/>
-                            <DataGridTextColumn Header="IP" Binding="{Binding IpAddress}" Width="125"/>
-                            <DataGridTextColumn Header="MS" Binding="{Binding DurationMs}" Width="68"/>
-                        </DataGrid.Columns>
-                    </DataGrid>
-
-                    <TextBlock x:Name="EmptyText"
-                               Grid.Row="1"
-                               Text="No HTTP requests found."
-                               HorizontalAlignment="Center"
+                <Grid Margin="10,6,10,8">
+                    <TextBlock Text="HttpRequests"
+                               FontSize="16"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextBrush}"/>
+                    <TextBlock x:Name="StatusText"
+                               HorizontalAlignment="Right"
                                VerticalAlignment="Center"
-                               FontSize="14"
-                               Foreground="{DynamicResource SecondaryTextBrush}"
-                               Visibility="Collapsed"/>
-
-                    <StackPanel Grid.Row="2"
-                                Orientation="Horizontal"
-                                HorizontalAlignment="Right"
-                                Margin="8,10,8,4">
-                        <Button x:Name="PreviousButton"
-                                Content="‹  Previous"
-                                Style="{DynamicResource SecondaryButtonStyle}"
-                                Height="36"
-                                Padding="14,0"
-                                Margin="0,0,8,0"
-                                IsEnabled="False"
-                                Click="PreviousButton_Click"/>
-                        <TextBlock x:Name="PageText"
-                                   VerticalAlignment="Center"
-                                   MinWidth="80"
-                                   TextAlignment="Center"
-                                   Foreground="{DynamicResource SecondaryTextBrush}"
-                                   FontSize="12"/>
-                        <Button x:Name="NextButton"
-                                Content="Next  ›"
-                                Style="{DynamicResource SecondaryButtonStyle}"
-                                Height="36"
-                                Padding="14,0"
-                                Margin="8,0,0,0"
-                                IsEnabled="False"
-                                Click="NextButton_Click"/>
-                    </StackPanel>
+                               Foreground="{DynamicResource SecondaryTextBrush}"/>
                 </Grid>
-            </Border>
 
-            <Border Grid.Column="1"
-                    Margin="18,0,0,0"
-                    Background="{DynamicResource PanelBackgroundBrush}"
-                    BorderBrush="{DynamicResource BorderBrush}"
-                    BorderThickness="1"
-                    CornerRadius="18"
-                    Padding="24">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel>
-                        <TextBlock Text="Request Details"
-                                   FontSize="18"
-                                   FontWeight="Bold"
-                                   Foreground="{DynamicResource TextBrush}"/>
+                <DataGrid x:Name="LogsGrid"
+                          Grid.Row="1"
+                          Style="{StaticResource LogDataGridStyle}"
+                          SelectionChanged="LogsGrid_SelectionChanged">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="70"/>
+                        <DataGridTextColumn Header="RequestId" Binding="{Binding RequestId}" Width="160"/>
+                        <DataGridTextColumn Header="Method" Binding="{Binding Method}" Width="90"/>
+                        <DataGridTextColumn Header="Scheme" Binding="{Binding Scheme}" Width="80"/>
+                        <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="170"/>
+                        <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="260"/>
+                        <DataGridTextColumn Header="QueryString" Binding="{Binding QueryString}" Width="220"/>
+                        <DataGridTextColumn Header="Protocol" Binding="{Binding Protocol}" Width="95"/>
+                        <DataGridTextColumn Header="StatusCode" Binding="{Binding StatusCode}" Width="95"/>
+                        <DataGridCheckBoxColumn Header="IsAuthenticated" Binding="{Binding IsAuthenticated}" Width="125"/>
+                        <DataGridTextColumn Header="UserId" Binding="{Binding UserId}" Width="90"/>
+                        <DataGridTextColumn Header="Username" Binding="{Binding Username}" Width="120"/>
+                        <DataGridTextColumn Header="IpAddress" Binding="{Binding IpAddress}" Width="125"/>
+                        <DataGridTextColumn Header="UserAgent" Binding="{Binding UserAgent}" Width="280"/>
+                        <DataGridTextColumn Header="RequestContentType" Binding="{Binding RequestContentType}" Width="190"/>
+                        <DataGridTextColumn Header="RequestContentLength" Binding="{Binding RequestContentLength}" Width="150"/>
+                        <DataGridTextColumn Header="ResponseContentType" Binding="{Binding ResponseContentType}" Width="190"/>
+                        <DataGridTextColumn Header="ResponseContentLength" Binding="{Binding ResponseContentLength}" Width="160"/>
+                        <DataGridTextColumn Header="ResponseBody" Binding="{Binding ResponseBody}" Width="420"/>
+                        <DataGridTextColumn Header="StartedAt" Binding="{Binding StartedAtText}" Width="155"/>
+                        <DataGridTextColumn Header="CompletedAt" Binding="{Binding CompletedAtText}" Width="155"/>
+                        <DataGridTextColumn Header="DurationMs" Binding="{Binding DurationMs}" Width="105"/>
+                        <DataGridCheckBoxColumn Header="Succeeded" Binding="{Binding Succeeded}" Width="90"/>
+                    </DataGrid.Columns>
+                </DataGrid>
 
-                        <TextBlock x:Name="SelectedRequestText"
-                                   Text="Select a request to inspect its details."
-                                   Margin="0,5,0,18"
-                                   FontSize="12"
-                                   Foreground="{DynamicResource SecondaryTextBrush}"
-                                   TextWrapping="Wrap"/>
+                <TextBlock x:Name="EmptyText"
+                           Grid.Row="1"
+                           Text="No HTTP requests found."
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           FontSize="14"
+                           Foreground="{DynamicResource SecondaryTextBrush}"
+                           Visibility="Collapsed"/>
 
-                        <Border Padding="14"
-                                Background="{DynamicResource AppBackgroundBrush}"
-                                BorderBrush="{DynamicResource BorderBrush}"
-                                BorderThickness="1"
-                                CornerRadius="14">
-                            <StackPanel>
-                                <TextBlock Text="REQUEST"
-                                           FontSize="9"
-                                           FontWeight="Bold"
-                                           Foreground="{DynamicResource SecondaryTextBrush}"/>
-                                <TextBlock x:Name="RequestMethodText"
-                                           Margin="0,7,0,0"
-                                           FontSize="14"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource TextBrush}"
-                                           TextWrapping="Wrap"/>
-                                <TextBlock x:Name="RequestPathText"
-                                           Margin="0,4,0,0"
-                                           FontSize="12"
-                                           Foreground="{DynamicResource TextBrush}"
-                                           TextWrapping="Wrap"/>
-                                <TextBlock x:Name="RequestQueryText"
-                                           Margin="0,4,0,0"
-                                           FontSize="11"
-                                           Foreground="{DynamicResource SecondaryTextBrush}"
-                                           TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
-
-                        <Border Margin="0,12,0,0"
-                                Padding="14"
-                                Background="{DynamicResource AppBackgroundBrush}"
-                                BorderBrush="{DynamicResource BorderBrush}"
-                                BorderThickness="1"
-                                CornerRadius="14">
-                            <StackPanel>
-                                <TextBlock Text="RESULT"
-                                           FontSize="9"
-                                           FontWeight="Bold"
-                                           Foreground="{DynamicResource SecondaryTextBrush}"/>
-                                <TextBlock x:Name="ResponseStatusText"
-                                           Margin="0,7,0,0"
-                                           FontSize="14"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource TextBrush}"/>
-                                <TextBlock x:Name="ResponseContentTypeText"
-                                           Margin="0,4,0,0"
-                                           FontSize="11"
-                                           Foreground="{DynamicResource SecondaryTextBrush}"
-                                           TextWrapping="Wrap"/>
-                                <TextBlock x:Name="DurationText"
-                                           Margin="0,4,0,0"
-                                           FontSize="11"
-                                           Foreground="{DynamicResource SecondaryTextBrush}"/>
-                            </StackPanel>
-                        </Border>
-
-                        <Border Margin="0,12,0,0"
-                                Padding="14"
-                                Background="{DynamicResource AppBackgroundBrush}"
-                                BorderBrush="{DynamicResource BorderBrush}"
-                                BorderThickness="1"
-                                CornerRadius="14">
-                            <StackPanel>
-                                <TextBlock Text="CLIENT"
-                                           FontSize="9"
-                                           FontWeight="Bold"
-                                           Foreground="{DynamicResource SecondaryTextBrush}"/>
-                                <TextBlock x:Name="UsernameText"
-                                           Margin="0,7,0,0"
-                                           FontSize="12"
-                                           Foreground="{DynamicResource TextBrush}"
-                                           TextWrapping="Wrap"/>
-                                <TextBlock x:Name="IpAddressText"
-                                           Margin="0,4,0,0"
-                                           FontSize="11"
-                                           Foreground="{DynamicResource SecondaryTextBrush}"
-                                           TextWrapping="Wrap"/>
-                                <TextBlock x:Name="UserAgentText"
-                                           Margin="0,4,0,0"
-                                           FontSize="11"
-                                           Foreground="{DynamicResource SecondaryTextBrush}"
-                                           TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
-
-                        <Border Margin="0,12,0,0"
-                                Padding="14"
-                                Background="{DynamicResource AppBackgroundBrush}"
-                                BorderBrush="{DynamicResource BorderBrush}"
-                                BorderThickness="1"
-                                CornerRadius="14">
-                            <StackPanel>
-                                <TextBlock Text="RESPONSE BODY"
-                                           FontSize="9"
-                                           FontWeight="Bold"
-                                           Foreground="{DynamicResource SecondaryTextBrush}"/>
-                                <TextBlock x:Name="ResponseBodyText"
-                                           Margin="0,7,0,0"
-                                           FontSize="11"
-                                           Foreground="{DynamicResource TextBrush}"
-                                           TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </ScrollViewer>
-            </Border>
-        </Grid>
+                <TextBlock Grid.Row="2"
+                           Text="Horizontal scroll is available for the complete MariaDB-style column set."
+                           Margin="8,9,8,2"
+                           FontSize="10"
+                           Foreground="{DynamicResource SecondaryTextBrush}"/>
+            </Grid>
+        </Border>
     </Grid>
 </UserControl>
