@@ -16,7 +16,7 @@ public sealed class AdminSearchController(
     public async Task<IActionResult> SearchHttpRequests(
         [FromQuery] string? q,
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 50,
+        [FromQuery] int pageSize = 10000,
         CancellationToken cancellationToken = default)
     {
         var results = await searchService.SearchAsync(q, page, pageSize, cancellationToken);
@@ -25,7 +25,7 @@ public sealed class AdminSearchController(
         {
             query = q,
             page = Math.Max(1, page),
-            pageSize = Math.Clamp(pageSize, 1, 100),
+            pageSize = Math.Clamp(pageSize, 1, 10000),
             count = results.Count,
             results
         });
