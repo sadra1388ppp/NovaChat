@@ -221,7 +221,7 @@ public sealed class ElasticsearchHttpRequestLogService(
 
             return new DeleteAllHttpRequestResult(
                 deletedInDatabase,
-                response.IsValidResponse ? response.Deleted : 0,
+                response.IsValidResponse ? response.Deleted.GetValueOrDefault() : 0,
                 response.IsValidResponse);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
