@@ -46,6 +46,34 @@ public sealed class HttpRequestLogDbContext(DbContextOptions<HttpRequestLogDbCon
         });
     }
 
+    public async Task EnsureSchemaCompatibilityAsync(CancellationToken cancellationToken = default)
+    {
+        const string columnExistsSql = @"
+            SELECT COUNT(*)
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'HttpRequests'
+              AND COLUMN_NAME = 'ResponseBody';";
+
+        var connection = Database.GetDbConnection();
+        await using var command = connection.CreateCommand();
+        command.CommandText = columnExistsSql;
+
+        if (connection.State != System.Data.ConnectionState.Open)
+            await connection.OpenAsync(cancellationToken);
+
+        var exists = Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken)) > 0;
+
+        if (exists)
+            return;
+
+        await using var alterCommand = connection.CreateCommand();
+        alterCommand.CommandText = @"
+            ALTER TABLE `HttpRequests`
+            ADD COLUMN `ResponseBody` LONGTEXT NULL AFTER `ResponseContentLength`;";
+
+        await alterCommand.ExecuteNonQueryAsync(cancellationToken);
+    }
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         var added = ChangeTracker.Entries<HttpRequestLog>()
