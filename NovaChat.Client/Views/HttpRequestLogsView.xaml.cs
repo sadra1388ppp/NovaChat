@@ -133,9 +133,170 @@ public partial class HttpRequestLogsView : UserControl
         }
     }
 
+    private void SelectAllButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isBusy || _logs.Count == 0) return;
+
+        LogsGrid.SelectAll();
+        UpdateSelectionState();
+    }
+
+    private async void DeleteSelectedButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isBusy) return;
+
+        var ids = LogsGrid.SelectedItems
+            .Cast<HttpRequestLogSearchItem>()
+            .Select(x => x.Id)
+            .Where(x => x > 0)
+            .Distinct()
+            .ToArray();
+
+        if (ids.Length == 0)
+        {
+            MessageBox.Show(
+                "Select at least one HTTP request first.",
+                "Delete HTTP Requests",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var confirmation = MessageBox.Show(
+            $"Delete {ids.Length:n0} selected HTTP request(s)?\n\nThis will permanently remove them from MariaDB and Elasticsearch.",
+            "Confirm Delete",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (confirmation != MessageBoxResult.Yes)
+            return;
+
+        _isBusy = true;
+        SetBusyState(true);
+
+        var deleted = false;
+
+        try
+        {
+            var result = await _apiService.PostAsync<object, DeleteHttpRequestsResponse>(
+                "api/admin/search/http-requests/delete",
+                new { ids });
+
+            if (result == null)
+                throw new InvalidOperationException("The server returned an empty delete response.");
+
+            deleted = true;
+            StatusText.Text = result.ElasticsearchSucceeded
+                ? $"Deleted {result.DeletedInDatabase:n0} request(s)."
+                : $"Deleted {result.DeletedInDatabase:n0} from MariaDB; Elasticsearch cleanup was incomplete.";
+
+            if (!result.ElasticsearchSucceeded)
+            {
+                MessageBox.Show(
+                    "The requests were deleted from MariaDB, but some Elasticsearch documents could not be deleted. Use Reindex to synchronize Elasticsearch.",
+                    "Delete HTTP Requests",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = "Delete failed.";
+            MessageBox.Show(
+                $"Could not delete the selected HTTP requests.\n\n{ex.Message}",
+                "Delete HTTP Requests",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        finally
+        {
+            _isBusy = false;
+            SetBusyState(false);
+        }
+
+        if (deleted)
+            await SearchAsync();
+    }
+
+    private async void DeleteAllButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isBusy || _logs.Count == 0) return;
+
+        var confirmation = MessageBox.Show(
+            "Delete ALL HTTP requests?\n\nThis permanently removes every record from MariaDB and Elasticsearch. This action cannot be undone.",
+            "Confirm Delete All",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (confirmation != MessageBoxResult.Yes)
+            return;
+
+        _isBusy = true;
+        SetBusyState(true);
+
+        var deleted = false;
+
+        try
+        {
+            var result = await _apiService.PostAsync<object, DeleteHttpRequestsResponse>(
+                "api/admin/search/http-requests/delete-all",
+                new { });
+
+            if (result == null)
+                throw new InvalidOperationException("The server returned an empty delete response.");
+
+            deleted = true;
+            StatusText.Text = result.ElasticsearchSucceeded
+                ? $"Deleted {result.DeletedInDatabase:n0} request(s)."
+                : $"Deleted {result.DeletedInDatabase:n0} from MariaDB; Elasticsearch cleanup was incomplete.";
+
+            if (!result.ElasticsearchSucceeded)
+            {
+                MessageBox.Show(
+                    "All MariaDB records were deleted, but Elasticsearch could not be fully cleaned. Use Reindex to synchronize Elasticsearch.",
+                    "Delete All HTTP Requests",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = "Delete all failed.";
+            MessageBox.Show(
+                $"Could not delete all HTTP requests.\n\n{ex.Message}",
+                "Delete All HTTP Requests",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        finally
+        {
+            _isBusy = false;
+            SetBusyState(false);
+        }
+
+        if (deleted)
+            await SearchAsync();
+    }
+
     private void LogsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        // The complete record is displayed directly in the grid, just like the MariaDB table.
+        UpdateSelectionState();
+    }
+
+    private void UpdateSelectionState()
+    {
+        var selectedCount = LogsGrid.SelectedItems.Count;
+
+        if (!_isBusy)
+            StatusText.Text = selectedCount > 0
+                ? $"{selectedCount:n0} request(s) selected."
+                : (string.IsNullOrWhiteSpace(SearchBox.Text)
+                    ? "All indexed requests"
+                    : $"Search: {SearchBox.Text.Trim()}");
+
+        DeleteSelectedButton.IsEnabled = !_isBusy && selectedCount > 0;
+        SelectAllButton.IsEnabled = !_isBusy && _logs.Count > 0;
+        DeleteAllButton.IsEnabled = !_isBusy && _logs.Count > 0;
     }
 
     private void SetBusyState(bool busy)
@@ -143,6 +304,9 @@ public partial class HttpRequestLogsView : UserControl
         SearchButton.IsEnabled = !busy;
         SearchBox.IsEnabled = !busy;
         ReindexButton.IsEnabled = !busy;
+        SelectAllButton.IsEnabled = !busy && _logs.Count > 0;
+        DeleteSelectedButton.IsEnabled = !busy && LogsGrid.SelectedItems.Count > 0;
+        DeleteAllButton.IsEnabled = !busy && _logs.Count > 0;
     }
 
     private static string FormatDate(DateTime value)
@@ -161,6 +325,13 @@ public partial class HttpRequestLogsView : UserControl
     {
         public int Indexed { get; set; }
         public int Failed { get; set; }
+    }
+
+    private sealed class DeleteHttpRequestsResponse
+    {
+        public int DeletedInDatabase { get; set; }
+        public long DeletedInElasticsearch { get; set; }
+        public bool ElasticsearchSucceeded { get; set; }
     }
 
     private sealed class HttpRequestLogSearchItem
