@@ -10,10 +10,9 @@ namespace NovaChat.Client.Views;
 
 public partial class HttpRequestLogsView : UserControl
 {
-    private const int PageSize = 50;
+    private const int PageSize = 10000;
     private readonly ApiService _apiService = new();
     private readonly ObservableCollection<HttpRequestLogSearchItem> _logs = [];
-    private int _page = 1;
     private bool _isBusy;
 
     public event Action? BackToChatRequested;
@@ -31,7 +30,7 @@ public partial class HttpRequestLogsView : UserControl
         await SearchAsync();
     }
 
-    private async void SearchButton_Click(object sender, RoutedEventArgs e) => await SearchAsync(1);
+    private async void SearchButton_Click(object sender, RoutedEventArgs e) => await SearchAsync();
 
     private void BackButton_Click(object sender, RoutedEventArgs e) => BackToChatRequested?.Invoke();
 
@@ -39,7 +38,7 @@ public partial class HttpRequestLogsView : UserControl
     {
         if (e.Key != Key.Enter) return;
         e.Handled = true;
-        await SearchAsync(1);
+        await SearchAsync();
     }
 
     private async void ReindexButton_Click(object sender, RoutedEventArgs e)
@@ -66,7 +65,9 @@ public partial class HttpRequestLogsView : UserControl
         {
             StatusText.Text = "Reindex failed.";
             MessageBox.Show(
-                $"Could not reindex HTTP requests.\n\n{ex.Message}",
+                $"Could not reindex HTTP requests.
+
+{ex.Message}",
                 "HTTP Request Search",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
@@ -78,62 +79,53 @@ public partial class HttpRequestLogsView : UserControl
         }
     }
 
-    private async Task SearchAsync(int? page = null)
+    private async Task SearchAsync()
     {
-        if (_isBusy && page.HasValue) return;
+        if (_isBusy) return;
 
         _isBusy = true;
         SetBusyState(true);
 
-        var targetPage = page.GetValueOrDefault(_page);
-        if (targetPage < 1) targetPage = 1;
-
         try
         {
             var query = SearchBox.Text.Trim();
-            var endpoint = $"api/admin/search/http-requests?page={targetPage}&pageSize={PageSize}";
+            var endpoint = $"api/admin/search/http-requests?page=1&pageSize={PageSize}";
+
             if (!string.IsNullOrWhiteSpace(query))
                 endpoint += $"&q={Uri.EscapeDataString(query)}";
 
             var response = await _apiService.GetAsync<HttpRequestSearchResponse>(endpoint);
+
             if (response == null)
                 throw new InvalidOperationException("The server returned an empty search response.");
 
-            _page = Math.Max(1, response.Page);
             _logs.Clear();
 
             foreach (var item in response.Results ?? [])
             {
                 item.StartedAtText = FormatDate(item.StartedAt);
+                item.CompletedAtText = FormatDate(item.CompletedAt);
                 _logs.Add(item);
             }
 
             ResultCountText.Text = response.Count.ToString("n0", CultureInfo.InvariantCulture);
             EmptyText.Visibility = _logs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
-            PreviousButton.IsEnabled = _page > 1;
-            NextButton.IsEnabled = _logs.Count == PageSize;
-            PageText.Text = $"Page {_page}";
-
             StatusText.Text = string.IsNullOrWhiteSpace(query)
-                ? "Indexed requests"
+                ? "All indexed requests"
                 : $"Search: {query}";
-
-            if (_logs.Count == 0)
-                ClearDetails();
         }
         catch (Exception ex)
         {
             _logs.Clear();
             EmptyText.Visibility = Visibility.Visible;
             ResultCountText.Text = "0";
-            PreviousButton.IsEnabled = false;
-            NextButton.IsEnabled = false;
-            PageText.Text = $"Page {targetPage}";
             StatusText.Text = "Search failed.";
 
             MessageBox.Show(
-                $"Could not search HTTP requests.\n\n{ex.Message}",
+                $"Could not search HTTP requests.
+
+{ex.Message}",
                 "HTTP Request Search",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
@@ -145,67 +137,9 @@ public partial class HttpRequestLogsView : UserControl
         }
     }
 
-    private async void PreviousButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_page <= 1) return;
-        await SearchAsync(_page - 1);
-    }
-
-    private async void NextButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_logs.Count < PageSize) return;
-        await SearchAsync(_page + 1);
-    }
-
     private void LogsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (LogsGrid.SelectedItem is not HttpRequestLogSearchItem selected)
-        {
-            ClearDetails();
-            return;
-        }
-
-        SelectedRequestText.Text = $"Request #{selected.Id} • {selected.StartedAtText}";
-        RequestMethodText.Text = $"{selected.Method} {selected.Protocol} • {selected.Scheme}://{selected.Host}";
-        RequestPathText.Text = selected.Path;
-        RequestQueryText.Text = string.IsNullOrWhiteSpace(selected.QueryString)
-            ? "No query string"
-            : selected.QueryString;
-
-        ResponseStatusText.Text = $"{selected.StatusCode} • {(selected.Succeeded ? "Succeeded" : "Failed")}";
-        ResponseContentTypeText.Text = string.IsNullOrWhiteSpace(selected.ResponseContentType)
-            ? "Response type: unknown"
-            : $"Response type: {selected.ResponseContentType}";
-        DurationText.Text = $"Duration: {selected.DurationMs:n0} ms";
-
-        UsernameText.Text = string.IsNullOrWhiteSpace(selected.Username)
-            ? "User: Anonymous"
-            : $"User: @{selected.Username}";
-        IpAddressText.Text = string.IsNullOrWhiteSpace(selected.IpAddress)
-            ? "IP: Unknown"
-            : $"IP: {selected.IpAddress}";
-        UserAgentText.Text = string.IsNullOrWhiteSpace(selected.UserAgent)
-            ? "User agent: Unknown"
-            : $"User agent: {selected.UserAgent}";
-
-        ResponseBodyText.Text = string.IsNullOrWhiteSpace(selected.ResponseBody)
-            ? "(empty)"
-            : selected.ResponseBody;
-    }
-
-    private void ClearDetails()
-    {
-        SelectedRequestText.Text = "Select a request to inspect its details.";
-        RequestMethodText.Text = string.Empty;
-        RequestPathText.Text = string.Empty;
-        RequestQueryText.Text = string.Empty;
-        ResponseStatusText.Text = string.Empty;
-        ResponseContentTypeText.Text = string.Empty;
-        DurationText.Text = string.Empty;
-        UsernameText.Text = string.Empty;
-        IpAddressText.Text = string.Empty;
-        UserAgentText.Text = string.Empty;
-        ResponseBodyText.Text = string.Empty;
+        // The complete record is displayed directly in the grid, just like the MariaDB table.
     }
 
     private void SetBusyState(bool busy)
@@ -213,12 +147,10 @@ public partial class HttpRequestLogsView : UserControl
         SearchButton.IsEnabled = !busy;
         SearchBox.IsEnabled = !busy;
         ReindexButton.IsEnabled = !busy;
-        PreviousButton.IsEnabled = !busy && _page > 1;
-        NextButton.IsEnabled = !busy && _logs.Count == PageSize;
     }
 
     private static string FormatDate(DateTime value)
-        => value.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+        => value.ToString("yyyy-MM-dd HH:mm:ss.ffffff", CultureInfo.InvariantCulture);
 
     private sealed class HttpRequestSearchResponse
     {
@@ -263,6 +195,8 @@ public partial class HttpRequestLogsView : UserControl
 
         [JsonIgnore]
         public string StartedAtText { get; set; } = string.Empty;
-    }
 
+        [JsonIgnore]
+        public string CompletedAtText { get; set; } = string.Empty;
+    }
 }
