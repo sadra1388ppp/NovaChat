@@ -15,7 +15,7 @@
             <Setter Property="HeadersVisibility" Value="Column"/>
             <Setter Property="CanUserAddRows" Value="False"/>
             <Setter Property="AutoGenerateColumns" Value="False"/>
-            <Setter Property="SelectionMode" Value="Single"/>
+            <Setter Property="SelectionMode" Value="Extended"/>
             <Setter Property="SelectionUnit" Value="FullRow"/>
             <Setter Property="IsReadOnly" Value="True"/>
             <Setter Property="EnableRowVirtualization" Value="True"/>
@@ -158,14 +158,42 @@
                 </Grid.RowDefinitions>
 
                 <Grid Margin="10,6,10,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
                     <TextBlock Text="HttpRequests"
                                FontSize="16"
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource TextBrush}"/>
-                    <TextBlock x:Name="StatusText"
-                               HorizontalAlignment="Right"
-                               VerticalAlignment="Center"
-                               Foreground="{DynamicResource SecondaryTextBrush}"/>
+
+                    <StackPanel Grid.Column="1"
+                                Orientation="Horizontal">
+                        <Button x:Name="SelectAllButton"
+                                Content="Select All"
+                                Style="{DynamicResource SecondaryButtonStyle}"
+                                Height="36"
+                                Padding="12,0"
+                                Margin="0,0,8,0"
+                                Click="SelectAllButton_Click"/>
+
+                        <Button x:Name="DeleteSelectedButton"
+                                Content="Delete Selected"
+                                Style="{DynamicResource SecondaryButtonStyle}"
+                                Height="36"
+                                Padding="12,0"
+                                Margin="0,0,8,0"
+                                Click="DeleteSelectedButton_Click"
+                                IsEnabled="False"/>
+
+                        <Button x:Name="DeleteAllButton"
+                                Content="Delete All"
+                                Style="{DynamicResource SecondaryButtonStyle}"
+                                Height="36"
+                                Padding="12,0"
+                                Click="DeleteAllButton_Click"/>
+                    </StackPanel>
                 </Grid>
 
                 <DataGrid x:Name="LogsGrid"
