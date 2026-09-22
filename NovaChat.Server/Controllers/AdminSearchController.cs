@@ -76,10 +76,47 @@ public sealed class AdminSearchController(
         });
     }
 
+    [HttpPost("http-requests/delete")]
+    public async Task<IActionResult> DeleteHttpRequests(
+        [FromBody] DeleteHttpRequestsRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (request.Ids is null || request.Ids.Length == 0)
+            return BadRequest(new { message = "Select at least one HTTP request to delete." });
+
+        var result = await searchService.DeleteAsync(db, request.Ids, cancellationToken);
+
+        return Ok(new
+        {
+            deletedInDatabase = result.DeletedInDatabase,
+            deletedInElasticsearch = result.DeletedInElasticsearch,
+            elasticsearchSucceeded = result.ElasticsearchSucceeded
+        });
+    }
+
+    [HttpPost("http-requests/delete-all")]
+    public async Task<IActionResult> DeleteAllHttpRequests(CancellationToken cancellationToken = default)
+    {
+        var result = await searchService.DeleteAllAsync(db, cancellationToken);
+
+        return Ok(new
+        {
+            deletedInDatabase = result.DeletedInDatabase,
+            deletedInElasticsearch = result.DeletedInElasticsearch,
+            elasticsearchSucceeded = result.ElasticsearchSucceeded
+        });
+    }
+
     [HttpPost("http-requests/reindex")]
     public async Task<IActionResult> ReindexHttpRequests(CancellationToken cancellationToken = default)
     {
         var result = await searchService.ReindexAsync(db, cancellationToken);
         return Ok(result);
     }
+}
+
+
+public sealed class DeleteHttpRequestsRequest
+{
+    public long[] Ids { get; set; } = [];
 }
