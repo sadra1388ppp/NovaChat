@@ -82,6 +82,8 @@ try
     await httpRequestLogDb.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS AuditLogs;");
     await httpRequestLogDb.Database.EnsureCreatedAsync();
 
+    await httpRequestLogDb.EnsureSchemaCompatibilityAsync();
+
     await scope.ServiceProvider
         .GetRequiredService<ElasticsearchMessageService>()
         .EnsureIndexAsync();
