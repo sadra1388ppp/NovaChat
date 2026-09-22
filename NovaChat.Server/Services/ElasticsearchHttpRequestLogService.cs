@@ -221,7 +221,7 @@ public sealed class ElasticsearchHttpRequestLogService(
                     .From((page - 1) * pageSize)
                     .Size(pageSize)
                     .Query(q => q.MatchAll())
-                    .Sort(sort => sort.Field(f => f.StartedAt, field => field.Order(SortOrder.Desc))), cancellationToken)
+                    .Sort(sort => sort.Field(f => f.Id, field => field.Order(SortOrder.Desc))), cancellationToken)
                 : await _client.SearchAsync<HttpRequestLogSearchDocument>(search => search
                     .Indices(IndexName)
                     .From((page - 1) * pageSize)
