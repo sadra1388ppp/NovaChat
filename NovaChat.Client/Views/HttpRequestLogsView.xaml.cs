@@ -65,9 +65,7 @@ public partial class HttpRequestLogsView : UserControl
         {
             StatusText.Text = "Reindex failed.";
             MessageBox.Show(
-                $"Could not reindex HTTP requests.
-
-{ex.Message}",
+                $"Could not reindex HTTP requests.\n\n{ex.Message}",
                 "HTTP Request Search",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
@@ -123,9 +121,7 @@ public partial class HttpRequestLogsView : UserControl
             StatusText.Text = "Search failed.";
 
             MessageBox.Show(
-                $"Could not search HTTP requests.
-
-{ex.Message}",
+                $"Could not search HTTP requests.\n\n{ex.Message}",
                 "HTTP Request Search",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
