@@ -7,7 +7,7 @@ public sealed class UploadStorageService
     private static readonly FrozenSet<string> DangerousExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         ".ade", ".adp", ".apk", ".app", ".appx", ".bat", ".bin", ".cab", ".cmd", ".com",
-        ".cpl", ".dll", ".dmg", ".exe", ".hta", ".inf", ".ins", ".iso", ".jar", ".js",
+        ".cpl", ".dll", ".dmg", ".hta", ".inf", ".ins", ".iso", ".jar", ".js",
         ".jse", ".lnk", ".msi", ".msp", ".mst", ".ocx", ".ps1", ".psd1", ".psm1",
         ".reg", ".scr", ".sys", ".vb", ".vbe", ".vbs", ".vhd", ".vhdx", ".wsc", ".wsf",
         ".wsh"
