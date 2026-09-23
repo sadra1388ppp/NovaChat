@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Http;
 using System.Collections.Frozen;
 
 namespace NovaChat.Server.Services;
@@ -59,12 +58,13 @@ public sealed class UploadStorageService
     public string GetWritePath(string category, string storageName)
     {
         ValidateCategory(category);
+
         var safeName = Path.GetFileName(storageName);
-        if (string.IsNullOrWhiteSpace(safeName) || !string.Equals(safeName, storageName, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(safeName) ||
+            !string.Equals(safeName, storageName, StringComparison.Ordinal))
             throw new InvalidOperationException("Invalid storage file name.");
 
-        var directory = GetWriteDirectory(category);
-        return Path.Combine(directory, safeName);
+        return Path.Combine(GetWriteDirectory(category), safeName);
     }
 
     public string? FindExistingPath(string category, string storageName)
@@ -72,7 +72,8 @@ public sealed class UploadStorageService
         ValidateCategory(category);
 
         var safeName = Path.GetFileName(storageName);
-        if (string.IsNullOrWhiteSpace(safeName) || !string.Equals(safeName, storageName, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(safeName) ||
+            !string.Equals(safeName, storageName, StringComparison.Ordinal))
             return null;
 
         var newPath = Path.Combine(RootPath, category, safeName);
@@ -90,10 +91,18 @@ public sealed class UploadStorageService
 
         var normalized = storageName.Replace('\\', '/').TrimStart('/');
         var parts = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
         if (parts.Length != 2)
             return null;
 
-        return FindExistingPath(Path.Combine("chat", parts[0]), parts[1]);
+        var category = parts[0];
+        var safeName = parts[1];
+
+        if (!string.Equals(category, Path.GetFileName(category), StringComparison.Ordinal) ||
+            !string.Equals(safeName, Path.GetFileName(safeName), StringComparison.Ordinal))
+            return null;
+
+        return FindExistingPath(Path.Combine("chat", category), safeName);
     }
 
     public static string GetSafeOriginalFileName(string fileName)
