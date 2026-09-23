@@ -13,7 +13,6 @@ public sealed class ExecutableSecurityService
     private const uint WtdChoiceFile = 1;
     private const uint WtdStateActionVerify = 1;
     private const uint WtdStateActionClose = 2;
-    private const uint WtdLifetimeSigningFlag = 2048;
 
     public async Task<ExecutableSecurityResult> ValidateAsync(
         string filePath,
@@ -34,9 +33,8 @@ public sealed class ExecutableSecurityService
         var hash = await ComputeSha256Async(filePath, cancellationToken);
 
         // WinVerifyTrust is the Windows Authenticode trust decision.
-        // Do not force an online certificate-revocation lookup here: an unavailable
-        // CRL/OCSP endpoint must not turn an otherwise trusted Authenticode signature
-        // into a false rejection.
+        // It understands normal Authenticode rules, including timestamped
+        // signatures whose signing certificate has since expired.
         if (!VerifyAuthenticodeSignature(filePath))
         {
             return ExecutableSecurityResult.Rejected(
@@ -59,17 +57,10 @@ public sealed class ExecutableSecurityService
 
         using (certificate)
         {
-            var now = DateTime.UtcNow;
-            if (certificate.NotBefore.ToUniversalTime() > now ||
-                certificate.NotAfter.ToUniversalTime() < now)
-            {
-                return ExecutableSecurityResult.Rejected(
-                    "The EXE signing certificate is outside its validity period.",
-                    hash,
-                    certificate.Subject,
-                    certificate.Issuer);
-            }
-
+            // Do not independently reject an expired certificate here.
+            // Authenticode can remain valid when the signature has a trusted
+            // timestamp from when the certificate was valid. WinVerifyTrust
+            // is responsible for that policy decision.
             return ExecutableSecurityResult.Accepted(
                 hash,
                 certificate.Subject,
@@ -105,17 +96,11 @@ public sealed class ExecutableSecurityService
         {
             CbStruct = (uint)Marshal.SizeOf<WinTrustData>(),
             DwUiChoice = WtdUiNone,
-
-            // Let Windows perform its normal Authenticode trust evaluation.
-            // Explicit online revocation flags were removed because they caused
-            // valid signed files to be rejected when CRL/OCSP endpoints were
-            // unreachable from the server.
             FdwRevocationChecks = 0,
-
             DwUnionChoice = WtdChoiceFile,
             PFile = fileInfoPtr,
             DwStateAction = WtdStateActionVerify,
-            DwProvFlags = WtdLifetimeSigningFlag,
+            DwProvFlags = 0,
             DwUiContext = 0
         };
 
@@ -129,8 +114,11 @@ public sealed class ExecutableSecurityService
 
             var status = WinVerifyTrust(IntPtr.Zero, ref action, dataPtr);
 
-            trustData.DwStateAction = WtdStateActionClose;
-            Marshal.StructureToPtr(trustData, dataPtr, false);
+            // The verification call may populate HWvtStateData. Re-read it
+            // before asking WinTrust to close its state.
+            var verifiedTrustData = Marshal.PtrToStructure<WinTrustData>(dataPtr);
+            verifiedTrustData.DwStateAction = WtdStateActionClose;
+            Marshal.StructureToPtr(verifiedTrustData, dataPtr, false);
             _ = WinVerifyTrust(IntPtr.Zero, ref action, dataPtr);
 
             return status == 0;
