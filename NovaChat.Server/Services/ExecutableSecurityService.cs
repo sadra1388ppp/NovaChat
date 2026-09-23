@@ -10,31 +10,39 @@ public sealed class ExecutableSecurityService
         new("00AAC56B-CD44-11d0-8CC2-00C04FC295EE");
 
     private const uint WtdUiNone = 2;
-    private const uint WtdRevokeWholeChain = 1;
     private const uint WtdChoiceFile = 1;
     private const uint WtdStateActionVerify = 1;
     private const uint WtdStateActionClose = 2;
-    private const uint WtdRevocationCheckChainExcludeRoot = 128;
     private const uint WtdLifetimeSigningFlag = 2048;
 
-    public async Task<ExecutableSecurityResult> ValidateAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<ExecutableSecurityResult> ValidateAsync(
+        string filePath,
+        CancellationToken cancellationToken = default)
     {
         if (!OperatingSystem.IsWindows())
-            return ExecutableSecurityResult.Rejected("Executable signature validation is only supported on Windows.");
+            return ExecutableSecurityResult.Rejected(
+                "Executable signature validation is only supported on Windows.");
 
         if (!File.Exists(filePath))
-            return ExecutableSecurityResult.Rejected("The uploaded executable could not be found.");
+            return ExecutableSecurityResult.Rejected(
+                "The uploaded executable could not be found.");
 
-        var extension = Path.GetExtension(filePath);
-        if (!string.Equals(extension, ".exe", StringComparison.OrdinalIgnoreCase))
-            return ExecutableSecurityResult.Rejected("Only EXE files can be checked by this validator.");
+        if (!string.Equals(Path.GetExtension(filePath), ".exe", StringComparison.OrdinalIgnoreCase))
+            return ExecutableSecurityResult.Rejected(
+                "Only EXE files can be checked by this validator.");
 
         var hash = await ComputeSha256Async(filePath, cancellationToken);
 
+        // WinVerifyTrust is the Windows Authenticode trust decision.
+        // Do not force an online certificate-revocation lookup here: an unavailable
+        // CRL/OCSP endpoint must not turn an otherwise trusted Authenticode signature
+        // into a false rejection.
         if (!VerifyAuthenticodeSignature(filePath))
+        {
             return ExecutableSecurityResult.Rejected(
                 "The EXE does not have a valid trusted Authenticode signature.",
                 hash);
+        }
 
         X509Certificate2 certificate;
         try
@@ -51,28 +59,12 @@ public sealed class ExecutableSecurityService
 
         using (certificate)
         {
-            if (certificate.NotBefore > DateTime.UtcNow || certificate.NotAfter < DateTime.UtcNow)
+            var now = DateTime.UtcNow;
+            if (certificate.NotBefore.ToUniversalTime() > now ||
+                certificate.NotAfter.ToUniversalTime() < now)
             {
                 return ExecutableSecurityResult.Rejected(
                     "The EXE signing certificate is outside its validity period.",
-                    hash,
-                    certificate.Subject,
-                    certificate.Issuer);
-            }
-
-            using var chain = new X509Chain();
-            chain.ChainPolicy.RevocationMode = X509RevocationMode.Online;
-            chain.ChainPolicy.RevocationFlag = X509RevocationFlag.ExcludeRoot;
-            chain.ChainPolicy.VerificationFlags = X509VerificationFlags.NoFlag;
-
-            if (!chain.Build(certificate))
-            {
-                var reason = chain.ChainStatus.Length == 0
-                    ? "The EXE signing certificate chain could not be validated."
-                    : $"The EXE signing certificate chain is not trusted: {chain.ChainStatus[0].StatusInformation.Trim()}";
-
-                return ExecutableSecurityResult.Rejected(
-                    reason,
                     hash,
                     certificate.Subject,
                     certificate.Issuer);
@@ -86,7 +78,9 @@ public sealed class ExecutableSecurityService
         }
     }
 
-    private static async Task<string> ComputeSha256Async(string filePath, CancellationToken cancellationToken)
+    private static async Task<string> ComputeSha256Async(
+        string filePath,
+        CancellationToken cancellationToken)
     {
         await using var stream = new FileStream(
             filePath,
@@ -106,41 +100,46 @@ public sealed class ExecutableSecurityService
         var fileInfo = new WinTrustFileInfo(filePath);
         var fileInfoPtr = Marshal.AllocHGlobal(Marshal.SizeOf<WinTrustFileInfo>());
         var action = WinTrustActionGenericVerifyV2;
+
         var trustData = new WinTrustData
         {
             CbStruct = (uint)Marshal.SizeOf<WinTrustData>(),
             DwUiChoice = WtdUiNone,
-            FdwRevocationChecks = WtdRevokeWholeChain,
+
+            // Let Windows perform its normal Authenticode trust evaluation.
+            // Explicit online revocation flags were removed because they caused
+            // valid signed files to be rejected when CRL/OCSP endpoints were
+            // unreachable from the server.
+            FdwRevocationChecks = 0,
+
             DwUnionChoice = WtdChoiceFile,
             PFile = fileInfoPtr,
             DwStateAction = WtdStateActionVerify,
-            DwProvFlags = WtdRevocationCheckChainExcludeRoot | WtdLifetimeSigningFlag,
+            DwProvFlags = WtdLifetimeSigningFlag,
             DwUiContext = 0
         };
+
+        IntPtr dataPtr = IntPtr.Zero;
 
         try
         {
             Marshal.StructureToPtr(fileInfo, fileInfoPtr, false);
-            var dataPtr = Marshal.AllocHGlobal(Marshal.SizeOf<WinTrustData>());
+            dataPtr = Marshal.AllocHGlobal(Marshal.SizeOf<WinTrustData>());
+            Marshal.StructureToPtr(trustData, dataPtr, false);
 
-            try
-            {
-                Marshal.StructureToPtr(trustData, dataPtr, false);
-                var status = WinVerifyTrust(IntPtr.Zero, ref action, dataPtr);
+            var status = WinVerifyTrust(IntPtr.Zero, ref action, dataPtr);
 
-                trustData.DwStateAction = WtdStateActionClose;
-                Marshal.StructureToPtr(trustData, dataPtr, false);
-                _ = WinVerifyTrust(IntPtr.Zero, ref action, dataPtr);
+            trustData.DwStateAction = WtdStateActionClose;
+            Marshal.StructureToPtr(trustData, dataPtr, false);
+            _ = WinVerifyTrust(IntPtr.Zero, ref action, dataPtr);
 
-                return status == 0;
-            }
-            finally
-            {
-                Marshal.FreeHGlobal(dataPtr);
-            }
+            return status == 0;
         }
         finally
         {
+            if (dataPtr != IntPtr.Zero)
+                Marshal.FreeHGlobal(dataPtr);
+
             Marshal.FreeHGlobal(fileInfo.PcwszFilePath);
             Marshal.FreeHGlobal(fileInfoPtr);
         }
