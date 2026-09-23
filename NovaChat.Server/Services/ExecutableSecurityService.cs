@@ -186,7 +186,6 @@ public sealed class ExecutableSecurityService
             unchecked((int)0x80096010) => "TRUST_E_BAD_DIGEST",
             unchecked((int)0x80096005) => "TRUST_E_SUBJECT_NOT_TRUSTED",
             unchecked((int)0x80096019) => "TRUST_E_TIME_STAMP",
-            unchecked((int)0x80096005) => "TRUST_E_SUBJECT_NOT_TRUSTED",
             unchecked((int)0x80092003) => "CRYPT_E_FILE_ERROR",
             unchecked((int)0x80092026) => "CRYPT_E_REVOCATION_OFFLINE",
             unchecked((int)0x800B0004) => "TRUST_E_ACTION_UNKNOWN",
