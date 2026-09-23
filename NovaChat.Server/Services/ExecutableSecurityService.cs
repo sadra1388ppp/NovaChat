@@ -19,58 +19,72 @@ public sealed class ExecutableSecurityService
         string filePath,
         CancellationToken cancellationToken = default)
     {
+        Log($"Starting validation: {filePath}");
+
         if (!OperatingSystem.IsWindows())
-        {
-            return ExecutableSecurityResult.Rejected(
-                "Executable signature validation is only supported on Windows.");
-        }
+            return Reject("Executable signature validation is only supported on Windows.");
 
         if (!File.Exists(filePath))
-        {
-            return ExecutableSecurityResult.Rejected(
-                "The uploaded executable could not be found.");
-        }
+            return Reject("The uploaded executable could not be found.");
 
         if (!string.Equals(Path.GetExtension(filePath), ".exe", StringComparison.OrdinalIgnoreCase))
-        {
-            return ExecutableSecurityResult.Rejected(
-                "Only EXE files can be checked by this validator.");
-        }
+            return Reject("Only EXE files can be checked by this validator.");
+
+        var info = new FileInfo(filePath);
+        Log($"Size: {info.Length} bytes");
 
         var hash = await ComputeSha256Async(filePath, cancellationToken);
+        Log($"SHA256: {hash}");
 
         var signature = VerifyAuthenticodeSignature(filePath);
+
+        Log($"WinVerifyTrust status: 0x{signature.Status:X8}");
+        Log($"WinVerifyTrust name: {signature.StatusName}");
+        Log($"WinVerifyTrust valid: {signature.IsValid}");
+
         if (!signature.IsValid)
         {
-            return ExecutableSecurityResult.Rejected(
+            var reason =
                 $"The EXE Authenticode signature was rejected by Windows. " +
-                $"WinVerifyTrust=0x{signature.Status:X8} ({signature.StatusName}).",
-                hash);
+                $"WinVerifyTrust=0x{signature.Status:X8} ({signature.StatusName}).";
+
+            Log($"REJECTED: {reason}");
+            return ExecutableSecurityResult.Rejected(reason, hash);
         }
 
-        X509Certificate2 certificate;
         try
         {
             using var certificateData = X509Certificate.CreateFromSignedFile(filePath);
-            certificate = new X509Certificate2(certificateData);
+            using var certificate = new X509Certificate2(certificateData);
+
+            var subject = certificate.Subject;
+            var issuer = certificate.Issuer;
+            var simpleName = certificate.GetNameInfo(X509NameType.SimpleName, false);
+
+            Log($"Certificate Subject: {subject}");
+            Log($"Certificate Issuer: {issuer}");
+            Log($"Certificate Publisher: {simpleName}");
+            Log($"Certificate Thumbprint: {certificate.Thumbprint}");
+            Log($"Certificate NotBefore: {certificate.NotBefore:O}");
+            Log($"Certificate NotAfter: {certificate.NotAfter:O}");
+            Log("ACCEPTED: trusted Authenticode signature.");
+
+            // Certificate expiry is intentionally not checked independently.
+            // WinVerifyTrust evaluates Authenticode timestamps correctly.
+            return ExecutableSecurityResult.Accepted(
+                hash,
+                subject,
+                issuer,
+                simpleName);
         }
-        catch (Exception ex) when (ex is CryptographicException or ArgumentException)
+        catch (Exception ex) when (
+            ex is CryptographicException or ArgumentException)
         {
+            Log($"Certificate extraction failed: {ex.GetType().Name}: {ex.Message}");
+
             return ExecutableSecurityResult.Rejected(
                 "Windows accepted the Authenticode signature, but the signing certificate could not be read.",
                 hash);
-        }
-
-        using (certificate)
-        {
-            // Do not independently reject an expired certificate.
-            // Authenticode timestamps can preserve the validity of a signature
-            // after the signing certificate itself has expired.
-            return ExecutableSecurityResult.Accepted(
-                hash,
-                certificate.Subject,
-                certificate.Issuer,
-                certificate.GetNameInfo(X509NameType.SimpleName, false));
         }
     }
 
@@ -83,8 +97,8 @@ public sealed class ExecutableSecurityService
             FileMode.Open,
             FileAccess.Read,
             FileShare.Read,
-            bufferSize: 1024 * 64,
-            options: FileOptions.Asynchronous | FileOptions.SequentialScan);
+            64 * 1024,
+            FileOptions.Asynchronous | FileOptions.SequentialScan);
 
         using var sha256 = SHA256.Create();
         var hash = await sha256.ComputeHashAsync(stream, cancellationToken);
@@ -109,43 +123,53 @@ public sealed class ExecutableSecurityService
             DwUiContext = 0
         };
 
-        var verifyStatus = -1;
+        var verifyStatus = unchecked((int)0xFFFFFFFF);
         var closeStatus = 0;
 
         try
         {
             Marshal.StructureToPtr(fileInfo, fileInfoPtr, false);
 
-            // Pass WINTRUST_DATA directly by reference. This matches the native
-            // WinVerifyTrust contract and avoids a second manually-managed copy
-            // of the structure.
+            Log("Calling WinVerifyTrust...");
             verifyStatus = WinVerifyTrust(
                 IntPtr.Zero,
                 ref action,
                 ref trustData);
 
-            // The VERIFY call can populate hWVTStateData. The same structure
-            // must then be passed back with STATEACTION_CLOSE to release it.
+            Log($"WinVerifyTrust returned 0x{verifyStatus:X8}.");
+
+            // WinTrust may allocate HWVTStateData during VERIFY.
+            // Reuse the same structure for the mandatory CLOSE operation.
             trustData.DwStateAction = WtdStateActionClose;
+
             closeStatus = WinVerifyTrust(
                 IntPtr.Zero,
                 ref action,
                 ref trustData);
 
-            var isValid = verifyStatus == 0;
+            Log($"WinVerifyTrust close returned 0x{closeStatus:X8}.");
 
             return new SignatureVerificationResult(
-                isValid,
+                verifyStatus == 0,
                 verifyStatus,
                 GetWinTrustStatusName(verifyStatus));
         }
+        catch (Exception ex)
+        {
+            Log($"WinVerifyTrust exception: {ex.GetType().FullName}");
+            Log($"Message: {ex.Message}");
+            Log($"HRESULT: 0x{ex.HResult:X8}");
+
+            return new SignatureVerificationResult(
+                false,
+                ex.HResult,
+                "WINTRUST_EXCEPTION");
+        }
         finally
         {
-            // STATEACTION_CLOSE is the documented way to release WinTrust's
-            // verification state. If the first call itself failed, attempting
-            // CLOSE is still harmless; WinTrust owns the state handle.
-            _ = closeStatus;
-            Marshal.FreeHGlobal(fileInfo.PcwszFilePath);
+            if (fileInfo.PcwszFilePath != IntPtr.Zero)
+                Marshal.FreeHGlobal(fileInfo.PcwszFilePath);
+
             Marshal.FreeHGlobal(fileInfoPtr);
         }
     }
@@ -161,11 +185,20 @@ public sealed class ExecutableSecurityService
             unchecked((int)0x800B0101) => "CERT_E_EXPIRED",
             unchecked((int)0x80096010) => "TRUST_E_BAD_DIGEST",
             unchecked((int)0x80096005) => "TRUST_E_SUBJECT_NOT_TRUSTED",
+            unchecked((int)0x80096019) => "TRUST_E_TIME_STAMP",
+            unchecked((int)0x80092003) => "CRYPT_E_FILE_ERROR",
+            unchecked((int)0x80092026) => "CRYPT_E_REVOCATION_OFFLINE",
             unchecked((int)0x800B0004) => "TRUST_E_ACTION_UNKNOWN",
             unchecked((int)0x800B0003) => "TRUST_E_PROVIDER_UNKNOWN",
             unchecked((int)0x800B0006) => "TRUST_E_SUBJECT_FORM_UNKNOWN",
             _ => "UNKNOWN_WINTRUST_STATUS"
         };
+
+    private static void Log(string message) =>
+        Console.WriteLine($"[EXE SECURITY] {message}");
+
+    private static ExecutableSecurityResult Reject(string reason) =>
+        ExecutableSecurityResult.Rejected(reason);
 
     private readonly record struct SignatureVerificationResult(
         bool IsValid,
