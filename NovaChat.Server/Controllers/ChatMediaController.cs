@@ -124,7 +124,8 @@ public class ChatMediaController : ControllerBase
                     System.IO.File.Delete(temporaryPath);
                     return BadRequest(new
                     {
-                        message = "EXE upload rejected.",
+                        message = securityResult.Reason,
+                        error = "EXE_UPLOAD_REJECTED",
                         reason = securityResult.Reason,
                         sha256 = securityResult.Sha256
                     });
