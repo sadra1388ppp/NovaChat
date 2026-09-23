@@ -136,8 +136,18 @@ public sealed class UploadStorageService
 
     private static void ValidateCategory(string category)
     {
-        if (string.IsNullOrWhiteSpace(category) ||
-            category.IndexOfAny(['\\', '/', ':', '.', '\0']) >= 0)
+        if (string.IsNullOrWhiteSpace(category))
+            throw new ArgumentException("Invalid upload category.", nameof(category));
+
+        var normalized = category.Replace('\\', '/').Trim('/');
+        if (string.IsNullOrWhiteSpace(normalized))
+            throw new ArgumentException("Invalid upload category.", nameof(category));
+
+        var segments = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+        if (segments.Any(segment =>
+                segment is "." or ".." ||
+                segment.IndexOfAny([':', '\\', '\0']) >= 0))
             throw new ArgumentException("Invalid upload category.", nameof(category));
     }
 }
