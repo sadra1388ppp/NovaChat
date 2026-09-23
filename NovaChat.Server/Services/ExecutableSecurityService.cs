@@ -141,6 +141,7 @@ public sealed class ExecutableSecurityService
         }
         finally
         {
+            Marshal.FreeHGlobal(fileInfo.PcwszFilePath);
             Marshal.FreeHGlobal(fileInfoPtr);
         }
     }
