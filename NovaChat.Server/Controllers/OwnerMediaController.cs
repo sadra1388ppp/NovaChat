@@ -9,7 +9,7 @@ namespace NovaChat.Server.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize(Policy = "OwnerOnly")]
-public sealed class OwnerMediaController(AppDbContext db, IWebHostEnvironment environment) : ControllerBase
+public sealed class OwnerMediaController(AppDbContext db, IWebHostEnvironment environment, UploadStorageService uploads) : ControllerBase
 {
     [HttpGet("{chatId:int}/{messageId:int}")]
     public async Task<IActionResult> Get(int chatId, int messageId)
@@ -23,14 +23,8 @@ public sealed class OwnerMediaController(AppDbContext db, IWebHostEnvironment en
         if (!MediaMessageEnvelope.TryParse(message.Content, out var media) || media == null)
             return NotFound(new { message = "The selected message does not contain supported legacy media." });
 
-        var root = environment.WebRootPath ?? Path.Combine(environment.ContentRootPath, "wwwroot");
-        var uploadRoot = Path.GetFullPath(Path.Combine(root, "uploads", "chat"));
-        var path = Path.GetFullPath(Path.Combine(uploadRoot, media.StorageName.Replace('/', Path.DirectorySeparatorChar)));
-        var rootWithSeparator = uploadRoot.EndsWith(Path.DirectorySeparatorChar)
-            ? uploadRoot
-            : uploadRoot + Path.DirectorySeparatorChar;
-
-        if (!path.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase) || !System.IO.File.Exists(path))
+        var path = uploads.FindExistingChatPath(media.StorageName);
+        if (path == null)
             return NotFound(new { message = "Media file not found on the server." });
 
         Response.Headers.ContentDisposition = $"inline; filename=\"{Uri.EscapeDataString(Path.GetFileName(media.FileName))}\"";
