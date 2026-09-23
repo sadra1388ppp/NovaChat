@@ -10,11 +10,13 @@ public class AvatarController : ControllerBase
 {
     private readonly UserService _userService;
     private readonly IWebHostEnvironment _environment;
+    private readonly UploadStorageService _uploads;
 
-    public AvatarController(UserService userService, IWebHostEnvironment environment)
+    public AvatarController(UserService userService, IWebHostEnvironment environment, UploadStorageService uploads)
     {
         _userService = userService;
         _environment = environment;
+        _uploads = uploads;
     }
 
     [AllowAnonymous]
@@ -27,9 +29,8 @@ public class AvatarController : ControllerBase
         var fileName = Path.GetFileName(user.AvatarUrl);
         if (string.IsNullOrWhiteSpace(fileName)) return NotFound();
 
-        var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
-        var path = Path.Combine(root, "uploads", "avatars", fileName);
-        if (!System.IO.File.Exists(path)) return NotFound();
+        var path = _uploads.FindExistingPath("avatars", fileName);
+        if (path == null) return NotFound();
 
         var bytes = await System.IO.File.ReadAllBytesAsync(path);
         if (bytes.Length == 0) return NotFound();

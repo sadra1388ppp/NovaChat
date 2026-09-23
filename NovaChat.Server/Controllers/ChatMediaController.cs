@@ -31,15 +31,18 @@ public class ChatMediaController : ControllerBase
     private readonly ChatService _chatService;
     private readonly IWebHostEnvironment _environment;
     private readonly IHubContext<NovaChat.Server.Hubs.ChatHub> _hub;
+    private readonly UploadStorageService _uploads;
 
     public ChatMediaController(
         ChatService chatService,
         IWebHostEnvironment environment,
-        IHubContext<NovaChat.Server.Hubs.ChatHub> hub)
+        IHubContext<NovaChat.Server.Hubs.ChatHub> hub,
+        UploadStorageService uploads)
     {
         _chatService = chatService;
         _environment = environment;
         _hub = hub;
+        _uploads = uploads;
     }
 
     [HttpPost("{chatId}")]
@@ -64,7 +67,11 @@ public class ChatMediaController : ControllerBase
         if (type is not ("image" or "file" or "voice"))
             return BadRequest(new { message = "Invalid media type." });
 
-        var extension = Path.GetExtension(file.FileName);
+        var originalFileName = UploadStorageService.GetSafeOriginalFileName(file.FileName);
+        if (!UploadStorageService.IsSafeUploadedFileName(originalFileName))
+            return BadRequest(new { message = "The uploaded file name is not allowed." });
+
+        var extension = Path.GetExtension(originalFileName);
         if (type == "image" && !AllowedImages.Contains(extension))
             return BadRequest(new { message = "Unsupported image type." });
         if (type == "file" && !AllowedFiles.Contains(extension))
@@ -95,8 +102,7 @@ public class ChatMediaController : ControllerBase
         }
 
         var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
-        var folder = Path.Combine(root, "uploads", "chat", type);
-        Directory.CreateDirectory(folder);
+        var folder = _uploads.GetWriteDirectory(Path.Combine("chat", type));
 
         var storageName = $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
         var path = Path.Combine(folder, storageName);
@@ -117,7 +123,7 @@ public class ChatMediaController : ControllerBase
             {
                 Type = type,
                 StorageName = $"{type}/{storageName}",
-                FileName = Path.GetFileName(file.FileName),
+                FileName = originalFileName,
                 ContentType = contentType,
                 Size = file.Length,
                 DurationSeconds = parsedDuration
@@ -164,14 +170,8 @@ public class ChatMediaController : ControllerBase
         if (!await _chatService.CanAccessChatAsync(message.ChatId, userId.Value))
             return Forbid();
 
-        var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
-        var uploadRoot = Path.GetFullPath(Path.Combine(root, "uploads", "chat"));
-        var path = Path.GetFullPath(Path.Combine(uploadRoot, media.StorageName.Replace('/', Path.DirectorySeparatorChar)));
-        var rootWithSeparator = uploadRoot.EndsWith(Path.DirectorySeparatorChar)
-            ? uploadRoot
-            : uploadRoot + Path.DirectorySeparatorChar;
-
-        if (!path.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase) || !System.IO.File.Exists(path))
+        var path = _uploads.FindExistingChatPath(media.StorageName);
+        if (path == null)
             return NotFound();
 
         Response.Headers.ContentDisposition = $"inline; filename=\"{Uri.EscapeDataString(media.FileName)}\"";

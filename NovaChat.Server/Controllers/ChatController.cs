@@ -23,14 +23,16 @@ public partial class ChatController : ControllerBase
     private readonly IHubContext<ChatHub> _hub;
     private readonly ILogger<ChatController> _logger;
     private readonly IWebHostEnvironment _environment;
+    private readonly UploadStorageService _uploads;
 
-    public ChatController(ChatService chatService, IConfiguration configuration, IHubContext<ChatHub> hub, ILogger<ChatController> logger, IWebHostEnvironment environment)
+    public ChatController(ChatService chatService, IConfiguration configuration, IHubContext<ChatHub> hub, ILogger<ChatController> logger, IWebHostEnvironment environment, UploadStorageService uploads)
     {
         _chatService = chatService;
         _configuration = configuration;
         _hub = hub;
         _logger = logger;
         _environment = environment;
+        _uploads = uploads;
     }
 
     [HttpPost]
@@ -172,6 +174,8 @@ public partial class ChatController : ControllerBase
         var member = await _chatService.GetMemberAsync(chatId, userId);
         if (member == null || member.Role == (int)ChatMemberRole.Member) return Forbid();
         if (file == null || file.Length == 0) return BadRequest(new { message = "Please select an image." });
+        var originalFileName = UploadStorageService.GetSafeOriginalFileName(file.FileName);
+        if (!UploadStorageService.IsSafeUploadedFileName(originalFileName)) return BadRequest(new { message = "The uploaded file name is not allowed." });
         if (file.Length > MaxGroupAvatarBytes) return BadRequest(new { message = "Group picture must be 5 MB or smaller." });
         var allowed = new[] { "image/jpeg", "image/png", "image/webp" };
         if (!allowed.Contains(file.ContentType, StringComparer.OrdinalIgnoreCase)) return BadRequest(new { message = "Only JPG, PNG and WebP images are supported." });
@@ -180,8 +184,7 @@ public partial class ChatController : ControllerBase
             await using var input = file.OpenReadStream();
             using var image = await Image.LoadAsync(input);
             if (image.Width < 64 || image.Height < 64) return BadRequest(new { message = "Image must be at least 64x64 pixels." });
-            var dir = Path.Combine(_environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot"), "uploads", "groups");
-            Directory.CreateDirectory(dir);
+            var dir = _uploads.GetWriteDirectory("groups");
             var fileName = $"{Guid.NewGuid():N}.jpg";
             var fullPath = Path.Combine(dir, fileName);
             image.Mutate(x => x.Resize(new ResizeOptions { Size = new Size(512, 512), Mode = ResizeMode.Crop }));
@@ -340,8 +343,8 @@ public partial class ChatController : ControllerBase
         var fileName = Path.GetFileName(avatarUrl);
         if (string.IsNullOrWhiteSpace(fileName)) return;
         var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
-        var path = Path.Combine(root, "uploads", "groups", fileName);
-        if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
+        var path = _uploads.FindExistingPath("groups", fileName);
+        if (path != null && System.IO.File.Exists(path)) System.IO.File.Delete(path);
     }
 
     private bool TryGetCurrentUserId(out long userId) => long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out userId) && userId > 0;

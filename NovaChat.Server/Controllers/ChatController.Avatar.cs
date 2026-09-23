@@ -25,9 +25,8 @@ public partial class ChatController
         if (string.IsNullOrWhiteSpace(fileName))
             return NotFound();
 
-        var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
-        var path = Path.Combine(root, "uploads", "groups", fileName);
-        if (!System.IO.File.Exists(path))
+        var path = _uploads.FindExistingPath("groups", fileName);
+        if (path == null)
             return NotFound();
 
         Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
