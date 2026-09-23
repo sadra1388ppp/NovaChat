@@ -205,7 +205,7 @@ public sealed class ExecutableSecurityService
     }
 
     [DllImport("wintrust.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern long WinVerifyTrust(
+    private static extern int WinVerifyTrust(
         IntPtr hwnd,
         ref Guid pgActionID,
         IntPtr pWvtData);
