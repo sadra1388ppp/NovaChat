@@ -25,24 +25,27 @@ public class ChatMediaController : ControllerBase
     private static readonly HashSet<string> AllowedFiles = new(StringComparer.OrdinalIgnoreCase)
     {
         ".pdf", ".txt", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
-        ".zip", ".rar", ".7z", ".csv", ".json", ".mp4", ".mov", ".mkv", ".webm"
+        ".zip", ".rar", ".7z", ".csv", ".json", ".mp4", ".mov", ".mkv", ".webm", ".exe"
     };
 
     private readonly ChatService _chatService;
     private readonly IWebHostEnvironment _environment;
     private readonly IHubContext<NovaChat.Server.Hubs.ChatHub> _hub;
     private readonly UploadStorageService _uploads;
+    private readonly ExecutableSecurityService _executableSecurity;
 
     public ChatMediaController(
         ChatService chatService,
         IWebHostEnvironment environment,
         IHubContext<NovaChat.Server.Hubs.ChatHub> hub,
-        UploadStorageService uploads)
+        UploadStorageService uploads,
+        ExecutableSecurityService executableSecurity)
     {
         _chatService = chatService;
         _environment = environment;
         _hub = hub;
         _uploads = uploads;
+        _executableSecurity = executableSecurity;
     }
 
     [HttpPost("{chatId}")]
@@ -106,11 +109,29 @@ public class ChatMediaController : ControllerBase
 
         var storageName = $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
         var path = Path.Combine(folder, storageName);
+        var temporaryPath = Path.Combine(folder, $"{Guid.NewGuid():N}.uploading{extension.ToLowerInvariant()}");
 
         try
         {
-            await using (var stream = System.IO.File.Create(path))
+            await using (var stream = System.IO.File.Create(temporaryPath))
                 await file.CopyToAsync(stream);
+
+            if (string.Equals(extension, ".exe", StringComparison.OrdinalIgnoreCase))
+            {
+                var securityResult = await _executableSecurity.ValidateAsync(temporaryPath, HttpContext.RequestAborted);
+                if (!securityResult.Allowed)
+                {
+                    System.IO.File.Delete(temporaryPath);
+                    return BadRequest(new
+                    {
+                        message = "EXE upload rejected.",
+                        reason = securityResult.Reason,
+                        sha256 = securityResult.Sha256
+                    });
+                }
+            }
+
+            System.IO.File.Move(temporaryPath, path);
 
             var contentType = type switch
             {
@@ -150,6 +171,9 @@ public class ChatMediaController : ControllerBase
             {
                 if (System.IO.File.Exists(path))
                     System.IO.File.Delete(path);
+
+                if (System.IO.File.Exists(temporaryPath))
+                    System.IO.File.Delete(temporaryPath);
             }
             catch { }
 
