@@ -14,7 +14,6 @@ public sealed class ExecutableSecurityService
     private const uint WtdChoiceFile = 1;
     private const uint WtdStateActionVerify = 1;
     private const uint WtdStateActionClose = 2;
-    private const uint WtdRevocationCheckNone = 0x10;
 
     public async Task<ExecutableSecurityResult> ValidateAsync(
         string filePath,
@@ -106,7 +105,7 @@ public sealed class ExecutableSecurityService
             DwUnionChoice = WtdChoiceFile,
             PFile = fileInfoPtr,
             DwStateAction = WtdStateActionVerify,
-            DwProvFlags = WtdRevocationCheckNone,
+            DwProvFlags = 0,
             DwUiContext = 0
         };
 
