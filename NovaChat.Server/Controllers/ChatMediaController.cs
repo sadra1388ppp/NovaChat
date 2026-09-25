@@ -32,14 +32,12 @@ public class ChatMediaController : ControllerBase
     private readonly IWebHostEnvironment _environment;
     private readonly IHubContext<NovaChat.Server.Hubs.ChatHub> _hub;
     private readonly UploadStorageService _uploads;
-    private readonly ExecutableSecurityService _executableSecurity;
 
     public ChatMediaController(
         ChatService chatService,
         IWebHostEnvironment environment,
         IHubContext<NovaChat.Server.Hubs.ChatHub> hub,
-        UploadStorageService uploads,
-        ExecutableSecurityService executableSecurity)
+        UploadStorageService uploads)
     {
         _chatService = chatService;
         _environment = environment;
@@ -115,22 +113,6 @@ public class ChatMediaController : ControllerBase
         {
             await using (var stream = System.IO.File.Create(temporaryPath))
                 await file.CopyToAsync(stream);
-
-            if (string.Equals(extension, ".exe", StringComparison.OrdinalIgnoreCase))
-            {
-                var securityResult = await _executableSecurity.ValidateAsync(temporaryPath, HttpContext.RequestAborted);
-                if (!securityResult.Allowed)
-                {
-                    System.IO.File.Delete(temporaryPath);
-                    return BadRequest(new
-                    {
-                        message = securityResult.Reason,
-                        error = "EXE_UPLOAD_REJECTED",
-                        reason = securityResult.Reason,
-                        sha256 = securityResult.Sha256
-                    });
-                }
-            }
 
             System.IO.File.Move(temporaryPath, path);
 
