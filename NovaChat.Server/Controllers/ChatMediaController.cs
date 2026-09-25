@@ -25,7 +25,7 @@ public class ChatMediaController : ControllerBase
     private static readonly HashSet<string> AllowedFiles = new(StringComparer.OrdinalIgnoreCase)
     {
         ".pdf", ".txt", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
-        ".zip", ".rar", ".7z", ".csv", ".json", ".mp4", ".mov", ".mkv", ".webm"
+        ".zip", ".rar", ".7z", ".csv", ".json", ".mp4", ".mov", ".mkv", ".webm", ".exe"
     };
 
     private readonly ChatService _chatService;
