@@ -76,7 +76,7 @@ public partial class MainView
         var dialog = new OpenFileDialog
         {
             Title = "Send photo or file",
-            Filter = "Photos and files|*.jpg;*.jpeg;*.png;*.webp;*.gif;*.pdf;*.doc;*.docx;*.xls;*.xlsx;*.ppt;*.pptx;*.zip;*.rar;*.7z;*.txt;*.csv;*.json;*.mp4;*.mov;*.mkv;*.webm|All files|*.*",
+            Filter = "Photos and files|*.jpg;*.jpeg;*.png;*.webp;*.gif;*.pdf;*.doc;*.docx;*.xls;*.xlsx;*.ppt;*.pptx;*.zip;*.rar;*.7z;*.txt;*.csv;*.json;*.mp4;*.mov;*.mkv;*.webm;*.exe|All files|*.*",
             CheckFileExists = true,
             Multiselect = false
         };
