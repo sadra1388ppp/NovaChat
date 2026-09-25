@@ -23,7 +23,6 @@ builder.Services.AddSingleton<JwtTokenRevocationService>();
 builder.Services.AddScoped<AdminService>();
 builder.Services.AddScoped<ChatService>();
 builder.Services.AddSingleton<UploadStorageService>();
-builder.Services.AddSingleton<ExecutableSecurityService>();
 builder.Services.AddScoped<ChatRequestService>();
 builder.Services.AddScoped<GroupAddRequestService>();
 builder.Services.AddScoped<MessageReadService>();
