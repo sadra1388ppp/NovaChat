@@ -24,7 +24,7 @@ builder.Services.AddHttpClient("MetaDefender", client =>
         baseUrl = "https://api.metadefender.com/v4/";
 
     client.BaseAddress = new Uri(baseUrl, UriKind.Absolute);
-    client.Timeout = TimeSpan.FromSeconds(30);
+    client.Timeout = TimeSpan.FromMinutes(5);
 });
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ContactService>();
