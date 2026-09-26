@@ -15,17 +15,6 @@ builder.Services.AddDbContext<AppDbContext>(options => options.UseNovaChatDataba
 builder.Services.AddScoped<DatabaseInitializer>();
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
-builder.Services.AddHttpClient("MetaDefender", client =>
-{
-    var baseUrl = builder.Configuration[
-        "FileSecurity:Executable:MetaDefender:BaseUrl"];
-
-    if (string.IsNullOrWhiteSpace(baseUrl))
-        baseUrl = "https://api.metadefender.com/v4/";
-
-    client.BaseAddress = new Uri(baseUrl, UriKind.Absolute);
-    client.Timeout = TimeSpan.FromMinutes(5);
-});
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ContactService>();
 builder.Services.AddSingleton<PasswordHashService>();
