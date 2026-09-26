@@ -34,12 +34,6 @@ public sealed class ExecutableFileSecurityService
         string originalFileName,
         CancellationToken cancellationToken = default)
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            return ExecutableValidationResult.Rejected(
-                "EXE upload validation requires a Windows server.");
-        }
-
         if (!File.Exists(filePath))
         {
             return ExecutableValidationResult.Rejected(
