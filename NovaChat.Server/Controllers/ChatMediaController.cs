@@ -239,7 +239,7 @@ public class ChatMediaController : ControllerBase
         if (!path.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase) || !System.IO.File.Exists(path))
             return NotFound();
 
-        Response.Headers.ContentDisposition = $"inline; filename="{Uri.EscapeDataString(media.FileName)}"";
+        Response.Headers.ContentDisposition = $"inline; filename=\"{Uri.EscapeDataString(media.FileName)}\"";
         Response.Headers.CacheControl = "private, max-age=3600";
         return PhysicalFile(path, media.ContentType, enableRangeProcessing: true);
     }
