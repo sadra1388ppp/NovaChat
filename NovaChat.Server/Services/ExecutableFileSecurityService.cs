@@ -90,12 +90,12 @@ public sealed class ExecutableFileSecurityService
 
     private HashSet<string> GetTrustedPublisherThumbprints()
     {
-        var values = _configuration
-            .GetSection("FileSecurity:Executable:TrustedPublisherThumbprints")
-            .Get<string[]>() ?? [];
+        var section = _configuration.GetSection(
+            "FileSecurity:Executable:TrustedPublisherThumbprints");
 
-        return values
-            .Select(NormalizeThumbprint)
+        return section
+            .GetChildren()
+            .Select(child => NormalizeThumbprint(child.Value))
             .Where(value => value.Length > 0)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
