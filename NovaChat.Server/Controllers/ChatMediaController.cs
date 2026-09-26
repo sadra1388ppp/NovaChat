@@ -134,7 +134,6 @@ public class ChatMediaController : ControllerBase
 
                 executableValidation = await _executableSecurity.ValidateAsync(
                     quarantinePath,
-                    Path.GetFileName(file.FileName),
                     HttpContext.RequestAborted);
 
                 if (!executableValidation.IsAccepted)
@@ -183,7 +182,7 @@ public class ChatMediaController : ControllerBase
             return Ok(new
             {
                 message = isExecutable
-                    ? "Executable security scan passed and file was sent successfully."
+                    ? "Verified executable sent successfully."
                     : "Media sent successfully.",
                 data = dto
             });
