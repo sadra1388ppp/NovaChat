@@ -1,5 +1,5 @@
 using System.Buffers.Binary;
-using System.Runtime.InteropServices;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -7,16 +7,7 @@ namespace NovaChat.Server.Services;
 
 public sealed class ExecutableFileSecurityService
 {
-    private const int WinVerifyTrustSuccess = 0;
-    private const uint WtdUiNone = 2;
-    private const uint WtdRevokeWholeChain = 1;
-    private const uint WtdChoiceFile = 1;
-    private const uint WtdStateActionVerify = 1;
-    private const uint WtdStateActionClose = 2;
-    private const uint WtdRevocationCheckChainExcludeRoot = 128;
-
-    private static readonly Guid WinTrustActionGenericVerifyV2 =
-        new("00AAC56B-CD44-11d0-8CC2-00C04FC295EE");
+    private const int DefaultScanTimeoutSeconds = 120;
 
     private readonly IConfiguration _configuration;
 
@@ -32,78 +23,223 @@ public sealed class ExecutableFileSecurityService
         if (!OperatingSystem.IsWindows())
         {
             return ExecutableValidationResult.Rejected(
-                "EXE uploads require a Windows server because Authenticode validation uses Windows trust services.");
+                "EXE upload validation requires a Windows server.");
         }
 
         if (!File.Exists(filePath))
-            return ExecutableValidationResult.Rejected("The uploaded file could not be found.");
+            return ExecutableValidationResult.Rejected(
+                "The uploaded file could not be found.");
 
         if (!await IsPortableExecutableAsync(filePath, cancellationToken))
-            return ExecutableValidationResult.Rejected("The uploaded file is not a valid Windows PE executable.");
-
-        var hash = await ComputeSha256Async(filePath, cancellationToken);
-
-        if (!VerifyAuthenticode(filePath))
+        {
             return ExecutableValidationResult.Rejected(
-                "The executable does not have a valid trusted Authenticode signature.");
+                "The uploaded file is not a valid Windows PE executable.");
+        }
 
-        X509Certificate2 signer;
+        var sha256 = await ComputeSha256Async(filePath, cancellationToken);
+
+        var scanResult = await ScanWithWindowsDefenderAsync(
+            filePath,
+            cancellationToken);
+
+        if (!scanResult.IsAccepted)
+        {
+            return ExecutableValidationResult.Rejected(
+                scanResult.Message);
+        }
+
+        // A valid EXE does not need to be Authenticode-signed to pass.
+        // When a signer exists, store its metadata for audit/UI purposes.
+        var signer = TryReadSigner(filePath);
+
+        return ExecutableValidationResult.Accepted(
+            sha256,
+            signer.Publisher,
+            signer.Thumbprint);
+    }
+
+    private async Task<DefenderScanResult> ScanWithWindowsDefenderAsync(
+        string filePath,
+        CancellationToken cancellationToken)
+    {
+        var defenderPath = FindMpCmdRun();
+
+        if (defenderPath == null)
+        {
+            return DefenderScanResult.Rejected(
+                "Microsoft Defender command-line scanner (MpCmdRun.exe) was not found on the server.");
+        }
+
+        var timeoutSeconds = _configuration.GetValue(
+            "FileSecurity:Executable:ScanTimeoutSeconds",
+            DefaultScanTimeoutSeconds);
+
+        timeoutSeconds = Math.Clamp(timeoutSeconds, 10, 900);
+
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = defenderPath,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            }
+        };
+
+        process.StartInfo.ArgumentList.Add("-Scan");
+        process.StartInfo.ArgumentList.Add("-ScanType");
+        process.StartInfo.ArgumentList.Add("3");
+        process.StartInfo.ArgumentList.Add("-File");
+        process.StartInfo.ArgumentList.Add(filePath);
+
+        try
+        {
+            if (!process.Start())
+            {
+                return DefenderScanResult.Rejected(
+                    "Windows Defender could not start the EXE security scan.");
+            }
+
+            var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+            var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+
+            try
+            {
+                await process.WaitForExitAsync(timeoutCts.Token);
+            }
+            catch (OperationCanceledException) when (
+                !cancellationToken.IsCancellationRequested)
+            {
+                TryKill(process);
+
+                return DefenderScanResult.Rejected(
+                    $"Windows Defender scan timed out after {timeoutSeconds} seconds.");
+            }
+
+            var stdout = await stdoutTask;
+            var stderr = await stderrTask;
+
+            if (process.ExitCode == 0)
+                return DefenderScanResult.Accepted();
+
+            var details = string.IsNullOrWhiteSpace(stderr)
+                ? stdout
+                : stderr;
+
+            details = NormalizeScanDetails(details);
+
+            return DefenderScanResult.Rejected(
+                string.IsNullOrWhiteSpace(details)
+                    ? $"Windows Defender rejected the executable scan (exit code {process.ExitCode})."
+                    : $"Windows Defender rejected the executable scan (exit code {process.ExitCode}). {details}");
+        }
+        catch (OperationCanceledException)
+        {
+            TryKill(process);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            TryKill(process);
+
+            return DefenderScanResult.Rejected(
+                $"Windows Defender scan failed: {ex.Message}");
+        }
+    }
+
+    private static string? FindMpCmdRun()
+    {
+        var platformRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "Microsoft",
+            "Windows Defender",
+            "Platform");
+
+        if (Directory.Exists(platformRoot))
+        {
+            var platformPath = Directory
+                .GetDirectories(platformRoot)
+                .OrderByDescending(path => path, StringComparer.OrdinalIgnoreCase)
+                .Select(path => Path.Combine(path, "MpCmdRun.exe"))
+                .FirstOrDefault(File.Exists);
+
+            if (platformPath != null)
+                return platformPath;
+        }
+
+        var programFilesPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            "Windows Defender",
+            "MpCmdRun.exe");
+
+        return File.Exists(programFilesPath)
+            ? programFilesPath
+            : null;
+    }
+
+    private static void TryKill(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+        }
+        catch
+        {
+            // Best-effort cleanup only.
+        }
+    }
+
+    private static string NormalizeScanDetails(string details)
+    {
+        var singleLine = details
+            .Replace('\r', ' ')
+            .Replace('\n', ' ')
+            .Trim();
+
+        return singleLine.Length > 500
+            ? singleLine[..500] + "..."
+            : singleLine;
+    }
+
+    private static (string? Publisher, string? Thumbprint) TryReadSigner(
+        string filePath)
+    {
         try
         {
 #pragma warning disable SYSLIB0057
             using var certificate = X509Certificate.CreateFromSignedFile(filePath);
 #pragma warning restore SYSLIB0057
-            signer = new X509Certificate2(certificate);
-        }
-        catch (Exception)
-        {
-            return ExecutableValidationResult.Rejected(
-                "The executable signature could not be read.");
-        }
+            using var signer = new X509Certificate2(certificate);
 
-        using (signer)
-        {
-            if (!signer.Verify())
-            {
-                return ExecutableValidationResult.Rejected(
-                    "The executable signing certificate could not be validated against the server's trusted certificate chain.");
-            }
+            var publisher = signer.GetNameInfo(
+                X509NameType.SimpleName,
+                forIssuer: false);
 
             var thumbprint = NormalizeThumbprint(signer.Thumbprint);
-            var publisher = signer.GetNameInfo(X509NameType.SimpleName, false);
 
-            var trustedThumbprints = GetTrustedPublisherThumbprints();
-
-            if (trustedThumbprints.Count > 0 &&
-                !trustedThumbprints.Contains(thumbprint, StringComparer.OrdinalIgnoreCase))
-            {
-                return ExecutableValidationResult.Rejected(
-                    "The executable is signed, but its publisher is not on NovaChat's trusted publisher allowlist.");
-            }
-
-            return ExecutableValidationResult.Accepted(
-                hash,
-                publisher,
-                thumbprint);
+            return (
+                string.IsNullOrWhiteSpace(publisher) ? null : publisher,
+                string.IsNullOrWhiteSpace(thumbprint) ? null : thumbprint);
         }
-    }
-
-    private HashSet<string> GetTrustedPublisherThumbprints()
-    {
-        var section = _configuration.GetSection(
-            "FileSecurity:Executable:TrustedPublisherThumbprints");
-
-        return section
-            .GetChildren()
-            .Select(child => NormalizeThumbprint(child.Value))
-            .Where(value => value.Length > 0)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        catch
+        {
+            return (null, null);
+        }
     }
 
     private static string NormalizeThumbprint(string? thumbprint) =>
         string.IsNullOrWhiteSpace(thumbprint)
             ? string.Empty
-            : new string(thumbprint.Where(Uri.IsHexDigit).ToArray()).ToUpperInvariant();
+            : new string(
+                thumbprint.Where(Uri.IsHexDigit).ToArray())
+                .ToUpperInvariant();
 
     private static async Task<string> ComputeSha256Async(
         string filePath,
@@ -117,7 +253,10 @@ public sealed class ExecutableFileSecurityService
             bufferSize: 128 * 1024,
             options: FileOptions.Asynchronous | FileOptions.SequentialScan);
 
-        var hash = await SHA256.HashDataAsync(stream, cancellationToken);
+        var hash = await SHA256.HashDataAsync(
+            stream,
+            cancellationToken);
+
         return Convert.ToHexString(hash);
     }
 
@@ -137,19 +276,29 @@ public sealed class ExecutableFileSecurityService
             return false;
 
         var dosHeader = new byte[64];
-        await ReadExactlyAsync(stream, dosHeader, cancellationToken);
+        await ReadExactlyAsync(
+            stream,
+            dosHeader,
+            cancellationToken);
 
-        if (dosHeader[0] != (byte)'M' || dosHeader[1] != (byte)'Z')
+        if (dosHeader[0] != (byte)'M' ||
+            dosHeader[1] != (byte)'Z')
             return false;
 
-        var peOffset = BinaryPrimitives.ReadInt32LittleEndian(dosHeader.AsSpan(0x3C, 4));
-        if (peOffset < 64 || peOffset > stream.Length - 4)
+        var peOffset = BinaryPrimitives.ReadInt32LittleEndian(
+            dosHeader.AsSpan(0x3C, 4));
+
+        if (peOffset < 64 ||
+            peOffset > stream.Length - 4)
             return false;
 
         stream.Position = peOffset;
 
         var peHeader = new byte[4];
-        await ReadExactlyAsync(stream, peHeader, cancellationToken);
+        await ReadExactlyAsync(
+            stream,
+            peHeader,
+            cancellationToken);
 
         return peHeader[0] == (byte)'P' &&
                peHeader[1] == (byte)'E' &&
@@ -167,7 +316,9 @@ public sealed class ExecutableFileSecurityService
         while (offset < buffer.Length)
         {
             var read = await stream.ReadAsync(
-                buffer.AsMemory(offset, buffer.Length - offset),
+                buffer.AsMemory(
+                    offset,
+                    buffer.Length - offset),
                 cancellationToken);
 
             if (read == 0)
@@ -177,92 +328,16 @@ public sealed class ExecutableFileSecurityService
         }
     }
 
-    private static bool VerifyAuthenticode(string filePath)
+    private sealed record DefenderScanResult(
+        bool IsAccepted,
+        string Message)
     {
-        var filePathPointer = Marshal.StringToCoTaskMemUni(filePath);
+        public static DefenderScanResult Accepted() =>
+            new(true, "Windows Defender found no blocked threats.");
 
-        try
-        {
-            var fileInfo = new WinTrustFileInfo
-            {
-                CbStruct = (uint)Marshal.SizeOf<WinTrustFileInfo>(),
-                PcwszFilePath = filePathPointer
-            };
-
-            var fileInfoPointer = Marshal.AllocCoTaskMem(
-                Marshal.SizeOf<WinTrustFileInfo>());
-
-            try
-            {
-                Marshal.StructureToPtr(fileInfo, fileInfoPointer, false);
-
-                var trustData = new WinTrustData
-                {
-                    CbStruct = (uint)Marshal.SizeOf<WinTrustData>(),
-                    DwUiChoice = WtdUiNone,
-                    FdwRevocationChecks = WtdRevokeWholeChain,
-                    DwUnionChoice = WtdChoiceFile,
-                    PFile = fileInfoPointer,
-                    DwStateAction = WtdStateActionVerify,
-                    DwProvFlags = WtdRevocationCheckChainExcludeRoot
-                };
-
-                var actionGuid = WinTrustActionGenericVerifyV2;
-                var status = WinVerifyTrust(
-                    IntPtr.Zero,
-                    ref actionGuid,
-                    ref trustData);
-
-                trustData.DwStateAction = WtdStateActionClose;
-                _ = WinVerifyTrust(
-                    IntPtr.Zero,
-                    ref actionGuid,
-                    ref trustData);
-
-                return status == WinVerifyTrustSuccess;
-            }
-            finally
-            {
-                Marshal.FreeCoTaskMem(fileInfoPointer);
-            }
-        }
-        finally
-        {
-            Marshal.FreeCoTaskMem(filePathPointer);
-        }
-    }
-
-    [DllImport("wintrust.dll", CharSet = CharSet.Unicode)]
-    private static extern int WinVerifyTrust(
-        IntPtr hwnd,
-        ref Guid pgActionId,
-        ref WinTrustData pWinTrustData);
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct WinTrustFileInfo
-    {
-        public uint CbStruct;
-        public IntPtr PcwszFilePath;
-        public IntPtr HFile;
-        public IntPtr PgKnownSubject;
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct WinTrustData
-    {
-        public uint CbStruct;
-        public IntPtr PPolicyCallbackData;
-        public IntPtr PSipClientData;
-        public uint DwUiChoice;
-        public uint FdwRevocationChecks;
-        public uint DwUnionChoice;
-        public IntPtr PFile;
-        public uint DwStateAction;
-        public IntPtr HWvtStateData;
-        public IntPtr PwszUrlReference;
-        public uint DwProvFlags;
-        public uint DwUiContext;
-        public IntPtr PSignatureSettings;
+        public static DefenderScanResult Rejected(
+            string message) =>
+            new(false, message);
     }
 }
 
@@ -275,10 +350,21 @@ public sealed record ExecutableValidationResult(
 {
     public static ExecutableValidationResult Accepted(
         string sha256,
-        string publisher,
-        string signerThumbprint) =>
-        new(true, "Executable accepted.", sha256, publisher, signerThumbprint);
+        string? publisher,
+        string? signerThumbprint) =>
+        new(
+            true,
+            "Executable accepted after Windows Defender scanning.",
+            sha256,
+            publisher,
+            signerThumbprint);
 
-    public static ExecutableValidationResult Rejected(string message) =>
-        new(false, message, null, null, null);
+    public static ExecutableValidationResult Rejected(
+        string message) =>
+        new(
+            false,
+            message,
+            null,
+            null,
+            null);
 }
