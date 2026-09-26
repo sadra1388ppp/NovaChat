@@ -1,23 +1,37 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
+using System.Net;
+using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace NovaChat.Server.Services;
 
 public sealed class ExecutableFileSecurityService
 {
-    private const int DefaultScanTimeoutSeconds = 120;
+    private const int DefaultScanTimeoutSeconds = 180;
+    private const int DefaultPollIntervalMilliseconds = 1000;
+    private const int MaxPollIntervalMilliseconds = 5000;
 
     private readonly IConfiguration _configuration;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ILogger<ExecutableFileSecurityService> _logger;
 
-    public ExecutableFileSecurityService(IConfiguration configuration)
+    public ExecutableFileSecurityService(
+        IConfiguration configuration,
+        IHttpClientFactory httpClientFactory,
+        ILogger<ExecutableFileSecurityService> logger)
     {
         _configuration = configuration;
+        _httpClientFactory = httpClientFactory;
+        _logger = logger;
     }
 
     public async Task<ExecutableValidationResult> ValidateAsync(
         string filePath,
+        string originalFileName,
         CancellationToken cancellationToken = default)
     {
         if (!OperatingSystem.IsWindows())
@@ -27,8 +41,10 @@ public sealed class ExecutableFileSecurityService
         }
 
         if (!File.Exists(filePath))
+        {
             return ExecutableValidationResult.Rejected(
                 "The uploaded file could not be found.");
+        }
 
         if (!await IsPortableExecutableAsync(filePath, cancellationToken))
         {
@@ -36,10 +52,13 @@ public sealed class ExecutableFileSecurityService
                 "The uploaded file is not a valid Windows PE executable.");
         }
 
-        var sha256 = await ComputeSha256Async(filePath, cancellationToken);
-
-        var scanResult = await ScanWithWindowsDefenderAsync(
+        var sha256 = await ComputeSha256Async(
             filePath,
+            cancellationToken);
+
+        var scanResult = await ScanWithMetaDefenderAsync(
+            filePath,
+            originalFileName,
             cancellationToken);
 
         if (!scanResult.IsAccepted)
@@ -48,8 +67,6 @@ public sealed class ExecutableFileSecurityService
                 scanResult.Message);
         }
 
-        // A valid EXE does not need to be Authenticode-signed to pass.
-        // When a signer exists, store its metadata for audit/UI purposes.
         var signer = TryReadSigner(filePath);
 
         return ExecutableValidationResult.Accepted(
@@ -58,155 +75,267 @@ public sealed class ExecutableFileSecurityService
             signer.Thumbprint);
     }
 
-    private async Task<DefenderScanResult> ScanWithWindowsDefenderAsync(
+    private async Task<MetaDefenderScanResult> ScanWithMetaDefenderAsync(
         string filePath,
+        string originalFileName,
         CancellationToken cancellationToken)
     {
-        var defenderPath = FindMpCmdRun();
+        var apiKey = _configuration[
+            "FileSecurity:Executable:MetaDefender:ApiKey"];
 
-        if (defenderPath == null)
+        if (string.IsNullOrWhiteSpace(apiKey))
         {
-            return DefenderScanResult.Rejected(
-                "Microsoft Defender command-line scanner (MpCmdRun.exe) was not found on the server.");
+            return MetaDefenderScanResult.Rejected(
+                "MetaDefender API key is not configured on the server.");
         }
 
         var timeoutSeconds = _configuration.GetValue(
-            "FileSecurity:Executable:ScanTimeoutSeconds",
+            "FileSecurity:Executable:MetaDefender:ScanTimeoutSeconds",
             DefaultScanTimeoutSeconds);
 
-        timeoutSeconds = Math.Clamp(timeoutSeconds, 10, 900);
+        timeoutSeconds = Math.Clamp(timeoutSeconds, 30, 900);
 
-        using var process = new Process
+        var pollIntervalMilliseconds = _configuration.GetValue(
+            "FileSecurity:Executable:MetaDefender:PollIntervalMilliseconds",
+            DefaultPollIntervalMilliseconds);
+
+        pollIntervalMilliseconds = Math.Clamp(
+            pollIntervalMilliseconds,
+            250,
+            MaxPollIntervalMilliseconds);
+
+        var client = _httpClientFactory.CreateClient("MetaDefender");
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken);
+
+        timeoutCts.CancelAfter(
+            TimeSpan.FromSeconds(timeoutSeconds));
+
+        try
         {
-            StartInfo = new ProcessStartInfo
+            var upload = await UploadToMetaDefenderAsync(
+                client,
+                apiKey,
+                filePath,
+                originalFileName,
+                timeoutCts.Token);
+
+            if (string.IsNullOrWhiteSpace(upload.DataId))
             {
-                FileName = defenderPath,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
+                return MetaDefenderScanResult.Rejected(
+                    "MetaDefender did not return a scan identifier.");
             }
+
+            while (true)
+            {
+                timeoutCts.Token.ThrowIfCancellationRequested();
+
+                var report = await GetMetaDefenderReportAsync(
+                    client,
+                    apiKey,
+                    upload.DataId,
+                    timeoutCts.Token);
+
+                if (report == null)
+                {
+                    return MetaDefenderScanResult.Rejected(
+                        "MetaDefender returned an invalid scan report.");
+                }
+
+                if (report.ScanResultCode is 254 or 255)
+                {
+                    await Task.Delay(
+                        pollIntervalMilliseconds,
+                        timeoutCts.Token);
+
+                    continue;
+                }
+
+                return MapFinalScanResult(report);
+            }
+        }
+        catch (OperationCanceledException) when (
+            !cancellationToken.IsCancellationRequested)
+        {
+            return MetaDefenderScanResult.Rejected(
+                $"MetaDefender scan timed out after {timeoutSeconds} seconds.");
+        }
+        catch (HttpRequestException exception)
+        {
+            _logger.LogError(
+                exception,
+                "MetaDefender request failed for executable {FileName}.",
+                originalFileName);
+
+            return MetaDefenderScanResult.Rejected(
+                "MetaDefender could not be reached to scan the executable.");
+        }
+        catch (JsonException exception)
+        {
+            _logger.LogError(
+                exception,
+                "MetaDefender returned an unreadable response for executable {FileName}.",
+                originalFileName);
+
+            return MetaDefenderScanResult.Rejected(
+                "MetaDefender returned an invalid scan response.");
+        }
+    }
+
+    private async Task<MetaDefenderUploadResponse> UploadToMetaDefenderAsync(
+        HttpClient client,
+        string apiKey,
+        string filePath,
+        string originalFileName,
+        CancellationToken cancellationToken)
+    {
+        await using var stream = new FileStream(
+            filePath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 128 * 1024,
+            options: FileOptions.Asynchronous | FileOptions.SequentialScan);
+
+        using var fileContent = new StreamContent(stream);
+        fileContent.Headers.ContentType =
+            new MediaTypeHeaderValue("application/octet-stream");
+
+        using var form = new MultipartFormDataContent();
+        form.Add(
+            fileContent,
+            "file",
+            Path.GetFileName(originalFileName));
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "file");
+
+        request.Headers.TryAddWithoutValidation("apikey", apiKey);
+        request.Headers.TryAddWithoutValidation(
+            "filename",
+            Path.GetFileName(originalFileName));
+
+        if (_configuration.GetValue(
+                "FileSecurity:Executable:MetaDefender:PrivateScanning",
+                false))
+        {
+            // MetaDefender documents samplesharing=0 for paid private scanning.
+            request.Headers.TryAddWithoutValidation(
+                "samplesharing",
+                "0");
+        }
+
+        request.Content = form;
+
+        using var response = await client.SendAsync(
+            request,
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationToken);
+
+        var body = await response.Content.ReadAsStringAsync(
+            cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning(
+                "MetaDefender upload failed with HTTP {StatusCode}. Response: {Response}",
+                response.StatusCode,
+                Truncate(body, 500));
+
+            throw new HttpRequestException(
+                $"MetaDefender returned HTTP {(int)response.StatusCode} ({response.StatusCode}).");
+        }
+
+        var result = JsonSerializer.Deserialize<MetaDefenderUploadResponse>(
+            body,
+            JsonOptions);
+
+        return result ?? new MetaDefenderUploadResponse();
+    }
+
+    private static async Task<MetaDefenderReport?> GetMetaDefenderReportAsync(
+        HttpClient client,
+        string apiKey,
+        string dataId,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"file/{Uri.EscapeDataString(dataId)}");
+
+        request.Headers.TryAddWithoutValidation("apikey", apiKey);
+
+        using var response = await client.SendAsync(
+            request,
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationToken);
+
+        var body = await response.Content.ReadAsStringAsync(
+            cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException(
+                $"MetaDefender returned HTTP {(int)response.StatusCode} ({response.StatusCode}).");
+        }
+
+        return JsonSerializer.Deserialize<MetaDefenderReport>(
+            body,
+            JsonOptions);
+    }
+
+    private static MetaDefenderScanResult MapFinalScanResult(
+        MetaDefenderReport report)
+    {
+        var resultCode = report.ScanResults?.ScanAllResultI;
+
+        if (resultCode == 0)
+        {
+            var detected = report.ScanResults.TotalDetectedAvs;
+            var total = report.ScanResults.TotalAvs;
+
+            return MetaDefenderScanResult.Accepted(
+                detected,
+                total);
+        }
+
+        if (resultCode == 7)
+        {
+            return MetaDefenderScanResult.Accepted(
+                report.ScanResults.TotalDetectedAvs,
+                report.ScanResults.TotalAvs);
+        }
+
+        var description = resultCode switch
+        {
+            1 => "A threat was detected.",
+            2 => "MetaDefender classified the executable as suspicious.",
+            3 => "MetaDefender failed to complete the scan.",
+            17 => "MetaDefender detected a file type mismatch.",
+            23 => "MetaDefender could not scan this file type.",
+            253 => "MetaDefender did not scan the file because the API rate limit was exceeded.",
+            254 => "The file is still queued for scanning.",
+            255 => "The file is still being scanned.",
+            _ => $"MetaDefender returned scan result code {resultCode?.ToString() ?? "unknown"}."
         };
 
-        process.StartInfo.ArgumentList.Add("-Scan");
-        process.StartInfo.ArgumentList.Add("-ScanType");
-        process.StartInfo.ArgumentList.Add("3");
-        process.StartInfo.ArgumentList.Add("-File");
-        process.StartInfo.ArgumentList.Add(filePath);
-
-        try
-        {
-            if (!process.Start())
-            {
-                return DefenderScanResult.Rejected(
-                    "Windows Defender could not start the EXE security scan.");
-            }
-
-            var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(
-                cancellationToken);
-            timeoutCts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
-
-            try
-            {
-                await process.WaitForExitAsync(timeoutCts.Token);
-            }
-            catch (OperationCanceledException) when (
-                !cancellationToken.IsCancellationRequested)
-            {
-                TryKill(process);
-
-                return DefenderScanResult.Rejected(
-                    $"Windows Defender scan timed out after {timeoutSeconds} seconds.");
-            }
-
-            var stdout = await stdoutTask;
-            var stderr = await stderrTask;
-
-            if (process.ExitCode == 0)
-                return DefenderScanResult.Accepted();
-
-            var details = string.IsNullOrWhiteSpace(stderr)
-                ? stdout
-                : stderr;
-
-            details = NormalizeScanDetails(details);
-
-            return DefenderScanResult.Rejected(
-                string.IsNullOrWhiteSpace(details)
-                    ? $"Windows Defender rejected the executable scan (exit code {process.ExitCode})."
-                    : $"Windows Defender rejected the executable scan (exit code {process.ExitCode}). {details}");
-        }
-        catch (OperationCanceledException)
-        {
-            TryKill(process);
-            throw;
-        }
-        catch (Exception ex)
-        {
-            TryKill(process);
-
-            return DefenderScanResult.Rejected(
-                $"Windows Defender scan failed: {ex.Message}");
-        }
+        return MetaDefenderScanResult.Rejected(
+            $"Executable rejected by MetaDefender. {description}");
     }
 
-    private static string? FindMpCmdRun()
-    {
-        var platformRoot = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "Microsoft",
-            "Windows Defender",
-            "Platform");
-
-        if (Directory.Exists(platformRoot))
-        {
-            var platformPath = Directory
-                .GetDirectories(platformRoot)
-                .OrderByDescending(path => path, StringComparer.OrdinalIgnoreCase)
-                .Select(path => Path.Combine(path, "MpCmdRun.exe"))
-                .FirstOrDefault(File.Exists);
-
-            if (platformPath != null)
-                return platformPath;
-        }
-
-        var programFilesPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-            "Windows Defender",
-            "MpCmdRun.exe");
-
-        return File.Exists(programFilesPath)
-            ? programFilesPath
-            : null;
-    }
-
-    private static void TryKill(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-                process.Kill(entireProcessTree: true);
-        }
-        catch
-        {
-            // Best-effort cleanup only.
-        }
-    }
-
-    private static string NormalizeScanDetails(string details)
-    {
-        var singleLine = details
-            .Replace('\r', ' ')
-            .Replace('\n', ' ')
-            .Trim();
-
-        return singleLine.Length > 500
-            ? singleLine[..500] + "..."
-            : singleLine;
-    }
+    private static string Truncate(
+        string value,
+        int maxLength) =>
+        value.Length <= maxLength
+            ? value
+            : value[..maxLength] + "...";
 
     private static (string? Publisher, string? Thumbprint) TryReadSigner(
         string filePath)
@@ -214,19 +343,26 @@ public sealed class ExecutableFileSecurityService
         try
         {
 #pragma warning disable SYSLIB0057
-            using var certificate = X509Certificate.CreateFromSignedFile(filePath);
+            using var certificate =
+                X509Certificate.CreateFromSignedFile(filePath);
 #pragma warning restore SYSLIB0057
+
             using var signer = new X509Certificate2(certificate);
 
             var publisher = signer.GetNameInfo(
                 X509NameType.SimpleName,
                 forIssuer: false);
 
-            var thumbprint = NormalizeThumbprint(signer.Thumbprint);
+            var thumbprint =
+                NormalizeThumbprint(signer.Thumbprint);
 
             return (
-                string.IsNullOrWhiteSpace(publisher) ? null : publisher,
-                string.IsNullOrWhiteSpace(thumbprint) ? null : thumbprint);
+                string.IsNullOrWhiteSpace(publisher)
+                    ? null
+                    : publisher,
+                string.IsNullOrWhiteSpace(thumbprint)
+                    ? null
+                    : thumbprint);
         }
         catch
         {
@@ -234,7 +370,8 @@ public sealed class ExecutableFileSecurityService
         }
     }
 
-    private static string NormalizeThumbprint(string? thumbprint) =>
+    private static string NormalizeThumbprint(
+        string? thumbprint) =>
         string.IsNullOrWhiteSpace(thumbprint)
             ? string.Empty
             : new string(
@@ -251,7 +388,8 @@ public sealed class ExecutableFileSecurityService
             FileAccess.Read,
             FileShare.Read,
             bufferSize: 128 * 1024,
-            options: FileOptions.Asynchronous | FileOptions.SequentialScan);
+            options: FileOptions.Asynchronous |
+                     FileOptions.SequentialScan);
 
         var hash = await SHA256.HashDataAsync(
             stream,
@@ -270,12 +408,14 @@ public sealed class ExecutableFileSecurityService
             FileAccess.Read,
             FileShare.Read,
             bufferSize: 4096,
-            options: FileOptions.Asynchronous | FileOptions.SequentialScan);
+            options: FileOptions.Asynchronous |
+                     FileOptions.SequentialScan);
 
         if (stream.Length < 64)
             return false;
 
         var dosHeader = new byte[64];
+
         await ReadExactlyAsync(
             stream,
             dosHeader,
@@ -285,8 +425,9 @@ public sealed class ExecutableFileSecurityService
             dosHeader[1] != (byte)'Z')
             return false;
 
-        var peOffset = BinaryPrimitives.ReadInt32LittleEndian(
-            dosHeader.AsSpan(0x3C, 4));
+        var peOffset =
+            BinaryPrimitives.ReadInt32LittleEndian(
+                dosHeader.AsSpan(0x3C, 4));
 
         if (peOffset < 64 ||
             peOffset > stream.Length - 4)
@@ -295,6 +436,7 @@ public sealed class ExecutableFileSecurityService
         stream.Position = peOffset;
 
         var peHeader = new byte[4];
+
         await ReadExactlyAsync(
             stream,
             peHeader,
@@ -328,16 +470,62 @@ public sealed class ExecutableFileSecurityService
         }
     }
 
-    private sealed record DefenderScanResult(
-        bool IsAccepted,
-        string Message)
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        public static DefenderScanResult Accepted() =>
-            new(true, "Windows Defender found no blocked threats.");
+        PropertyNameCaseInsensitive = true
+    };
 
-        public static DefenderScanResult Rejected(
+    private sealed class MetaDefenderUploadResponse
+    {
+        [JsonPropertyName("data_id")]
+        public string? DataId { get; set; }
+    }
+
+    private sealed class MetaDefenderReport
+    {
+        [JsonPropertyName("process_info")]
+        public MetaDefenderProcessInfo? ProcessInfo { get; set; }
+
+        [JsonPropertyName("scan_results")]
+        public MetaDefenderScanResults ScanResults { get; set; } = new();
+    }
+
+    private sealed class MetaDefenderProcessInfo
+    {
+        [JsonPropertyName("progress_percentage")]
+        public int ProgressPercentage { get; set; }
+    }
+
+    private sealed class MetaDefenderScanResults
+    {
+        [JsonPropertyName("scan_all_result_i")]
+        public int? ScanAllResultI { get; set; }
+
+        [JsonPropertyName("total_detected_avs")]
+        public int TotalDetectedAvs { get; set; }
+
+        [JsonPropertyName("total_avs")]
+        public int TotalAvs { get; set; }
+    }
+
+    private sealed record MetaDefenderScanResult(
+        bool IsAccepted,
+        string Message,
+        int DetectedEngines,
+        int TotalEngines)
+    {
+        public static MetaDefenderScanResult Accepted(
+            int detectedEngines,
+            int totalEngines) =>
+            new(
+                true,
+                $"MetaDefender scan passed ({detectedEngines}/{totalEngines} engines detected no threat).",
+                detectedEngines,
+                totalEngines);
+
+        public static MetaDefenderScanResult Rejected(
             string message) =>
-            new(false, message);
+            new(false, message, 0, 0);
     }
 }
 
@@ -354,7 +542,7 @@ public sealed record ExecutableValidationResult(
         string? signerThumbprint) =>
         new(
             true,
-            "Executable accepted after Windows Defender scanning.",
+            "Executable accepted after MetaDefender security scanning.",
             sha256,
             publisher,
             signerThumbprint);
