@@ -27,6 +27,7 @@ builder.Services.AddScoped<GroupAddRequestService>();
 builder.Services.AddScoped<MessageReadService>();
 builder.Services.AddScoped<E2eeDeviceService>();
 builder.Services.AddSingleton<PresenceService>();
+builder.Services.AddSingleton<ExecutableFileSecurityService>();
 builder.Services.AddSingleton<IAuthorizationHandler, OwnerAuthorizationHandler>();
 builder.Services.AddAuthorization(options => options.AddPolicy("OwnerOnly", policy => { policy.RequireAuthenticatedUser(); policy.AddRequirements(new OwnerRequirement()); }));
 var jwtKey = builder.Configuration["Jwt:Key"];

@@ -14,6 +14,11 @@ public sealed class MediaMessageEnvelope
     public long Size { get; set; }
     public double? DurationSeconds { get; set; }
 
+    // Security metadata is populated for validated executable uploads.
+    public string? Sha256 { get; set; }
+    public string? SignerPublisher { get; set; }
+    public string? SignerThumbprint { get; set; }
+
     public string Serialize() => Prefix + JsonSerializer.Serialize(this);
 
     public static bool TryParse(string? content, out MediaMessageEnvelope? media)
