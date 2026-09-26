@@ -143,7 +143,11 @@ public sealed class ExecutableFileSecurityService
                         "MetaDefender returned an invalid scan report.");
                 }
 
-                if (report.ScanResultCode is 254 or 255)
+                var progress = report.ProcessInfo?.ProgressPercentage ?? 0;
+                var resultCode = report.ScanResults?.ScanAllResultI;
+
+                if (resultCode is 254 or 255 ||
+                    (resultCode == null && progress < 100))
                 {
                     await Task.Delay(
                         pollIntervalMilliseconds,
@@ -202,12 +206,6 @@ public sealed class ExecutableFileSecurityService
         fileContent.Headers.ContentType =
             new MediaTypeHeaderValue("application/octet-stream");
 
-        using var form = new MultipartFormDataContent();
-        form.Add(
-            fileContent,
-            "file",
-            Path.GetFileName(originalFileName));
-
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
             "file");
@@ -227,7 +225,7 @@ public sealed class ExecutableFileSecurityService
                 "0");
         }
 
-        request.Content = form;
+        request.Content = fileContent;
 
         using var response = await client.SendAsync(
             request,
@@ -298,8 +296,8 @@ public sealed class ExecutableFileSecurityService
 
         if (resultCode == 0)
         {
-            var detected = report.ScanResults.TotalDetectedAvs;
-            var total = report.ScanResults.TotalAvs;
+            var detected = report.ScanResults?.TotalDetectedAvs ?? 0;
+            var total = report.ScanResults?.TotalAvs ?? 0;
 
             return MetaDefenderScanResult.Accepted(
                 detected,
@@ -309,8 +307,8 @@ public sealed class ExecutableFileSecurityService
         if (resultCode == 7)
         {
             return MetaDefenderScanResult.Accepted(
-                report.ScanResults.TotalDetectedAvs,
-                report.ScanResults.TotalAvs);
+                report.ScanResults?.TotalDetectedAvs ?? 0,
+                report.ScanResults?.TotalAvs ?? 0);
         }
 
         var description = resultCode switch
@@ -487,7 +485,7 @@ public sealed class ExecutableFileSecurityService
         public MetaDefenderProcessInfo? ProcessInfo { get; set; }
 
         [JsonPropertyName("scan_results")]
-        public MetaDefenderScanResults ScanResults { get; set; } = new();
+        public MetaDefenderScanResults? ScanResults { get; set; }
     }
 
     private sealed class MetaDefenderProcessInfo
